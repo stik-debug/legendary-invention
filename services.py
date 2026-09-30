@@ -9,6 +9,7 @@ from db import IntegrityError, audit
 ACCESS_OK = {'TRIAL', 'ACTIVE', 'PAST_DUE', 'GRACE_PERIOD'}
 ROLES = ('CHAMA_ADMIN', 'TREASURER', 'SECRETARY', 'MEMBER')
 PAYMENT_DONE = {'SUCCESS', 'FAILED', 'CANCELLED', 'TIMEOUT'}
+FREQUENCIES = ('WEEKLY', 'BI_WEEKLY', 'MONTHLY')
 
 
 class BusinessError(Exception):
@@ -315,6 +316,102 @@ def expire_pending_payments(db, now=None, minutes=15):
     cutoff = iso(now - timedelta(minutes=minutes))
     with db.tx():
         db.execute("UPDATE payments SET status='TIMEOUT', completed_at=? WHERE status='PENDING' AND method!='MANUAL' AND created_at<?", (iso(now), cutoff))
+
+
+# ---------- contributions & ledger ----------
+def create_contribution_schedule(db, chama_id, amount_cents, frequency, start_date, end_date, is_active, actor_id, schedule_id=None, now=None):
+    """Create or update a contribution schedule. Treasurer only."""
+    now = now or now_utc()
+    if not amount_cents or amount_cents < 1000:  # minimum 10 KES
+        raise BusinessError('Amount must be at least KES 10.')
+    if frequency not in FREQUENCIES:
+        raise BusinessError('Frequency must be WEEKLY, BI_WEEKLY, or MONTHLY.')
+    try:
+        start = datetime.fromisoformat(start_date)
+    except (ValueError, TypeError):
+        raise BusinessError('Invalid start date.')
+    if end_date:
+        try:
+            end = datetime.fromisoformat(end_date)
+            if end < start:
+                raise BusinessError('End date must be after start date.')
+        except (ValueError, TypeError):
+            raise BusinessError('Invalid end date.')
+    with db.tx():
+        if schedule_id:
+            db.execute('UPDATE contribution_schedules SET amount_cents=?, frequency=?, start_date=?, end_date=?, is_active=? WHERE id=? AND chama_id=?',
+                      (amount_cents, frequency, start_date, end_date, int(is_active), schedule_id, chama_id))
+            audit(db, actor_id, 'SCHEDULE_UPDATED', 'contribution_schedule', schedule_id, chama_id, {'amount_cents': amount_cents, 'frequency': frequency})
+        else:
+            sid = db.insert('contribution_schedules', chama_id=chama_id, amount_cents=amount_cents, frequency=frequency,
+                           start_date=start_date, end_date=end_date, is_active=int(is_active), created_at=iso(now))
+            audit(db, actor_id, 'SCHEDULE_CREATED', 'contribution_schedule', sid, chama_id, {'amount_cents': amount_cents, 'frequency': frequency})
+
+
+def record_contribution(db, chama_id, user_id, amount_cents, receipt_code, notes, actor_id, now=None):
+    """Treasurer records a member contribution with optional M-Pesa receipt code."""
+    now = now or now_utc()
+    if not amount_cents or amount_cents < 1000:  # minimum 10 KES
+        raise BusinessError('Amount must be at least KES 10.')
+    # Verify the user is an active member
+    m = db.one("SELECT id FROM chama_members WHERE chama_id=? AND user_id=? AND status='ACTIVE'", (chama_id, user_id))
+    if not m:
+        raise BusinessError('Member not found or not active.')
+    with db.tx():
+        tid = db.insert('ledger_transactions', chama_id=chama_id, user_id=user_id, type='CONTRIBUTION',
+                       amount_cents=amount_cents, reference=receipt_code[:60] if receipt_code else None,
+                       notes=notes[:200] if notes else None, created_at=iso(now))
+        audit(db, actor_id, 'CONTRIBUTION_RECORDED', 'ledger_transaction', tid, chama_id,
+              {'user_id': user_id, 'amount_cents': amount_cents, 'receipt': receipt_code})
+    return tid
+
+
+def get_member_balance(db, chama_id, user_id):
+    """Calculate member's balance: amount paid - amount due."""
+    paid = db.val("""SELECT COALESCE(SUM(amount_cents), 0) FROM ledger_transactions
+                    WHERE chama_id=? AND user_id=? AND type='CONTRIBUTION'""", (chama_id, user_id), 0)
+    # Due = count active schedules from start date to today, summed
+    now = now_utc()
+    due = 0
+    for sched in db.all("SELECT * FROM contribution_schedules WHERE chama_id=? AND is_active=1", (chama_id,)):
+        start = parse(sched['start_date'])
+        end = parse(sched['end_date']) if sched['end_date'] else now
+        if start <= now:
+            # Simple: count how many periods have elapsed (weeks, bi-weeks, or months)
+            if sched['frequency'] == 'WEEKLY':
+                weeks = int((min(end, now) - start).days / 7) + 1
+                due += weeks * sched['amount_cents']
+            elif sched['frequency'] == 'BI_WEEKLY':
+                biweeks = int((min(end, now) - start).days / 14) + 1
+                due += biweeks * sched['amount_cents']
+            else:  # MONTHLY
+                months = ((min(end, now).year - start.year) * 12 + (min(end, now).month - start.month)) + 1
+                due += months * sched['amount_cents']
+    balance = paid - due
+    in_arrears = balance < 0
+    arrears_amt = abs(balance) if in_arrears else 0
+    return {'paid': paid, 'due': due, 'balance': balance, 'in_arrears': in_arrears, 'arrears': arrears_amt}
+
+
+def get_chama_ledger_stats(db, chama_id):
+    """Get aggregate stats for chama ledger."""
+    total_contributed = db.val("SELECT COALESCE(SUM(amount_cents), 0) FROM ledger_transactions WHERE chama_id=? AND type='CONTRIBUTION'", (chama_id,), 0)
+    active_schedules = db.val("SELECT COUNT(*) FROM contribution_schedules WHERE chama_id=? AND is_active=1", (chama_id,), 0)
+    # Members in arrears
+    members = db.all("SELECT u.id, u.name FROM chama_members m JOIN users u ON u.id=m.user_id WHERE m.chama_id=? AND m.status='ACTIVE'", (chama_id,))
+    in_arrears_count = 0
+    total_arrears = 0
+    for member in members:
+        bal = get_member_balance(db, chama_id, member['id'])
+        if bal['in_arrears']:
+            in_arrears_count += 1
+            total_arrears += bal['arrears']
+    return {
+        'total_contributed': total_contributed,
+        'active_schedules': active_schedules,
+        'members_in_arrears': in_arrears_count,
+        'total_arrears': total_arrears
+    }
 
 
 # ---------- owner actions ----------
