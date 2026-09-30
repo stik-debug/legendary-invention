@@ -326,6 +326,101 @@ def create_app(overrides=None):
             flash(str(e) if isinstance(e, S.BusinessError) else 'Invalid plan.', 'warning')
         return redirect(url_for('subscription', chama_id=chama_id))
 
+    @app.route('/chamas/<int:chama_id>/ledger')
+    @login_required
+    def chama_ledger(chama_id):
+        chama, me, sub = ctx(chama_id, roles=('CHAMA_ADMIN', 'TREASURER', 'SECRETARY'), allow_inactive=True)
+        schedules = db().all('SELECT * FROM contribution_schedules WHERE chama_id=? ORDER BY start_date DESC, id DESC', (chama_id,))
+        members = db().all("SELECT u.id, u.name FROM chama_members m JOIN users u ON u.id=m.user_id WHERE m.chama_id=? AND m.status='ACTIVE' ORDER BY u.name", (chama_id,))
+        member_balances = []
+        for member in members:
+            balance = S.get_member_balance(db(), chama_id, member['id'])
+            member_balances.append({
+                'id': member['id'],
+                'name': member['name'],
+                'paid': balance['paid'],
+                'due': balance['due'],
+                'balance': balance['balance'],
+                'in_arrears': balance['in_arrears'],
+                'arrears': balance['arrears'],
+            })
+        stats = S.get_chama_ledger_stats(db(), chama_id)
+        recent = db().all("""SELECT lt.*, u.name member_name FROM ledger_transactions lt JOIN users u ON u.id=lt.user_id
+            WHERE lt.chama_id=? ORDER BY lt.id DESC LIMIT 20""", (chama_id,))
+        return render_template(
+            'chama_ledger.html',
+            chama=chama,
+            schedules=schedules,
+            member_balances=member_balances,
+            recent_transactions=recent,
+            total_contributed=stats['total_contributed'],
+            active_schedules=stats['active_schedules'],
+            members_in_arrears=stats['members_in_arrears'],
+            total_arrears_kes=stats['total_arrears'],
+        )
+
+    @app.route('/chamas/<int:chama_id>/ledger/schedule', methods=['GET', 'POST'])
+    @login_required
+    def contribution_schedule(chama_id):
+        chama, me, sub = ctx(chama_id, roles=('CHAMA_ADMIN', 'TREASURER'), allow_inactive=True)
+        schedule_id = request.args.get('schedule_id', type=int)
+        schedule = None
+        if schedule_id:
+            schedule = db().one('SELECT * FROM contribution_schedules WHERE id=? AND chama_id=?', (schedule_id, chama_id))
+        if request.method == 'POST':
+            raw_amount = request.form.get('amount', '0')
+            frequency = request.form.get('frequency', 'MONTHLY')
+            start_date = request.form.get('start_date')
+            end_date = request.form.get('end_date') or None
+            is_active = request.form.get('is_active', '1') == '1'
+            try:
+                amount_cents = int(float(raw_amount) * 100)
+            except ValueError:
+                flash('Enter a valid amount.', 'danger')
+                return redirect(url_for('contribution_schedule', chama_id=chama_id))
+            try:
+                S.create_contribution_schedule(db(), chama_id, amount_cents, frequency, start_date, end_date, is_active, g.user['id'], schedule_id=schedule_id)
+                flash('Contribution schedule saved.', 'success')
+            except S.BusinessError as e:
+                flash(str(e), 'warning')
+            return redirect(url_for('chama_ledger', chama_id=chama_id))
+        return render_template('contribution_schedule.html', chama=chama, schedule=schedule)
+
+    @app.route('/chamas/<int:chama_id>/ledger/contribution', methods=['GET', 'POST'])
+    @login_required
+    def record_contribution(chama_id):
+        chama, me, sub = ctx(chama_id, roles=('CHAMA_ADMIN', 'TREASURER'), allow_inactive=True)
+        members = db().all("SELECT u.id, u.name FROM chama_members m JOIN users u ON u.id=m.user_id WHERE m.chama_id=? AND m.status='ACTIVE' ORDER BY u.name", (chama_id,))
+        if request.method == 'POST':
+            try:
+                member_id = int(request.form.get('member_id'))
+                amount_cents = int(float(request.form.get('amount', '0')) * 100)
+            except (TypeError, ValueError):
+                flash('Please enter a valid member and amount.', 'danger')
+                return redirect(url_for('record_contribution', chama_id=chama_id))
+            receipt_code = (request.form.get('receipt_code') or '').strip()
+            notes = (request.form.get('notes') or '').strip()
+            try:
+                S.record_contribution(db(), chama_id, member_id, amount_cents, receipt_code, notes, g.user['id'])
+                flash('Contribution recorded to ledger.', 'success')
+            except S.BusinessError as e:
+                flash(str(e), 'warning')
+            return redirect(url_for('chama_ledger', chama_id=chama_id))
+        return render_template('record_contribution.html', chama=chama, members=members, today=S.now_utc().date().isoformat())
+
+    @app.route('/chamas/<int:chama_id>/members/<int:user_id>/statement')
+    @login_required
+    def member_statement(chama_id, user_id):
+        chama, me, sub = ctx(chama_id, roles=('CHAMA_ADMIN', 'TREASURER', 'SECRETARY'), allow_inactive=True)
+        if g.user['id'] != user_id and me['role'] not in ('CHAMA_ADMIN', 'TREASURER', 'SECRETARY'):
+            abort(403)
+        member = db().one("SELECT u.* FROM users u JOIN chama_members m ON m.user_id=u.id WHERE m.chama_id=? AND u.id=? AND m.status='ACTIVE'", (chama_id, user_id))
+        if not member:
+            abort(404)
+        balance = S.get_member_balance(db(), chama_id, user_id)
+        transactions = db().all('SELECT * FROM ledger_transactions WHERE chama_id=? AND user_id=? ORDER BY id DESC', (chama_id, user_id))
+        return render_template('member_statement.html', chama=chama, member=member, balance=balance, transactions=transactions)
+
     # ---------- payment callbacks ----------
     @app.route('/webhooks/mpesa/<secret>', methods=['POST'])
     def mpesa_webhook(secret):
