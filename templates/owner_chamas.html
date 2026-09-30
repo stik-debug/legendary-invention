@@ -1,10 +1,47 @@
-{% extends "base.html" %}{% block title %}Chamas - Control Center{% endblock %}
+{% extends "base.html" %}{% block title %}Chamas - Control Center - ChamaPay Kenya{% endblock %}
 {% block content %}
-<div class="head"><div><h2>All chamas</h2><p>{{ total }} found</p></div></div>{% include '_owner_nav.html' %}
-<form method="GET" class="card" style="display:flex;gap:10px;flex-wrap:wrap"><input name="q" value="{{ q }}" placeholder="Search by name" style="flex:2;min-width:160px" aria-label="Search">
-<select name="status" style="flex:1;min-width:140px" aria-label="Status"><option value="">All statuses</option>{% for s in ('TRIAL','ACTIVE','PAST_DUE','GRACE_PERIOD','SUSPENDED','CANCELLED') %}<option value="{{ s }}" {% if s==status %}selected{% endif %}>{{ s.replace('_',' ') }}</option>{% endfor %}</select><button class="btn pri">Filter</button></form>
-<div class="card tight scroll"><table><thead><tr><th>Chama</th><th>Plan</th><th>Members</th><th>Status</th><th>Due</th></tr></thead><tbody>
-{% for c in rows %}<tr><td><a href="{{ url_for('owner_chama', chama_id=c.id) }}"><b>{{ c.name }}</b></a></td><td>{{ c.plan_name }}</td><td>{{ c.members }}</td><td><span class="pill {{ {'ACTIVE':'ok','TRIAL':'info','PAST_DUE':'warn','GRACE_PERIOD':'warn'}.get(c.status,'bad') }}">{{ c.status.replace('_',' ') }}</span></td><td>{{ c.due_at|date }}</td></tr>
-{% else %}<tr><td colspan="5" class="empty">No chamas found.</td></tr>{% endfor %}</tbody></table></div>
-<div class="pager">{% if page>1 %}<a class="btn sm" href="?q={{ q }}&status={{ status }}&page={{ page-1 }}">Previous</a>{% endif %}<span class="mute">Page {{ page }} of {{ pages }}</span>{% if page<pages %}<a class="btn sm" href="?q={{ q }}&status={{ status }}&page={{ page+1 }}">Next</a>{% endif %}</div>
+<div class="head">
+  <h1>All chamas</h1>
+  {% include '_owner_nav.html' %}
+</div>
+<div style="max-width:600px;margin-bottom:20px;display:flex;gap:12px;flex-wrap:wrap">
+  <form method="GET" action="{{ url_for('owner_chamas') }}" style="display:flex;gap:8px;flex:1;min-width:280px">
+    <input type="text" name="q" placeholder="Search chama name..." value="{{ q }}" style="flex:1">
+    <select name="status" style="min-width:140px">
+      <option value="">All statuses</option>
+      {% for st in ['TRIAL','ACTIVE','PAST_DUE','GRACE_PERIOD','SUSPENDED','CANCELLED'] %}
+      <option value="{{ st }}" {% if status==st %}selected{% endif %}>{{ st }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn">Filter</button>
+  </form>
+</div>
+<p class="mute">{{ total }} chama{% if total != 1 %}s{% endif %} found.</p>
+{% if not rows %}
+<div class="card empty">No chamas.</div>
+{% else %}
+<div class="card tight scroll">
+  <table>
+    <thead><tr><th>Name</th><th>Created</th><th>Status</th><th>Members</th><th>Plan</th><th>Due</th><th></th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td><a href="{{ url_for('owner_chama', chama_id=r.id) }}"><b>{{ r.name }}</b></a></td>
+        <td>{{ r.created_at|date }}</td>
+        <td><span class="pill {% if r.status=='TRIAL' %}info{% elif r.status in ('ACTIVE','PAST_DUE') %}ok{% elif r.status=='GRACE_PERIOD' %}warn{% else %}bad{% endif %}">{{ r.status }}</span></td>
+        <td>{{ r.members }}</td>
+        <td>{{ r.plan_name }}</td>
+        <td>{{ r.due_at|date }}</td>
+        <td style="text-align:right"><a href="{{ url_for('owner_chama', chama_id=r.id) }}">View</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="pager">
+  {% if page > 1 %}<a href="?q={{ q }}&status={{ status }}&page={{ page-1 }}" class="btn sm">← Previous</a>{% endif %}
+  <span>Page {{ page }} of {{ pages }}</span>
+  {% if page < pages %}<a href="?q={{ q }}&status={{ status }}&page={{ page+1 }}" class="btn sm">Next →</a>{% endif %}
+</div>
+{% endif %}
 {% endblock %}

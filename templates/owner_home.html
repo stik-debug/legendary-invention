@@ -1,21 +1,50 @@
-{% extends "base.html" %}{% block title %}Control Center - ChamaPay{% endblock %}
+{% extends "base.html" %}{% block title %}Control Center - ChamaPay Kenya{% endblock %}
 {% block content %}
-<div class="head"><div><h2>ChamaPay Control Center</h2><p>Live numbers from your database</p></div></div>{% include '_owner_nav.html' %}
-{% set b = st.by_status %}
-<div class="stats">
-<div class="stat dark tilt"><small>Monthly revenue</small><b>KES {{ st.revenue_month|kes }}</b></div>
-<div class="stat gold tilt"><small>All-time revenue</small><b>KES {{ st.revenue_total|kes }}</b></div>
-<div class="stat tilt"><small>Total chamas</small><b>{{ st.chamas }}</b></div>
-<div class="stat tilt"><small>Total users</small><b>{{ st.users }}</b></div>
-<div class="stat"><small>Active subscriptions</small><b>{{ b.get('ACTIVE',0) }}</b></div>
-<div class="stat"><small>On trial</small><b>{{ b.get('TRIAL',0) }}</b></div>
-<div class="stat"><small>Past due</small><b>{{ b.get('PAST_DUE',0) }}</b></div>
-<div class="stat"><small>Grace period</small><b>{{ b.get('GRACE_PERIOD',0) }}</b></div>
-<div class="stat"><small>Suspended</small><b>{{ b.get('SUSPENDED',0) }}</b></div>
-<div class="stat"><small>Cancelled</small><b>{{ b.get('CANCELLED',0) }}</b></div>
-<div class="stat"><small>Successful payments</small><b>{{ st.payments_ok }}</b></div>
+<div class="head">
+  <h1>Control Center</h1>
+  {% include '_owner_nav.html' %}
 </div>
-<div class="card"><h3>Integration status</h3><ul class="list" style="margin:-6px -20px -14px">{% for n, s in integrations %}<li><span class="grow">{{ n }}</span><span class="pill {{ 'ok' if s in ('READY','PostgreSQL') else 'warn' }}">{{ s }}</span></li>{% endfor %}</ul></div>
-<div class="card tight"><h3 style="padding:18px 20px 0">Recent payments</h3><ul class="list">
-{% for p in recent %}<li><span class="grow">{{ p.chama }}<br><small>{{ p.created_at|datetime }} · {{ p.method }}</small></span><span class="amt">KES {{ p.amount_cents|kes }}</span><span class="pill {{ {'SUCCESS':'ok','PENDING':'info'}.get(p.status,'bad') }}">{{ p.status }}</span></li>{% else %}<li class="empty grow">No payments yet.</li>{% endfor %}</ul></div>
+<div class="stats">
+  <div class="stat"><b>{{ st.chamas }}</b><small>chamas</small></div>
+  <div class="stat"><b>{{ st.users }}</b><small>users</small></div>
+  <div class="stat gold"><b>{{ st.payments_ok }}</b><small>successful payments</small></div>
+  <div class="stat dark"><b>KES {{ st.revenue_total|kes }}</b><small>revenue (all time)</small></div>
+  <div class="stat dark"><b>KES {{ st.revenue_month|kes }}</b><small>revenue (this month)</small></div>
+</div>
+<h2 style="margin-top:28px">Subscription status</h2>
+<div class="stats">
+  {% for status, count in st.by_status.items() %}
+  <div class="stat">
+    <b>{{ count }}</b>
+    <small>{{ status }}</small>
+  </div>
+  {% endfor %}
+</div>
+<h2 style="margin-top:28px">Recent payments</h2>
+<div class="card tight scroll">
+  <table>
+    <thead><tr><th>Chama</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
+    <tbody>
+    {% for p in recent %}
+      <tr>
+        <td><a href="{{ url_for('owner_chama', chama_id=p.chama_id) }}">{{ p.chama }}</a></td>
+        <td class="amt">KES {{ p.amount_cents|kes }}</td>
+        <td><span class="pill {% if p.status=='SUCCESS' %}ok{% elif p.status=='FAILED' %}bad{% else %}info{% endif %}">{{ p.status }}</span></td>
+        <td>{{ p.created_at|datetime }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<h2 style="margin-top:28px">Integrations</h2>
+<div class="grid">
+  {% for name, status in integrations %}
+  <div class="card" style="padding-top:16px">
+    <div style="font-size:14px;color:var(--mute)">{{ name }}</div>
+    <div style="margin-top:4px">
+      <span class="pill {% if 'READY' in status %}ok{% elif 'REQUIRED' in status %}warn{% else %}info{% endif %}">{{ status }}</span>
+    </div>
+  </div>
+  {% endfor %}
+</div>
 {% endblock %}

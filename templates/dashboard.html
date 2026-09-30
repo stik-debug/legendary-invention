@@ -1,12 +1,30 @@
-{% extends "base.html" %}{% block title %}My chamas - ChamaPay{% endblock %}
+{% extends "base.html" %}{% block title %}My Chamas - ChamaPay Kenya{% endblock %}
 {% block content %}
-<div class="head"><div><h2>Habari, {{ user.name.split()[0] }}</h2><p>Your chamas</p></div><a class="btn pri" href="{{ url_for('chama_new') }}">New chama</a></div>
-{% if chamas %}<div class="grid">
-{% for c in chamas %}
-<a class="card tilt" href="{{ url_for('chama_home', chama_id=c.id) }}" style="text-decoration:none;color:inherit;display:block">
-<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><h3>{{ c.name }}</h3>
-<span class="pill {{ {'ACTIVE':'ok','TRIAL':'info','PAST_DUE':'warn','GRACE_PERIOD':'warn'}.get(c.status,'bad') }}">{{ c.status.replace('_',' ') }}</span></div>
-<p class="mute" style="margin:8px 0 0">{{ c.plan_name }} plan · {{ c.members }} of {{ c.max_members }} members · {{ c.role.replace('_',' ')|title }}</p></a>
-{% endfor %}</div>
-{% else %}<div class="card empty"><h3>You are not in a chama yet</h3><p>Create one for your group, or ask your chairperson to add you using your phone number.</p><a class="btn pri" href="{{ url_for('chama_new') }}">Create your first chama</a></div>{% endif %}
+<div class="head">
+  <div><h1>My chamas</h1><p>{{ chamas|length }} chama{% if chamas|length != 1 %}s{% endif %}</p></div>
+  <a href="{{ url_for('chama_new') }}" class="btn pri">+ Start a new chama</a>
+</div>
+{% if not chamas %}
+<div class="card empty">
+  <p>You haven't joined a chama yet. <a href="{{ url_for('chama_new') }}">Start a new one</a> or ask a friend to add you to theirs.</p>
+</div>
+{% else %}
+<div class="grid">
+{% for chama in chamas %}
+<div class="card tilt">
+  <h3><a href="{{ url_for('chama_home', chama_id=chama.id) }}">{{ chama.name }}</a></h3>
+  <p class="mute">{{ chama.description }}</p>
+  <div style="margin:14px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <span class="pill {% if chama.status=='TRIAL' %}info{% elif chama.status in ('ACTIVE','PAST_DUE') %}ok{% elif chama.status=='GRACE_PERIOD' %}warn{% else %}bad{% endif %}">{{ chama.status }}</span>
+    <small>{{ chama.members }} / {{ chama.max_members }} members</small>
+  </div>
+  <p style="margin:0;font-size:14px;color:var(--mute)" title="Plan">{{ chama.plan_name }}</p>
+  <div style="margin-top:14px;display:flex;gap:8px">
+    <a href="{{ url_for('chama_home', chama_id=chama.id) }}" class="btn block pri" style="flex:1">Open</a>
+    <a href="{{ url_for('subscription', chama_id=chama.id) }}" class="btn block">Pay</a>
+  </div>
+</div>
+{% endfor %}
+</div>
+{% endif %}
 {% endblock %}

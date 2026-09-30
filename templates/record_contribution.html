@@ -1,0 +1,38 @@
+{% extends "base.html" %}{% block title %}Record contribution - {{ chama.name }}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Record contribution</h1>
+  <a href="{{ url_for('chama_ledger', chama_id=chama.id) }}" class="btn sm">Back</a>
+</div>
+<div style="max-width:600px">
+  <form method="POST" action="{{ url_for('record_contribution', chama_id=chama.id) }}">
+    {{ csrf_input() }}
+    <div class="field">
+      <label for="member_id">Member</label>
+      <select id="member_id" name="member_id" required>
+        <option value="" selected>Select a member...</option>
+        {% for m in members %}
+          <option value="{{ m.id }}">{{ m.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="amount">Amount (KES)</label>
+      <input type="number" id="amount" name="amount" step="0.01" required>
+    </div>
+    <div class="field">
+      <label for="payment_date">Payment date</label>
+      <input type="date" id="payment_date" name="payment_date" value="{{ today }}" required>
+    </div>
+    <div class="field">
+      <label for="receipt_code">M-Pesa receipt code (optional)</label>
+      <input type="text" id="receipt_code" name="receipt_code" placeholder="e.g., QRST1234">
+    </div>
+    <div class="field">
+      <label for="notes">Notes (optional)</label>
+      <textarea id="notes" name="notes" rows="2"></textarea>
+    </div>
+    <button type="submit" class="btn pri block">Record payment</button>
+  </form>
+</div>
+{% endblock %}

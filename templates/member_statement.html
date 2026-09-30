@@ -1,0 +1,35 @@
+{% extends "base.html" %}{% block title %}{{ member.name }} statement - {{ chama.name }}{% endblock %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>{{ member.name }}</h1>
+    <p>Member statement for {{ chama.name }}</p>
+  </div>
+  <a href="{{ url_for('chama_ledger', chama_id=chama.id) }}" class="btn sm">Back</a>
+</div>
+<div class="stats">
+  <div class="stat"><b>KES {{ balance.paid|kes }}</b><small>paid</small></div>
+  <div class="stat"><b>KES {{ balance.due|kes }}</b><small>due</small></div>
+  <div class="stat {% if balance.balance < 0 %}bad{% elif balance.balance > 0 %}ok{% endif %}"><b>KES {{ balance.balance|kes }}</b><small>balance</small></div>
+  {% if balance.in_arrears %}
+  <div class="stat bad"><b>KES {{ balance.arrears|kes }}</b><small>in arrears</small></div>
+  {% endif %}
+</div>
+<h2>Transactions</h2>
+<div class="card tight scroll">
+  <table>
+    <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Reference</th><th>Notes</th></tr></thead>
+    <tbody>
+    {% for t in transactions %}
+      <tr>
+        <td>{{ t.created_at|date }}</td>
+        <td><span class="pill">{{ t.type }}</span></td>
+        <td class="amt">KES {{ t.amount_cents|kes }}</td>
+        <td>{{ t.reference or '-' }}</td>
+        <td style="font-size:14px;color:var(--mute)">{{ t.notes or '-' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

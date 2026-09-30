@@ -1,27 +1,125 @@
-{% extends "base.html" %}{% block title %}{{ chama.name }} - Control Center{% endblock %}
+{% extends "base.html" %}{% block title %}{{ chama.name }} - Control Center - ChamaPay Kenya{% endblock %}
 {% block content %}
-<div class="head"><div><h2>{{ chama.name }}</h2><p>Created {{ chama.created_at|date }}</p></div><span class="pill {{ {'ACTIVE':'ok','TRIAL':'info','PAST_DUE':'warn','GRACE_PERIOD':'warn'}.get(sub.status,'bad') }}">{{ sub.status.replace('_',' ') }}</span></div>{% include '_owner_nav.html' %}
-<div class="stats"><div class="stat"><small>Plan</small><b style="font-size:22px">{{ plan.name }}</b></div><div class="stat"><small>Members</small><b>{{ count }} / {{ plan.max_members }}</b></div><div class="stat gold"><small>Payment due</small><b style="font-size:22px">{{ sub.due_at|date }}</b></div></div>
-{% if sub.suspend_reason and sub.status=='SUSPENDED' %}<div class="banner bad"><b>Suspended:</b> {{ sub.suspend_reason }}</div>{% endif %}
-<div class="card"><h3>Actions</h3><div style="display:flex;gap:10px;flex-wrap:wrap">
-{% if sub.status!='SUSPENDED' %}<button class="btn bad" data-open="susp">Suspend chama</button>{% endif %}
-<button class="btn pri" data-open="ext">{{ 'Reactivate' if sub.status in ('SUSPENDED','CANCELLED') else 'Extend subscription' }}</button>
-<button class="btn gold" data-open="man">Record manual payment</button></div></div>
-<dialog id="susp"><form method="POST" action="{{ url_for('owner_action', chama_id=chama.id, action='suspend') }}" data-confirm="Suspend {{ chama.name }} now? Members lose access until reactivated. No data is deleted.">{{ csrf_input() }}<h3>Suspend chama</h3><p class="mute">Access is blocked immediately. All data is kept.</p>
-<div class="field"><label for="r">Reason (required)</label><input id="r" name="reason" required maxlength="300"></div><div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn bad">Suspend</button></div></form></dialog>
-<dialog id="ext"><form method="POST" action="{{ url_for('owner_action', chama_id=chama.id, action=('reactivate' if sub.status in ('SUSPENDED','CANCELLED') else 'extend')) }}">{{ csrf_input() }}<h3>{{ 'Reactivate' if sub.status in ('SUSPENDED','CANCELLED') else 'Extend' }}</h3>
-<div class="field"><label for="dy">Days of access to give</label><select id="dy" name="days"><option>7</option><option selected>30</option><option>60</option><option>90</option></select></div><div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn pri">Confirm</button></div></form></dialog>
-<dialog id="man"><form method="POST" action="{{ url_for('owner_action', chama_id=chama.id, action='manual-payment') }}">{{ csrf_input() }}<h3>Record manual payment</h3><p class="mute">For real offline payments only. It is recorded as MANUAL, never as M-Pesa.</p>
-<div class="field"><label>Plan</label><select name="plan_id">{% for p in plans %}<option value="{{ p.id }}" {% if p.id==plan.id %}selected{% endif %}>{{ p.name }}: KES {{ p.price_cents|kes }}/month</option>{% endfor %}</select></div>
-<div class="field"><label>Months</label><select name="months"><option>1</option><option>3</option><option>6</option><option>12</option></select></div>
-<div class="field"><label>Method</label><select name="method"><option>Cash</option><option>Bank transfer</option><option>M-Pesa (received outside the app)</option></select></div>
-<div class="field"><label>Reference (required)</label><input name="reference" required maxlength="60"></div>
-<div class="field"><label>Date paid</label><input type="date" name="paid_on" required></div>
-<div class="field"><label>Notes</label><input name="notes" maxlength="200"></div><div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn pri">Record payment</button></div></form></dialog>
-<div class="card tight"><h3 style="padding:18px 20px 0">Members ({{ members|length }})</h3><ul class="list">
-{% for m in members %}<li><span class="grow">{{ m.name }}<br><small>{{ m.phone }} · {{ m.email }}</small></span><span class="pill">{{ m.role.replace('_',' ')|title }}</span>{% if m.status!='ACTIVE' %}<span class="pill bad">Removed</span>{% endif %}</li>{% endfor %}</ul></div>
-<div class="card tight"><h3 style="padding:18px 20px 0">Payments</h3><ul class="list">
-{% for p in pays %}<li><span class="grow">KES {{ p.amount_cents|kes }} · {{ p.period_days }} days<br><small>{{ p.created_at|datetime }} · {{ p.method }}{% if p.reference %} · {{ p.reference }}{% endif %}{% if p.provider_receipt %} · {{ p.provider_receipt }}{% endif %}</small></span><span class="pill {{ {'SUCCESS':'ok','PENDING':'info'}.get(p.status,'bad') }}">{{ p.status }}</span></li>{% else %}<li class="empty grow">No payments.</li>{% endfor %}</ul></div>
-<div class="card tight"><h3 style="padding:18px 20px 0">Recent activity</h3><ul class="list">
-{% for a in logs %}<li><span class="grow">{{ a.action.replace('_',' ')|title }}<br><small>{{ a.actor or 'System' }} · {{ a.created_at|datetime }}</small></span></li>{% else %}<li class="empty grow">No activity.</li>{% endfor %}</ul></div>
+<div class="head">
+  <div>
+    <h1>{{ chama.name }}</h1>
+    <p>{{ chama.created_at|date }}</p>
+  </div>
+  {% include '_owner_nav.html' %}
+</div>
+<div class="stats">
+  <div class="stat"><span class="pill {% if sub.status=='TRIAL' %}info{% elif sub.status in ('ACTIVE','PAST_DUE') %}ok{% elif sub.status=='GRACE_PERIOD' %}warn{% else %}bad{% endif %}">{{ sub.status }}</span></div>
+  <div class="stat"><b>{{ count }}</b><small>active members</small></div>
+  <div class="stat"><b>{{ plan.name }}</b><small>plan</small></div>
+  <div class="stat"><b>{{ sub.due_at|date }}</b><small>paid until</small></div>
+</div>
+<section style="margin-bottom:28px">
+  <h2>Actions</h2>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px">
+    {% if sub.status not in ('SUSPENDED','CANCELLED') %}
+    <form method="POST" action="{{ url_for('owner_action', chama_id=chama.id, action='suspend') }}">
+      {{ csrf_input() }}
+      <div class="field" style="margin:0">
+        <label for="reason">Suspend: reason</label>
+        <input type="text" id="reason" name="reason" placeholder="e.g., missed payment" required>
+      </div>
+      <button type="submit" class="btn block bad" style="margin-top:8px">Suspend chama</button>
+    </form>
+    {% else %}
+    <form method="POST" action="{{ url_for('owner_action', chama_id=chama.id, action='reactivate') }}">
+      {{ csrf_input() }}
+      <div class="field" style="margin:0">
+        <label for="days">Extend by days</label>
+        <input type="number" id="days" name="days" value="30" min="1" max="366" required>
+      </div>
+      <button type="submit" class="btn block pri">Reactivate</button>
+    </form>
+    {% endif %}
+    <form method="POST" action="{{ url_for('owner_action', chama_id=chama.id, action='extend') }}">
+      {{ csrf_input() }}
+      <div class="field" style="margin:0">
+        <label for="days2">Extend by days</label>
+        <input type="number" id="days2" name="days" value="30" min="1" max="366" required>
+      </div>
+      <button type="submit" class="btn block">Extend access</button>
+    </form>
+    <form method="POST" action="{{ url_for('owner_action', chama_id=chama.id, action='manual-payment') }}">
+      {{ csrf_input() }}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="field" style="margin:0">
+          <label for="plan_id">Plan</label>
+          <select id="plan_id" name="plan_id" required>
+            {% for p in plans %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field" style="margin:0">
+          <label for="months">Months</label>
+          <select id="months" name="months"><option>1</option><option>3</option><option>6</option><option>12</option></select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+        <div class="field" style="margin:0">
+          <label for="method">Method</label>
+          <input type="text" id="method" name="method" value="Cash" required>
+        </div>
+        <div class="field" style="margin:0">
+          <label for="reference">Reference</label>
+          <input type="text" id="reference" name="reference" required>
+        </div>
+      </div>
+      <input type="text" name="paid_on" placeholder="YYYY-MM-DD" style="margin-top:8px">
+      <input type="text" name="notes" placeholder="Notes" style="margin-top:8px">
+      <button type="submit" class="btn block" style="margin-top:8px">Record manual payment</button>
+    </form>
+  </div>
+</section>
+<h2>Members</h2>
+<div class="card tight scroll">
+  <table>
+    <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Role</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for m in members %}
+      <tr>
+        <td>{{ m.name }}</td>
+        <td>{{ m.phone }}</td>
+        <td>{{ m.email }}</td>
+        <td>{{ m.role }}</td>
+        <td><span class="pill {% if m.status=='ACTIVE' %}ok{% else %}info{% endif %}">{{ m.status }}</span></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<h2 style="margin-top:28px">Payments</h2>
+<div class="card tight scroll">
+  <table>
+    <thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Status</th><th>Reference</th></tr></thead>
+    <tbody>
+    {% for p in pays %}
+      <tr>
+        <td>{{ p.created_at|datetime }}</td>
+        <td class="amt">KES {{ p.amount_cents|kes }}</td>
+        <td>{{ p.method or p.provider }}</td>
+        <td><span class="pill {% if p.status=='SUCCESS' %}ok{% elif p.status=='FAILED' %}bad{% else %}info{% endif %}">{{ p.status }}</span></td>
+        <td>{{ p.reference or p.provider_receipt or '-' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<h2 style="margin-top:28px">Audit log</h2>
+<div class="card tight scroll">
+  <table>
+    <thead><tr><th>Date</th><th>Action</th><th>By</th></tr></thead>
+    <tbody>
+    {% for log in logs %}
+      <tr>
+        <td>{{ log.created_at|datetime }}</td>
+        <td>{{ log.action }}</td>
+        <td>{{ log.actor or 'System' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% endblock %}
