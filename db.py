@@ -140,6 +140,15 @@ CREATE TABLE IF NOT EXISTS audit_logs(
   id {PK}, actor_id INTEGER, action TEXT NOT NULL, entity_type TEXT, entity_id TEXT, chama_id INTEGER,
   metadata TEXT, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS login_attempts(id {PK}, key TEXT NOT NULL, at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS contribution_schedules(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id),
+  amount_cents INTEGER NOT NULL CHECK(amount_cents>0), frequency TEXT NOT NULL,
+  start_date TEXT NOT NULL, end_date TEXT, is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS ledger_transactions(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), user_id INTEGER NOT NULL REFERENCES users(id),
+  type TEXT NOT NULL, amount_cents INTEGER NOT NULL CHECK(amount_cents>0),
+  reference TEXT, notes TEXT, created_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS ix_members_chama ON chama_members(chama_id, status);
 CREATE INDEX IF NOT EXISTS ix_members_user ON chama_members(user_id);
 CREATE INDEX IF NOT EXISTS ix_pay_chama ON payments(chama_id, created_at);
@@ -147,6 +156,9 @@ CREATE INDEX IF NOT EXISTS ix_pay_status ON payments(status, completed_at);
 CREATE INDEX IF NOT EXISTS ix_audit_chama ON audit_logs(chama_id, created_at);
 CREATE INDEX IF NOT EXISTS ix_sub_status ON subscriptions(status);
 CREATE INDEX IF NOT EXISTS ix_attempts ON login_attempts(key, at);
+CREATE INDEX IF NOT EXISTS ix_contrib_chama ON contribution_schedules(chama_id);
+CREATE INDEX IF NOT EXISTS ix_ledger_chama ON ledger_transactions(chama_id, created_at);
+CREATE INDEX IF NOT EXISTS ix_ledger_user ON ledger_transactions(user_id);
 """
 
 DEFAULT_PLANS = [('starter', 'Starter', 50000, 15, 1), ('growth', 'Growth', 150000, 70, 2), ('business', 'Business', 200000, 100, 3)]
