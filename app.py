@@ -38,14 +38,17 @@ def create_app(overrides=None):
 
     boot = DB(app.config['DATABASE_URL'])
     init_db(boot)
-    if not boot.val('SELECT COUNT(*) FROM users WHERE is_super_admin=1'):
-        e, p, pw = os.environ.get('OWNER_EMAIL', ''), os.environ.get('OWNER_PHONE', ''), os.environ.get('OWNER_PASSWORD', '')
-        if e and p and len(pw) >= 10:
+    e, p, pw = os.environ.get('OWNER_EMAIL', ''), os.environ.get('OWNER_PHONE', ''), os.environ.get('OWNER_PASSWORD', '')
+    if e or p or pw:
+        if len(pw) < 10:
+            print('OWNER SETUP: OWNER_PASSWORD must be at least 10 characters. Owner account NOT created.')
+        else:
             try:
-                S.create_user(boot, 'Platform Owner', e, p, generate_password_hash(pw), super_admin=True)
-                print('Platform owner account created.')
-            except S.BusinessError as ex:
-                print('Owner not created:', ex)
+                print('OWNER SETUP:', S.ensure_owner(boot, e, p, generate_password_hash(pw)))
+            except Exception as ex:
+                print('OWNER SETUP failed:', type(ex).__name__)
+    elif not boot.val('SELECT COUNT(*) FROM users WHERE is_super_admin=1'):
+        print('OWNER SETUP: no owner exists. Set OWNER_EMAIL, OWNER_PHONE and OWNER_PASSWORD in the environment.')
     boot.close()
 
     # ---------- plumbing ----------
@@ -166,7 +169,10 @@ def create_app(overrides=None):
                 flash('Passwords do not match.', 'danger')
             else:
                 try:
-                    uid = S.create_user(db(), f.get('name'), f.get('email'), f.get('phone'), generate_password_hash(f['password']))
+                    uid = S.claim_account(db(), f.get('phone'), f.get('join_code'), f.get('name'), f.get('email'),
+                                          generate_password_hash(f['password']), check_password_hash)
+                    if uid is None:
+                        uid = S.create_user(db(), f.get('name'), f.get('email'), f.get('phone'), generate_password_hash(f['password']))
                     session.clear(); session['uid'] = uid; session.permanent = True
                     audit(db(), uid, 'USER_REGISTERED', 'user', uid); db().commit()
                     return redirect(url_for('dashboard'))
@@ -184,7 +190,7 @@ def create_app(overrides=None):
                 return render_template('login.html'), 429
             phone = S.normalize_phone(ident)
             u = db().one('SELECT * FROM users WHERE is_active=1 AND (email=? OR phone=?)', (ident, phone or '-'))
-            if u and check_password_hash(u['password_hash'], request.form.get('password', '')):
+            if u and u['claimed'] and u['password_hash'] and check_password_hash(u['password_hash'], request.form.get('password', '')):
                 nxt = safe_next(request.args.get('next'))
                 session.clear(); session['uid'] = u['id']; session.permanent = True
                 audit(db(), u['id'], 'LOGIN', 'user', u['id']); db().commit()
@@ -225,7 +231,7 @@ def create_app(overrides=None):
     @login_required
     def chama_home(chama_id):
         chama, me, sub = ctx(chama_id)
-        members = db().all("""SELECT u.id, u.name, u.phone, m.role, m.joined_at FROM chama_members m JOIN users u ON u.id=m.user_id
+        members = db().all("""SELECT u.id, u.name, u.phone, u.claimed, m.role, m.joined_at FROM chama_members m JOIN users u ON u.id=m.user_id
             WHERE m.chama_id=? AND m.status='ACTIVE' ORDER BY m.joined_at LIMIT 200""", (chama_id,))
         plan = S.get_plan(db(), sub['plan_id'])
         return render_template('chama_home.html', chama=chama, me=me, sub=sub, plan=plan, members=members,
@@ -235,16 +241,26 @@ def create_app(overrides=None):
     @login_required
     def member_add(chama_id):
         ctx(chama_id, roles=('CHAMA_ADMIN',))
-        ident = (request.form.get('phone') or '').strip().lower()
-        u = db().one('SELECT id FROM users WHERE is_active=1 AND (phone=? OR email=?)', (S.normalize_phone(ident) or '-', ident))
-        if not u:
-            flash('No ChamaPay account found for that phone or email. Ask them to register first.', 'warning')
-        else:
-            try:
-                S.add_member(db(), chama_id, u['id'], request.form.get('role', 'MEMBER'), g.user['id'])
-                flash('Member added.', 'success')
-            except S.BusinessError as e:
-                flash(str(e), 'warning')
+        try:
+            uid, code = S.add_member_by_phone(db(), chama_id, request.form.get('phone'), request.form.get('name'),
+                                              request.form.get('role', 'MEMBER'), g.user['id'], generate_password_hash)
+            if code:
+                flash('Member added. Give them this join code to register: ' + code + ' (shown only once).', 'success')
+            else:
+                flash('Member added. They can already log in.', 'success')
+        except S.BusinessError as e:
+            flash(str(e), 'warning')
+        return redirect(url_for('chama_home', chama_id=chama_id))
+
+    @app.route('/chamas/<int:chama_id>/members/<int:user_id>/code', methods=['POST'])
+    @login_required
+    def member_code(chama_id, user_id):
+        ctx(chama_id, roles=('CHAMA_ADMIN',))
+        try:
+            code = S.reset_join_code(db(), chama_id, user_id, generate_password_hash)
+            flash('New join code: ' + code + '. The old code no longer works.', 'success')
+        except S.BusinessError as e:
+            flash(str(e), 'warning')
         return redirect(url_for('chama_home', chama_id=chama_id))
 
     @app.route('/chamas/<int:chama_id>/members/<int:user_id>/remove', methods=['POST'])

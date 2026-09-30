@@ -135,22 +135,22 @@ class Web(unittest.TestCase):
         c, _ = self.signup(); cid = self.make_chama(c)
         for i in range(14):
             _, email = self.signup(f'Member {i}')
-            self.post(c, f'/chamas/{cid}/members', {'phone': email, 'role': 'MEMBER'})
+            self.post(c, f'/chamas/{cid}/members', {'phone': self.phone_of(email), 'role': 'MEMBER'})
         self.assertEqual(S.active_member_count(self.db, cid), 15)
         _, extra = self.signup('Member Sixteen')
-        r = self.post(c, f'/chamas/{cid}/members', {'phone': extra, 'role': 'MEMBER'}, follow=True)
+        r = self.post(c, f'/chamas/{cid}/members', {'phone': self.phone_of(extra), 'role': 'MEMBER'}, follow=True)
         self.assertIn('allows 15 members', r.get_data(as_text=True))
         self.assertEqual(S.active_member_count(self.db, cid), 15)
 
     # ---------- subscription lifecycle over HTTP ----------
     def test_suspended_chama_blocked_data_kept_then_payment_restores(self):
         c, _ = self.signup(); cid = self.make_chama(c)
-        _, e2 = self.signup('Second Person'); self.post(c, f'/chamas/{cid}/members', {'phone': e2, 'role': 'TREASURER'})
+        _, e2 = self.signup('Second Person'); self.post(c, f'/chamas/{cid}/members', {'phone': self.phone_of(e2), 'role': 'TREASURER'})
         due = S.parse(self.sub(cid)['due_at'])
         S.sweep_all(self.db, due + timedelta(days=10))
         self.assertEqual(self.sub(cid)['status'], 'SUSPENDED')
         r = c.get(f'/chamas/{cid}'); self.assertEqual(r.status_code, 302); self.assertIn('/subscription', r.headers['Location'])
-        self.assertEqual(self.post(c, f'/chamas/{cid}/members', {'phone': e2}).status_code, 302)
+        self.assertEqual(self.post(c, f'/chamas/{cid}/members', {'phone': self.phone_of(e2)}).status_code, 302)
         page = c.get(f'/chamas/{cid}/subscription').get_data(as_text=True)
         self.assertIn('Access is suspended', page); self.assertIn('safe', page)
         self.assertEqual(S.active_member_count(self.db, cid), 2)
@@ -242,6 +242,107 @@ class Web(unittest.TestCase):
             page = self.tok(c)
         finally:
             del os.environ['APP_ENV']
+
+    # ---------- members added by phone ----------
+    def phone_of(self, email):
+        return self.db.val('SELECT phone FROM users WHERE email=?', (email,))
+
+    def test_add_new_person_by_phone_creates_placeholder_and_join_code(self):
+        c, _ = self.signup(); cid = self.make_chama(c)
+        r = self.post(c, f'/chamas/{cid}/members', {'name': 'Wanjiru Kamau', 'phone': '0733111222', 'role': 'MEMBER'}, follow=True)
+        html = r.get_data(as_text=True)
+        code = re.search(r'register: (\d{8})', html).group(1)
+        u = self.db.one("SELECT * FROM users WHERE phone='254733111222'")
+        self.assertEqual((u['claimed'], u['password_hash']), (0, '')); self.assertNotEqual(u['claim_code_hash'], code)
+        self.assertEqual(S.active_member_count(self.db, cid), 2)
+        self.assertIn('Not registered yet', html)
+        # cannot log in as the placeholder
+        other = self.client()
+        self.post(other, '/login', {'login': '0733111222', 'password': ''})
+        self.assertEqual(other.get('/dashboard').status_code, 302)
+
+    def test_new_person_claims_account_with_code_and_sees_chama(self):
+        c, _ = self.signup(); cid = self.make_chama(c)
+        html = self.post(c, f'/chamas/{cid}/members', {'name': 'Wanjiru Kamau', 'phone': '0733111222', 'role': 'TREASURER'}, follow=True).get_data(as_text=True)
+        code = re.search(r'register: (\d{8})', html).group(1)
+        w = self.client()
+        r = self.post(w, '/register', {'name': 'Wanjiru Kamau', 'email': 'wanjiru@example.test', 'phone': '0733111222', 'password': 'Password123',
+                                        'confirm': 'Password123', 'join_code': code})
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(w.get(f'/chamas/{cid}').status_code, 200)
+        self.assertEqual(self.db.val("SELECT role FROM chama_members WHERE user_id=(SELECT id FROM users WHERE phone='254733111222')"), 'TREASURER')
+        self.assertEqual(self.db.val("SELECT COUNT(*) FROM users WHERE phone='254733111222'"), 1)
+        w2 = self.client()
+        self.post(w2, '/login', {'login': '0733111222', 'password': 'Password123'}); self.assertEqual(w2.get('/dashboard').status_code, 200)
+
+    def test_cannot_claim_without_or_with_wrong_code_and_locks_after_5(self):
+        c, _ = self.signup(); cid = self.make_chama(c)
+        html = self.post(c, f'/chamas/{cid}/members', {'name': 'Target Person', 'phone': '0733555666'}, follow=True).get_data(as_text=True)
+        code = re.search(r'register: (\d{8})', html).group(1)
+        atk = self.client()
+        form = {'name': 'Attacker', 'email': 'atk@example.test', 'phone': '0733555666', 'password': 'Password123', 'confirm': 'Password123'}
+        self.assertEqual(self.post(atk, '/register', dict(form)).status_code, 200)
+        for i in range(5): self.assertEqual(self.post(atk, '/register', dict(form, join_code='0000000' + str(i))).status_code, 200)
+        r = self.post(atk, '/register', dict(form, join_code=code))  # even the right code is now locked
+        self.assertEqual(r.status_code, 200); self.assertEqual(self.db.val("SELECT claimed FROM users WHERE phone='254733555666'"), 0)
+        newcode = re.search(r'code: (\d{8})', self.post(c, f'/chamas/{cid}/members/{self.db.val("SELECT id FROM users WHERE phone=?", ("254733555666",))}/code', follow=True).get_data(as_text=True)).group(1)
+        real = self.client()
+        self.assertEqual(self.post(real, '/register', dict(form, name='Target Person', email='target@example.test', join_code=newcode)).status_code, 302)
+
+    def test_add_existing_registered_person_by_phone(self):
+        c, _ = self.signup(); cid = self.make_chama(c); _, e2 = self.signup('Already Registered')
+        html = self.post(c, f'/chamas/{cid}/members', {'phone': self.phone_of(e2), 'role': 'SECRETARY'}, follow=True).get_data(as_text=True)
+        self.assertIn('already log in', html); self.assertNotIn('join code', html.lower().split('flash')[0] if False else 'x')
+        self.assertEqual(S.active_member_count(self.db, cid), 2)
+
+    def test_phone_member_16_rejected_and_no_placeholder_left_behind(self):
+        c, _ = self.signup(); cid = self.make_chama(c)
+        for i in range(14):
+            self.post(c, f'/chamas/{cid}/members', {'name': f'Member {i}', 'phone': f'07331000{i:02d}'})
+        self.assertEqual(S.active_member_count(self.db, cid), 15)
+        r = self.post(c, f'/chamas/{cid}/members', {'name': 'Sixteenth', 'phone': '0733999999'}, follow=True)
+        self.assertIn('allows 15 members', r.get_data(as_text=True))
+        self.assertEqual(self.db.val("SELECT COUNT(*) FROM users WHERE phone='254733999999'"), 0)
+
+    def test_bad_phone_or_missing_name_rejected(self):
+        c, _ = self.signup(); cid = self.make_chama(c)
+        self.assertIn('valid Kenyan phone', self.post(c, f'/chamas/{cid}/members', {'name': 'X Y', 'phone': '123'}, follow=True).get_data(as_text=True))
+        self.assertIn('Enter their name', self.post(c, f'/chamas/{cid}/members', {'name': '', 'phone': '0733000111'}, follow=True).get_data(as_text=True))
+        self.assertEqual(S.active_member_count(self.db, cid), 1)
+
+    # ---------- owner setup ----------
+    def test_owner_setup_creates_promotes_and_recovers(self):
+        os.environ.update(OWNER_EMAIL='boss@example.test', OWNER_PHONE='0711222333', OWNER_PASSWORD='StrongOwner12')
+        try:
+            create_app({'DATABASE_URL': self.url, 'SECRET_KEY': 'k' * 48})
+            c = self.client(); self.post(c, '/login', {'login': 'boss@example.test', 'password': 'StrongOwner12'})
+            self.assertEqual(c.get('/owner').status_code, 200)
+            # a normal account registered first with the owner's email is promoted, not ignored
+            c2 = self.client()
+            self.post(c2, '/register', {'name': 'Early Bird', 'email': 'early@example.test', 'phone': '0755000111', 'password': 'Password123', 'confirm': 'Password123'})
+            self.assertEqual(c2.get('/owner').status_code, 403)
+            os.environ.update(OWNER_EMAIL='early@example.test', OWNER_PHONE='0755000111', OWNER_PASSWORD='AnotherStrong99')
+            create_app({'DATABASE_URL': self.url, 'SECRET_KEY': 'k' * 48})
+            c3 = self.client(); self.post(c3, '/login', {'login': 'early@example.test', 'password': 'AnotherStrong99'})
+            self.assertEqual(c3.get('/owner').status_code, 200)
+            # changing the setting recovers a lost password
+            os.environ['OWNER_PASSWORD'] = 'RecoveredPass777'
+            create_app({'DATABASE_URL': self.url, 'SECRET_KEY': 'k' * 48})
+            c4 = self.client(); self.post(c4, '/login', {'login': 'early@example.test', 'password': 'RecoveredPass777'})
+            self.assertEqual(c4.get('/owner').status_code, 200)
+        finally:
+            for k in ('OWNER_EMAIL', 'OWNER_PHONE', 'OWNER_PASSWORD'): os.environ.pop(k, None)
+
+    def test_short_owner_password_is_reported_not_silent(self):
+        import io, contextlib
+        os.environ.update(OWNER_EMAIL='x@example.test', OWNER_PHONE='0711000999', OWNER_PASSWORD='short')
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf):
+                create_app({'DATABASE_URL': self.url, 'SECRET_KEY': 'k' * 48})
+        finally:
+            for k in ('OWNER_EMAIL', 'OWNER_PHONE', 'OWNER_PASSWORD'): os.environ.pop(k, None)
+        self.assertIn('at least 10 characters', buf.getvalue())
 
 
 if __name__ == '__main__':

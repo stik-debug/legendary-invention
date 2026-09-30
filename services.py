@@ -1,6 +1,7 @@
 """Business rules. Everything that touches money, plans or subscriptions lives here so it can be tested without a browser."""
 import json
 import re
+import secrets
 from datetime import datetime, timedelta
 
 from db import IntegrityError, audit
@@ -387,3 +388,91 @@ def owner_stats(db, now=None):
             'by_status': by, 'payments_ok': db.val(f'SELECT COUNT(*) FROM payments WHERE {real}', (), 0),
             'revenue_total': db.val(f'SELECT SUM(amount_cents) FROM payments WHERE {real}', (), 0),
             'revenue_month': db.val(f'SELECT SUM(amount_cents) FROM payments WHERE {real} AND completed_at>=?', (month,), 0)}
+
+
+# ---------- owner bootstrap and members added by phone ----------
+def ensure_owner(db, email, phone, pw_hash):
+    """Makes sure the platform owner exists. The OWNER_* settings are the source of truth, so changing them also recovers a lost password."""
+    email = (email or '').strip().lower()
+    ph = normalize_phone(phone)
+    if not valid_email(email):
+        return 'OWNER_EMAIL is not a valid email address.'
+    if not ph:
+        return 'OWNER_PHONE is not a valid Kenyan phone number (example 0712345678).'
+    with db.tx():
+        u = db.one('SELECT * FROM users WHERE email=?', (email,))
+        if u:
+            db.execute('UPDATE users SET password_hash=?, is_super_admin=1, is_active=1, claimed=1 WHERE id=?', (pw_hash, u['id']))
+            audit(db, None, 'OWNER_SYNCED', 'user', u['id'])
+            return 'Owner account ready (existing account updated).'
+        if db.val('SELECT COUNT(*) FROM users WHERE phone=?', (ph,)):
+            return 'OWNER_PHONE is already used by a different account. Use another phone number, or the same email as that account.'
+        uid = db.insert('users', name='Platform Owner', email=email, phone=ph, password_hash=pw_hash, is_super_admin=1, created_at=iso(now_utc()))
+        audit(db, None, 'OWNER_SYNCED', 'user', uid)
+        return 'Owner account created.'
+
+
+def _new_code():
+    return ''.join(secrets.choice('0123456789') for _ in range(8))
+
+
+def add_member_by_phone(db, chama_id, phone, name, role, actor_id, hasher, now=None):
+    """Add someone by phone number. If they have no account yet, a placeholder is created and a one-time join code is returned
+    so they can claim it when they register. Returns (user_id, join_code_or_None)."""
+    now = now or now_utc()
+    ph = normalize_phone(phone)
+    if not ph:
+        raise BusinessError('Enter a valid Kenyan phone number, for example 0712345678.')
+    code = None
+    with db.tx():
+        u = db.one('SELECT * FROM users WHERE phone=?', (ph,))
+        if not u:
+            name = (name or '').strip()
+            if len(name) < 2:
+                raise BusinessError('Enter their name.')
+            code = _new_code()
+            uid = db.insert('users', name=name[:80], email='pending-' + ph + '@chamapay.invalid', phone=ph, password_hash='',
+                            claimed=0, claim_code_hash=hasher(code), created_at=iso(now))
+        else:
+            uid = u['id']
+            if not u['claimed']:
+                code = _new_code()
+                db.execute('UPDATE users SET claim_code_hash=?, claim_fails=0 WHERE id=?', (hasher(code), uid))
+        add_member(db, chama_id, uid, role, actor_id, now)  # raises (undoing the placeholder) if the plan is full
+    return uid, code
+
+
+def reset_join_code(db, chama_id, user_id, hasher):
+    with db.tx():
+        u = db.one("SELECT u.* FROM users u JOIN chama_members m ON m.user_id=u.id WHERE u.id=? AND m.chama_id=? AND m.status='ACTIVE' AND u.claimed=0",
+                   (user_id, chama_id))
+        if not u:
+            raise BusinessError('That member has already registered.')
+        code = _new_code()
+        db.execute('UPDATE users SET claim_code_hash=?, claim_fails=0 WHERE id=?', (hasher(code), user_id))
+    return code
+
+
+def claim_account(db, phone, code, name, email, pw_hash, checker):
+    """A person added by phone registers. They must know the join code their chama gave them. Returns user id, or None if not applicable."""
+    ph = normalize_phone(phone)
+    u = db.one('SELECT * FROM users WHERE phone=? AND claimed=0', (ph or '-',))
+    if not u:
+        return None
+    if u['claim_fails'] >= 5:
+        raise BusinessError('Too many wrong codes. Ask your chairperson for a new join code.')
+    code = (code or '').strip()
+    if not code or not u['claim_code_hash'] or not checker(u['claim_code_hash'], code):
+        with db.tx():
+            db.execute('UPDATE users SET claim_fails=claim_fails+1 WHERE id=?', (u['id'],))
+        raise BusinessError('This number was added to a chama. Enter the 8-digit join code your chairperson gave you.')
+    email = (email or '').strip().lower()
+    if not valid_email(email):
+        raise BusinessError('Enter a valid email address.')
+    if db.val('SELECT COUNT(*) FROM users WHERE email=? AND id!=?', (email, u['id'])):
+        raise BusinessError('That email is already used by another account.')
+    with db.tx():
+        db.execute('UPDATE users SET name=?, email=?, password_hash=?, claimed=1, claim_code_hash=NULL, claim_fails=0 WHERE id=?',
+                   ((name or u['name']).strip()[:80], email, pw_hash, u['id']))
+        audit(db, u['id'], 'ACCOUNT_CLAIMED', 'user', u['id'])
+    return u['id']

@@ -109,7 +109,8 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS users(
   id {PK}, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE, phone TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL, is_super_admin INTEGER NOT NULL DEFAULT 0, is_active INTEGER NOT NULL DEFAULT 1,
-  is_test_data INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
+  is_test_data INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL,
+  claimed INTEGER NOT NULL DEFAULT 1, claim_code_hash TEXT, claim_fails INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS subscription_plans(
   id {PK}, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, price_cents INTEGER NOT NULL CHECK(price_cents>=0),
   max_members INTEGER NOT NULL CHECK(max_members>0), is_active INTEGER NOT NULL DEFAULT 1, sort_order INTEGER NOT NULL DEFAULT 0);
@@ -152,12 +153,22 @@ DEFAULT_PLANS = [('starter', 'Starter', 50000, 15, 1), ('growth', 'Growth', 1500
 DEFAULT_SETTINGS = {'trial_days': '7', 'grace_days': '3', 'billing_period_days': '30'}
 
 
+def ensure_column(db, table, col, ddl):
+    if db.pg:
+        db.execute('ALTER TABLE ' + table + ' ADD COLUMN IF NOT EXISTS ' + col + ' ' + ddl)
+    elif col not in [r['name'] for r in db.all('PRAGMA table_info(' + table + ')')]:
+        db.execute('ALTER TABLE ' + table + ' ADD COLUMN ' + col + ' ' + ddl)
+
+
 def init_db(db):
     pk = 'INTEGER PRIMARY KEY AUTOINCREMENT' if not db.pg else 'BIGSERIAL PRIMARY KEY'
     with db.tx():
         for stmt in SCHEMA.replace('{PK}', pk).split(';'):
             if stmt.strip():
                 db.execute(stmt)
+        ensure_column(db, 'users', 'claimed', 'INTEGER NOT NULL DEFAULT 1')
+        ensure_column(db, 'users', 'claim_code_hash', 'TEXT')
+        ensure_column(db, 'users', 'claim_fails', 'INTEGER NOT NULL DEFAULT 0')
         if not db.val('SELECT COUNT(*) FROM subscription_plans'):
             for code, name, price, mx, order in DEFAULT_PLANS:
                 db.insert('subscription_plans', code=code, name=name, price_cents=price, max_members=mx, sort_order=order)

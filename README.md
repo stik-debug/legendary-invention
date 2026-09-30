@@ -10,7 +10,7 @@ A multi-tenant SaaS for Kenyan chamas. **Stage 1 is the money-and-security found
 | Password reset | NOT built | Needs email/SMS. Owner can be recovered by changing env vars |
 | Roles (SUPER_ADMIN, CHAMA_ADMIN, TREASURER, SECRETARY, MEMBER) | Built, tested | Enforced on the server for every route |
 | Multi-tenant isolation | Built, tested | Chama A user gets 403 on Chama B pages and actions |
-| Chama create, members add/remove | Built, tested | Removal keeps history. Members must register first |
+| Chama create, members add/remove | Built, tested | Add by name + phone number. New people get an 8-digit join code to claim their account. Removal keeps history |
 | Invitations by link | NOT built | Stage 2 |
 | Plans Starter 500/15, Growth 1,500/70, Business 2,000/100 | Built, tested | In the database, editable by the owner. Per chama, never per member |
 | Member limit (16th, 71st, 101st rejected) | Built, tested | Enforced in the backend, race-safe on PostgreSQL |
@@ -30,7 +30,7 @@ A multi-tenant SaaS for Kenyan chamas. **Stage 1 is the money-and-security found
 | Test-data commands (seed/reset/validate) | NOT built | Stage 4. Automated tests use their own throwaway database |
 | Two-factor login for owner | NOT built | Use a strong password meanwhile |
 
-## Tests (51 automated, all passing when this was packaged)
+## Tests (59 automated, all passing when this was packaged)
 
     python -m unittest discover -s tests -v
 
@@ -43,7 +43,7 @@ Not covered here: a real PostgreSQL run, a real M-Pesa payment, real phones. You
 2. Create a **Web Service** from this folder. Build command: `pip install -r requirements.txt`. Start command: `gunicorn app:app --workers 2 --threads 4 --timeout 60`.
 3. Set environment variables from `.env.example`. At minimum: `AUTH_SECRET`, `DATABASE_URL`, `OWNER_EMAIL`, `OWNER_PHONE`, `OWNER_PASSWORD`, `PAY_INSTRUCTIONS`.
 4. Health check path: `/healthz`.
-5. Log in with the owner email and password. The Control Center opens.
+5. Log in with the owner email and password. The Control Center opens. The OWNER_* settings are checked on every start: if that email already has an account it is promoted to owner, and changing OWNER_PASSWORD resets the owner password (this is your recovery method). Check the deploy logs for a line starting with `OWNER SETUP:` to see what happened.
 6. Optional but recommended: add a Render **Cron Job** running `flask --app app sweep` every hour. (Statuses also update whenever anyone opens a chama.)
 
 The app refuses to start in production without a 32+ character `AUTH_SECRET`. On the free PostgreSQL plan, Render may expire the database; use a paid plan and backups before real customers.
