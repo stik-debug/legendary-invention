@@ -1,0 +1,113 @@
+{% extends "base.html" %}{% block title %}Finance - {{ chama.name }}{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>{{ chama.name }}: Finance</h1><p>Loans, repayments, fines, and penalties</p></div>
+  <a href="{{ url_for('chama_home', chama_id=chama.id) }}" class="btn sm">Back</a>
+</div>
+<div class="stats" style="margin-bottom:28px">
+  <div class="stat gold"><b>KES {{ summary.loan_outstanding|kes }}</b><small>loan outstanding</small></div>
+  <div class="stat"><b>KES {{ summary.fine_outstanding|kes }}</b><small>fine outstanding</small></div>
+  <div class="stat"><b>{{ loans|length }}</b><small>loans</small></div>
+  <div class="stat"><b>{{ fines|length }}</b><small>fines</small></div>
+</div>
+<section style="margin-bottom:28px">
+  <h2>Approve a loan</h2>
+  <form method="POST" action="{{ url_for('finance_loan', chama_id=chama.id) }}" style="max-width:700px">
+    {{ csrf_input() }}
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+      <div class="field" style="margin:0">
+        <label for="member_id">Member</label>
+        <select id="member_id" name="member_id" required>
+          <option value="">Select member</option>
+          {% for member in members %}<option value="{{ member.id }}">{{ member.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field" style="margin:0">
+        <label for="amount">Amount (KES)</label>
+        <input type="number" id="amount" name="amount" min="1" step="0.01" required>
+      </div>
+      <div class="field" style="margin:0">
+        <label for="due_date">Due date</label>
+        <input type="date" id="due_date" name="due_date">
+      </div>
+    </div>
+    <div class="field">
+      <label for="reason">Reason</label>
+      <textarea id="reason" name="reason" rows="2"></textarea>
+    </div>
+    <button type="submit" class="btn pri block" style="max-width:220px">Approve loan</button>
+  </form>
+</section>
+<section style="margin-bottom:28px">
+  <h2>Issue a fine</h2>
+  <form method="POST" action="{{ url_for('finance_fine', chama_id=chama.id) }}" style="max-width:700px">
+    {{ csrf_input() }}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="field" style="margin:0">
+        <label for="fine_member_id">Member</label>
+        <select id="fine_member_id" name="member_id" required>
+          <option value="">Select member</option>
+          {% for member in members %}<option value="{{ member.id }}">{{ member.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field" style="margin:0">
+        <label for="fine_amount">Amount (KES)</label>
+        <input type="number" id="fine_amount" name="amount" min="1" step="0.01" required>
+      </div>
+    </div>
+    <div class="field">
+      <label for="fine_reason">Reason</label>
+      <textarea id="fine_reason" name="reason" rows="2"></textarea>
+    </div>
+    <button type="submit" class="btn block" style="max-width:220px">Record fine</button>
+  </form>
+</section>
+<h2>Loans</h2>
+<div class="card tight scroll" style="margin-bottom:28px">
+  <table>
+    <thead><tr><th>Member</th><th>Amount</th><th>Repaid</th><th>Due</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for loan in loans %}
+      <tr>
+        <td>{{ loan.member_name }}</td>
+        <td class="amt">KES {{ loan.amount_cents|kes }}</td>
+        <td class="amt">KES {{ loan.repaid_cents|kes }}</td>
+        <td>{{ loan.due_date|date if loan.due_date else '-' }}</td>
+        <td><span class="pill {% if loan.status == 'REPAID' %}ok{% elif loan.status == 'PARTIAL' %}warn{% else %}info{% endif %}">{{ loan.status }}</span></td>
+        <td>
+          <form method="POST" action="{{ url_for('loan_repay', chama_id=chama.id, loan_id=loan.id) }}" style="margin:0;display:flex;gap:8px;align-items:center">
+            {{ csrf_input() }}
+            <input type="number" name="amount" min="1" step="0.01" placeholder="KES" style="width:110px">
+            <button type="submit" class="btn sm">Pay</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<h2>Fines</h2>
+<div class="card tight scroll">
+  <table>
+    <thead><tr><th>Member</th><th>Amount</th><th>Paid</th><th>Reason</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for fine in fines %}
+      <tr>
+        <td>{{ fine.member_name }}</td>
+        <td class="amt">KES {{ fine.amount_cents|kes }}</td>
+        <td class="amt">KES {{ fine.paid_cents|kes }}</td>
+        <td>{{ fine.reason or '-' }}</td>
+        <td><span class="pill {% if fine.status == 'PAID' %}ok{% elif fine.status == 'PARTIAL' %}warn{% else %}info{% endif %}">{{ fine.status }}</span></td>
+        <td>
+          <form method="POST" action="{{ url_for('fine_pay', chama_id=chama.id, fine_id=fine.id) }}" style="margin:0;display:flex;gap:8px;align-items:center">
+            {{ csrf_input() }}
+            <input type="number" name="amount" min="1" step="0.01" placeholder="KES" style="width:110px">
+            <button type="submit" class="btn sm">Pay</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
