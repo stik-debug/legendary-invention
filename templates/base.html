@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#06382A">
+<title>{% block title %}ChamaPay Kenya{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+<header class="top"><div class="wrap">
+<a class="logo" href="{{ url_for('index') }}"><i></i>ChamaPay</a>
+<nav class="links" aria-label="Main">
+{% if user %}
+{% if user.is_super_admin %}<a class="btn sm gold" href="{{ url_for('owner_home') }}">Control Center</a>{% endif %}
+<a class="btn sm" href="{{ url_for('dashboard') }}">My chamas</a>
+<form method="POST" action="{{ url_for('logout') }}" style="margin:0">{{ csrf_input() }}<button class="btn sm">Log out</button></form>
+{% else %}
+<a class="btn sm" href="{{ url_for('login') }}">Log in</a><a class="btn sm pri hide-sm" href="{{ url_for('register') }}">Start free</a>
+{% endif %}
+<button class="perf-btn hide-sm" data-perf type="button" title="Turn heavy 3D effects on or off">Lite mode</button>
+</nav></div></header>
+<main><div class="wrap">
+{% with messages = get_flashed_messages(with_categories=true) %}{% for cat, msg in messages %}<div class="flash {{ cat }}" role="status">{{ msg }}</div>{% endfor %}{% endwith %}
+{% block content %}{% endblock %}
+</div></main>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

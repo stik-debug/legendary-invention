@@ -1,0 +1,43 @@
+{% extends "base.html" %}{% block title %}ChamaPay Kenya: Manage Your Chama{% endblock %}
+{% block content %}
+<section class="hero">
+<div>
+<h1>Manage Your Chama.<br><span>Save Together. Grow Together.</span></h1>
+<p class="lead">One trusted place for members, contributions, loans and records, built for Kenyan savings groups. Every member can see the books, so trust comes easy.</p>
+<div class="cta"><a class="btn pri" href="{{ url_for('register') }}">Start {{ trial }}-day free trial</a><a class="btn" href="#pricing">See pricing</a></div>
+<p class="mute" style="margin-top:14px">No card needed to start.</p>
+</div>
+<div class="scene" aria-hidden="true">
+<div class="stack"><div class="coin"></div><div class="coin"></div><div class="coin"></div><div class="coin"></div><div class="coin"></div></div>
+<div class="float a"><small>This month</small>KES 78,000 saved</div>
+<div class="float b"><small>Loan approved</small>KES 10,000</div>
+<div class="float c"><small>Members paid</small>12 of 15</div>
+</div>
+</section>
+<section class="section">
+<h2>Everything your chama needs.</h2>
+<div class="features">
+{% for t, d, p in [('Members','Add members, assign chairperson, treasurer and secretary roles, and keep every record safe.','M16 11a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0'),('Contributions and savings','Track who has paid and what the group has saved, month by month.','M12 3v18M8 7h6a3 3 0 010 6H8m0 0h7a3 3 0 010 6H8'),('Loans','Members ask, officials approve, and repayments are tracked to the shilling.','M3 7h18v10H3zM12 12m-2.5 0a2.5 2.5 0 105 0 2.5 2.5 0 10-5 0'),('M-Pesa payments','Pay your subscription straight from your phone. Your chama unlocks when the payment is confirmed.','M7 2h10v20H7zM11 18h2')] %}
+<div class="card tilt"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{ p }}"/></svg></div><h3>{{ t }}</h3><p class="mute" style="margin:0">{{ d }}</p></div>
+{% endfor %}
+</div>
+<p class="mute" style="margin-top:14px">Some features, such as contributions, loans, fines and meetings, are being added in stages. Members, plans and billing are live now.</p>
+</section>
+<section class="section" id="pricing">
+<h2>Simple pricing for your whole chama.</h2>
+<p class="mute" style="font-size:18px"><b>One price per chama, not per member.</b> Try any plan free for {{ trial }} days.</p>
+<div class="plans">
+{% for p in plans %}
+<div class="card plan tilt {% if p.code=='growth' %}best{% endif %}">
+{% if p.code=='growth' %}<span class="badge">MOST POPULAR</span>{% endif %}
+<h3>{{ p.name|upper }}</h3>
+<div class="price">KES {{ p.price_cents|kes }}<small class="mute" style="font:500 16px 'DM Sans'">/month</small></div>
+<p class="mute" style="margin:2px 0 0">Up to {{ p.max_members }} members</p>
+<ul><li>Whole chama, one price</li><li>Roles for your officials</li><li>Full history kept, always</li></ul>
+<a class="btn block {{ 'gold' if p.code=='growth' else 'pri' }}" href="{{ url_for('register') }}">Start free trial</a>
+</div>
+{% endfor %}
+</div>
+</section>
+<footer>ChamaPay Kenya · Built for Kenyan savings groups</footer>
+{% endblock %}

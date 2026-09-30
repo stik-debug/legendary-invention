@@ -1,0 +1,21 @@
+{% extends "base.html" %}{% block title %}Control Center - ChamaPay{% endblock %}
+{% block content %}
+<div class="head"><div><h2>ChamaPay Control Center</h2><p>Live numbers from your database</p></div></div>{% include '_owner_nav.html' %}
+{% set b = st.by_status %}
+<div class="stats">
+<div class="stat dark tilt"><small>Monthly revenue</small><b>KES {{ st.revenue_month|kes }}</b></div>
+<div class="stat gold tilt"><small>All-time revenue</small><b>KES {{ st.revenue_total|kes }}</b></div>
+<div class="stat tilt"><small>Total chamas</small><b>{{ st.chamas }}</b></div>
+<div class="stat tilt"><small>Total users</small><b>{{ st.users }}</b></div>
+<div class="stat"><small>Active subscriptions</small><b>{{ b.get('ACTIVE',0) }}</b></div>
+<div class="stat"><small>On trial</small><b>{{ b.get('TRIAL',0) }}</b></div>
+<div class="stat"><small>Past due</small><b>{{ b.get('PAST_DUE',0) }}</b></div>
+<div class="stat"><small>Grace period</small><b>{{ b.get('GRACE_PERIOD',0) }}</b></div>
+<div class="stat"><small>Suspended</small><b>{{ b.get('SUSPENDED',0) }}</b></div>
+<div class="stat"><small>Cancelled</small><b>{{ b.get('CANCELLED',0) }}</b></div>
+<div class="stat"><small>Successful payments</small><b>{{ st.payments_ok }}</b></div>
+</div>
+<div class="card"><h3>Integration status</h3><ul class="list" style="margin:-6px -20px -14px">{% for n, s in integrations %}<li><span class="grow">{{ n }}</span><span class="pill {{ 'ok' if s in ('READY','PostgreSQL') else 'warn' }}">{{ s }}</span></li>{% endfor %}</ul></div>
+<div class="card tight"><h3 style="padding:18px 20px 0">Recent payments</h3><ul class="list">
+{% for p in recent %}<li><span class="grow">{{ p.chama }}<br><small>{{ p.created_at|datetime }} · {{ p.method }}</small></span><span class="amt">KES {{ p.amount_cents|kes }}</span><span class="pill {{ {'SUCCESS':'ok','PENDING':'info'}.get(p.status,'bad') }}">{{ p.status }}</span></li>{% else %}<li class="empty grow">No payments yet.</li>{% endfor %}</ul></div>
+{% endblock %}

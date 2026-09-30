@@ -1,0 +1,22 @@
+{% extends "base.html" %}{% block title %}{{ chama.name }} - ChamaPay{% endblock %}
+{% block content %}
+<div class="head"><div><h2>{{ chama.name }}</h2><p>{{ chama.description or 'Your chama' }}</p></div>
+<a class="btn" href="{{ url_for('subscription', chama_id=chama.id) }}">Subscription</a></div>
+{% if sub.status in ('PAST_DUE','GRACE_PERIOD') %}<div class="banner"><h3>Payment overdue</h3><p>Pay before the grace period ends or access will be suspended. Nothing is deleted.</p><a class="btn gold" href="{{ url_for('subscription', chama_id=chama.id) }}">Pay now</a></div>{% endif %}
+<div class="card hero3d tilt">
+<div><small>{{ plan.name }} plan</small><h2>{{ members|length }} of {{ plan.max_members }} members</h2>
+<p>{% if sub.status=='TRIAL' %}Free trial until {{ sub.due_at|date }}{% else %}Paid until {{ sub.due_at|date }}{% endif %}</p></div>
+<div class="ring" style="--p:{{ (members|length / plan.max_members * 100)|round|int }}"><span><div>{{ (members|length / plan.max_members * 100)|round|int }}%<small>full</small></div></span></div>
+</div>
+<div class="card tight"><div style="padding:18px 20px 4px;display:flex;justify-content:space-between;align-items:center;gap:10px"><h3 style="margin:0">Members</h3>
+{% if is_admin %}<button class="btn sm pri" data-open="add">Add member</button>{% endif %}</div>
+<ul class="list">
+{% for m in members %}<li><span class="av">{{ m.name[:1] }}</span><span class="grow">{{ m.name }}<br><small>{{ m.phone }}</small></span><span class="pill {{ 'ok' if m.role!='MEMBER' else '' }}">{{ m.role.replace('_',' ')|title }}</span>
+{% if is_admin and m.id!=user.id %}<form method="POST" action="{{ url_for('member_remove', chama_id=chama.id, user_id=m.id) }}" data-confirm="Remove {{ m.name }}? Their history is kept." style="margin:0">{{ csrf_input() }}<button class="btn sm bad">Remove</button></form>{% endif %}</li>{% endfor %}
+</ul></div>
+{% if is_admin %}<dialog id="add"><form method="POST" action="{{ url_for('member_add', chama_id=chama.id) }}">{{ csrf_input() }}<h3>Add a member</h3>
+<div class="field"><label for="ph">Their phone or email</label><input id="ph" name="phone" required><small>They must have registered on ChamaPay first.</small></div>
+<div class="field"><label for="ro">Role</label><select id="ro" name="role">{% for r in roles %}<option value="{{ r }}">{{ r.replace('_',' ')|title }}</option>{% endfor %}</select></div>
+<div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn pri">Add member</button></div></form></dialog>{% endif %}
+<p class="mute" style="text-align:center">Contributions, loans, fines and meetings are coming in the next stages.</p>
+{% endblock %}

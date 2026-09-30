@@ -1,0 +1,2 @@
+{% extends "base.html" %}{% block title %}{{ code }} - ChamaPay{% endblock %}
+{% block content %}<div class="auth card" style="text-align:center"><h1>{{ code }}</h1><p class="mute">{{ msg }}</p><a class="btn pri" href="{{ url_for('index') }}">Go home</a></div>{% endblock %}

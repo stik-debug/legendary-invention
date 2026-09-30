@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block title %}Chamas - Control Center{% endblock %}
+{% block content %}
+<div class="head"><div><h2>All chamas</h2><p>{{ total }} found</p></div></div>{% include '_owner_nav.html' %}
+<form method="GET" class="card" style="display:flex;gap:10px;flex-wrap:wrap"><input name="q" value="{{ q }}" placeholder="Search by name" style="flex:2;min-width:160px" aria-label="Search">
+<select name="status" style="flex:1;min-width:140px" aria-label="Status"><option value="">All statuses</option>{% for s in ('TRIAL','ACTIVE','PAST_DUE','GRACE_PERIOD','SUSPENDED','CANCELLED') %}<option value="{{ s }}" {% if s==status %}selected{% endif %}>{{ s.replace('_',' ') }}</option>{% endfor %}</select><button class="btn pri">Filter</button></form>
+<div class="card tight scroll"><table><thead><tr><th>Chama</th><th>Plan</th><th>Members</th><th>Status</th><th>Due</th></tr></thead><tbody>
+{% for c in rows %}<tr><td><a href="{{ url_for('owner_chama', chama_id=c.id) }}"><b>{{ c.name }}</b></a></td><td>{{ c.plan_name }}</td><td>{{ c.members }}</td><td><span class="pill {{ {'ACTIVE':'ok','TRIAL':'info','PAST_DUE':'warn','GRACE_PERIOD':'warn'}.get(c.status,'bad') }}">{{ c.status.replace('_',' ') }}</span></td><td>{{ c.due_at|date }}</td></tr>
+{% else %}<tr><td colspan="5" class="empty">No chamas found.</td></tr>{% endfor %}</tbody></table></div>
+<div class="pager">{% if page>1 %}<a class="btn sm" href="?q={{ q }}&status={{ status }}&page={{ page-1 }}">Previous</a>{% endif %}<span class="mute">Page {{ page }} of {{ pages }}</span>{% if page<pages %}<a class="btn sm" href="?q={{ q }}&status={{ status }}&page={{ page+1 }}">Next</a>{% endif %}</div>
+{% endblock %}

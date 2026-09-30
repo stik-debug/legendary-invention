@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block title %}New chama - ChamaPay{% endblock %}
+{% block content %}
+<div class="head"><div><h2>Create your chama</h2><p>{{ trial }} days free on any plan. Pricing is per chama, not per member.</p></div></div>
+<form method="POST" class="card">{{ csrf_input() }}
+<div class="field"><label for="n">Chama name</label><input id="n" name="name" placeholder="Umoja Women Group" required maxlength="100"></div>
+<div class="field"><label for="d">What is it for? (optional)</label><textarea id="d" name="description" rows="2" maxlength="300"></textarea></div>
+<div class="field"><label>Plan</label>
+{% for p in plans %}<label class="radio"><input type="radio" name="plan" value="{{ p.code }}" {% if p.code=='starter' %}checked{% endif %}><span><b>{{ p.name }}</b>, KES {{ p.price_cents|kes }} a month<br><span class="mute">Up to {{ p.max_members }} members</span></span></label>{% endfor %}</div>
+<button class="btn pri block">Create chama and start free trial</button></form>
+{% endblock %}
