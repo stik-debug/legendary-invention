@@ -4,557 +4,262 @@ import secrets
 from datetime import timedelta
 from functools import wraps
 
-from flask import Flask, abort, flash, g, jsonify, redirect, render_template, request, session, url_for
+from flask import (
+    Flask,
+    abort,
+    flash,
+    g,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 from markupsafe import Markup
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import services as S
 from db import DB, audit, init_db
-from providers import MpesaPaymentProvider, get_provider
+from providers import MpesaPaymentProvider
 
-PAGE = 25
+_db = None
 
 
 def create_app(overrides=None):
-    app = Flask(__name__, instance_relative_config=True)
-    os.makedirs(app.instance_path, exist_ok=True)
-    production = bool(os.environ.get('RENDER')) or os.environ.get('APP_ENV') == 'production'
-    app.config.update(
-        IS_PRODUCTION=production,
-        SECRET_KEY=os.environ.get('AUTH_SECRET') or os.environ.get('SECRET_KEY') or '',
-        DATABASE_URL=os.environ.get('DATABASE_URL') or 'sqlite:///' + os.path.join(app.instance_path, 'chamapay.db'),
-        PAY_INSTRUCTIONS=os.environ.get('PAY_INSTRUCTIONS', 'Contact ChamaPay support to pay. Your chama is reactivated as soon as we record your payment.'),
-        SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax', SESSION_COOKIE_SECURE=production,
-        PERMANENT_SESSION_LIFETIME=timedelta(days=14), MAX_CONTENT_LENGTH=256 * 1024)
-    app.config.update(overrides or {})
-    if len(app.config['SECRET_KEY']) < 32:
-        if production:
-            raise RuntimeError('Set AUTH_SECRET (or SECRET_KEY) to a random string of at least 32 characters.')
-        app.config['SECRET_KEY'] = 'dev-only-' + secrets.token_hex(16)
-    if app.config['DATABASE_URL'].startswith('postgres') is False and production:
-        print('WARNING: production is running on SQLite. Data will be lost on redeploy. Set DATABASE_URL to PostgreSQL.')
-    provider = get_provider(app.config['IS_PRODUCTION'] and not app.config.get('ALLOW_TEST_PROVIDER'))
-    app.config['PROVIDER'] = provider
+    app = Flask(__name__)
+    app.config.from_mapping(
+        SECRET_KEY=overrides.get('secret_key') if overrides else os.environ.get('SECRET_KEY', 'dev'),
+        PERMANENT_SESSION_LIFETIME=timedelta(days=7),
+    )
+    if overrides:
+        app.config.update(overrides)
 
-    boot = DB(app.config['DATABASE_URL'])
-    init_db(boot)
-    e, p, pw = os.environ.get('OWNER_EMAIL', ''), os.environ.get('OWNER_PHONE', ''), os.environ.get('OWNER_PASSWORD', '')
-    if e or p or pw:
-        if len(pw) < 10:
-            print('OWNER SETUP: OWNER_PASSWORD must be at least 10 characters. Owner account NOT created.')
-        else:
-            try:
-                print('OWNER SETUP:', S.ensure_owner(boot, e, p, generate_password_hash(pw)))
-            except Exception as ex:
-                print('OWNER SETUP failed:', type(ex).__name__)
-    elif not boot.val('SELECT COUNT(*) FROM users WHERE is_super_admin=1'):
-        print('OWNER SETUP: no owner exists. Set OWNER_EMAIL, OWNER_PHONE and OWNER_PASSWORD in the environment.')
-    boot.close()
-
-    # ---------- plumbing ----------
-    def db():
-        if 'db' not in g:
-            g.db = DB(app.config['DATABASE_URL'])
-        return g.db
-
-    @app.teardown_appcontext
-    def close(_):
-        d = g.pop('db', None)
-        if d:
-            try:
-                d.rollback()
-            except Exception:
-                pass
-            d.close()
-
-    @app.before_request
-    def load_user():
-        g.user = None
-        uid = session.get('uid')
-        if uid:
-            u = db().one('SELECT * FROM users WHERE id=? AND is_active=1', (uid,))
-            if u:
-                g.user = u
-            else:
-                session.clear()
-
-    @app.before_request
-    def csrf():
-        if request.method == 'POST' and request.endpoint not in ('mpesa_webhook',):
-            sent, want = request.form.get('_csrf', ''), session.get('_csrf', '')
-            if not want or not hmac.compare_digest(sent, want):
-                flash('Your session expired. Please try again.', 'danger')
-                return redirect(request.referrer or url_for('index'))
-
-    def token():
-        if '_csrf' not in session:
-            session['_csrf'] = secrets.token_hex(16)
-        return session['_csrf']
-
-    app.jinja_env.globals['csrf_input'] = lambda: Markup(f'<input type="hidden" name="_csrf" value="{token()}">')
-    app.jinja_env.filters['kes'] = S.kes
-    app.jinja_env.filters['date'] = lambda s: S.parse(s).strftime('%d %b %Y') if s else '-'
-    app.jinja_env.filters['datetime'] = lambda s: S.parse(s).strftime('%d %b %Y %H:%M') if s else '-'
-
-    @app.context_processor
-    def inject():
-        return {'user': g.get('user'), 'S': S}
-
-    @app.after_request
-    def headers(r):
-        r.headers['X-Content-Type-Options'] = 'nosniff'
-        r.headers['X-Frame-Options'] = 'DENY'
-        r.headers['Referrer-Policy'] = 'same-origin'
-        r.headers['Content-Security-Policy'] = ("default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-                                                "font-src https://fonts.gstatic.com; img-src 'self' data:; script-src 'self'; frame-ancestors 'none'; form-action 'self'")
-        if app.config['IS_PRODUCTION']:
-            r.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
-        if request.endpoint not in ('static',):
-            r.headers['Cache-Control'] = 'no-store'
-        return r
-
-    def login_required(f):
-        @wraps(f)
-        def w(*a, **k):
-            if not g.user:
-                return redirect(url_for('login', next=request.path))
-            return f(*a, **k)
-        return w
-
-    def owner_required(f):
-        @wraps(f)
-        @login_required
-        def w(*a, **k):
-            if not g.user['is_super_admin']:
-                abort(403)
-            return f(*a, **k)
-        return w
-
-    def ctx(chama_id, roles=None, allow_inactive=False):
-        """Server-side gate for every chama route: must be an ACTIVE member of THIS chama, with the right role, and (unless allowed) a working subscription."""
-        m = db().one("SELECT * FROM chama_members WHERE chama_id=? AND user_id=? AND status='ACTIVE'", (chama_id, g.user['id']))
-        if not m or (roles and m['role'] not in roles):
-            abort(403)
-        sub = S.sync_subscription(db(), chama_id)
-        if not allow_inactive and sub['status'] not in S.ACCESS_OK:
-            abort(redirect(url_for('subscription', chama_id=chama_id)))
-        return db().one('SELECT * FROM chamas WHERE id=?', (chama_id,)), m, sub
-
-    def safe_next(t):
-        return t if t and t.startswith('/') and not t.startswith('//') and '\\' not in t else None
-
-    def attempts_blocked(key):
-        cut = S.iso(S.now_utc() - timedelta(minutes=10))
-        db().execute('DELETE FROM login_attempts WHERE at<?', (cut,)); db().commit()
-        return db().val('SELECT COUNT(*) FROM login_attempts WHERE key=?', (key,), 0) >= 6
-
-    # ---------- public ----------
-    @app.route('/')
-    def index():
-        plans = db().all('SELECT * FROM subscription_plans WHERE is_active=1 ORDER BY sort_order')
-        return render_template('index.html', plans=plans, trial=S.setting(db(), 'trial_days', 7))
-
-    @app.route('/healthz')
-    def healthz():
-        db().val('SELECT 1')
-        return jsonify(status='ok')
-
-    @app.route('/register', methods=['GET', 'POST'])
-    def register():
-        if request.method == 'POST':
-            f = request.form
-            if len(f.get('password', '')) < 8:
-                flash('Password must be at least 8 characters.', 'danger')
-            elif f.get('password') != f.get('confirm'):
-                flash('Passwords do not match.', 'danger')
-            else:
-                try:
-                    uid = S.claim_account(db(), f.get('phone'), f.get('join_code'), f.get('name'), f.get('email'),
-                                          generate_password_hash(f['password']), check_password_hash)
-                    if uid is None:
-                        uid = S.create_user(db(), f.get('name'), f.get('email'), f.get('phone'), generate_password_hash(f['password']))
-                    session.clear(); session['uid'] = uid; session.permanent = True
-                    audit(db(), uid, 'USER_REGISTERED', 'user', uid); db().commit()
-                    return redirect(url_for('dashboard'))
-                except S.BusinessError as e:
-                    flash(str(e), 'danger')
-        return render_template('register.html')
-
-    @app.route('/login', methods=['GET', 'POST'])
-    def login():
-        if request.method == 'POST':
-            ident = (request.form.get('login') or '').strip().lower()
-            key = f'{ident}|{request.remote_addr}'
-            if attempts_blocked(key):
-                flash('Too many attempts. Wait 10 minutes and try again.', 'danger')
-                return render_template('login.html'), 429
-            phone = S.normalize_phone(ident)
-            u = db().one('SELECT * FROM users WHERE is_active=1 AND (email=? OR phone=?)', (ident, phone or '-'))
-            if u and u['claimed'] and u['password_hash'] and check_password_hash(u['password_hash'], request.form.get('password', '')):
-                nxt = safe_next(request.args.get('next'))
-                session.clear(); session['uid'] = u['id']; session.permanent = True
-                audit(db(), u['id'], 'LOGIN', 'user', u['id']); db().commit()
-                return redirect(nxt or url_for('owner_home' if u['is_super_admin'] else 'dashboard'))
-            db().execute('INSERT INTO login_attempts(key,at) VALUES(?,?)', (key, S.iso(S.now_utc()))); db().commit()
-            flash('Wrong email/phone or password.', 'danger')
-        return render_template('login.html')
-
-    @app.route('/logout', methods=['POST'])
-    def logout():
-        session.clear()
-        return redirect(url_for('index'))
-
-    # ---------- chama ----------
-    @app.route('/dashboard')
-    @login_required
-    def dashboard():
-        rows = db().all("""SELECT c.id, c.name, c.description, m.role, s.status, s.due_at, p.name plan_name, p.max_members,
-            (SELECT COUNT(*) FROM chama_members x WHERE x.chama_id=c.id AND x.status='ACTIVE') members
-            FROM chama_members m JOIN chamas c ON c.id=m.chama_id JOIN subscriptions s ON s.chama_id=c.id
-            JOIN subscription_plans p ON p.id=s.plan_id WHERE m.user_id=? AND m.status='ACTIVE' ORDER BY c.name""", (g.user['id'],))
-        return render_template('dashboard.html', chamas=rows)
-
-    @app.route('/chamas/new', methods=['GET', 'POST'])
-    @login_required
-    def chama_new():
-        plans = db().all('SELECT * FROM subscription_plans WHERE is_active=1 ORDER BY sort_order')
-        if request.method == 'POST':
-            try:
-                cid = S.create_chama(db(), g.user['id'], request.form.get('name'), request.form.get('description'), request.form.get('plan'))
-                flash('Your chama is ready. Your free trial has started.', 'success')
-                return redirect(url_for('chama_home', chama_id=cid))
-            except S.BusinessError as e:
-                flash(str(e), 'danger')
-        return render_template('chama_new.html', plans=plans, trial=S.setting(db(), 'trial_days', 7))
-
-    @app.route('/chamas/<int:chama_id>')
-    @login_required
-    def chama_home(chama_id):
-        chama, me, sub = ctx(chama_id)
-        members = db().all("""SELECT u.id, u.name, u.phone, u.claimed, m.role, m.joined_at FROM chama_members m JOIN users u ON u.id=m.user_id
-            WHERE m.chama_id=? AND m.status='ACTIVE' ORDER BY m.joined_at LIMIT 200""", (chama_id,))
-        plan = S.get_plan(db(), sub['plan_id'])
-        return render_template('chama_home.html', chama=chama, me=me, sub=sub, plan=plan, members=members,
-                               roles=S.ROLES, is_admin=me['role'] == 'CHAMA_ADMIN')
-
-    @app.route('/chamas/<int:chama_id>/members', methods=['POST'])
-    @login_required
-    def member_add(chama_id):
-        ctx(chama_id, roles=('CHAMA_ADMIN',))
-        try:
-            uid, code = S.add_member_by_phone(db(), chama_id, request.form.get('phone'), request.form.get('name'),
-                                              request.form.get('role', 'MEMBER'), g.user['id'], generate_password_hash)
-            if code:
-                flash('Member added. Give them this join code to register: ' + code + ' (shown only once).', 'success')
-            else:
-                flash('Member added. They can already log in.', 'success')
-        except S.BusinessError as e:
-            flash(str(e), 'warning')
-        return redirect(url_for('chama_home', chama_id=chama_id))
-
-    @app.route('/chamas/<int:chama_id>/members/<int:user_id>/code', methods=['POST'])
-    @login_required
-    def member_code(chama_id, user_id):
-        ctx(chama_id, roles=('CHAMA_ADMIN',))
-        try:
-            code = S.reset_join_code(db(), chama_id, user_id, generate_password_hash)
-            flash('New join code: ' + code + '. The old code no longer works.', 'success')
-        except S.BusinessError as e:
-            flash(str(e), 'warning')
-        return redirect(url_for('chama_home', chama_id=chama_id))
-
-    @app.route('/chamas/<int:chama_id>/members/<int:user_id>/remove', methods=['POST'])
-    @login_required
-    def member_remove(chama_id, user_id):
-        ctx(chama_id, roles=('CHAMA_ADMIN',))
-        try:
-            S.remove_member(db(), chama_id, user_id, g.user['id'])
-            flash('Member removed. Their history is kept.', 'success')
-        except S.BusinessError as e:
-            flash(str(e), 'warning')
-        return redirect(url_for('chama_home', chama_id=chama_id))
-
-    @app.route('/chamas/<int:chama_id>/subscription')
-    @login_required
-    def subscription(chama_id):
-        chama, me, sub = ctx(chama_id, allow_inactive=True)
-        plans = db().all('SELECT * FROM subscription_plans WHERE is_active=1 ORDER BY sort_order')
-        pays = db().all('SELECT * FROM payments WHERE chama_id=? ORDER BY id DESC LIMIT 20', (chama_id,))
-        return render_template('subscription.html', chama=chama, me=me, sub=sub, plan=S.get_plan(db(), sub['plan_id']), plans=plans, pays=pays,
-                               members=S.active_member_count(db(), chama_id), provider=app.config['PROVIDER'], dev=(app.config['PROVIDER'] and app.config['PROVIDER'].name == 'TEST'),
-                               can_pay=me['role'] in ('CHAMA_ADMIN', 'TREASURER'), active=sub['status'] in S.ACCESS_OK)
-
-    @app.route('/chamas/<int:chama_id>/subscription/pay', methods=['POST'])
-    @login_required
-    def subscription_pay(chama_id):
-        chama, me, sub = ctx(chama_id, roles=('CHAMA_ADMIN', 'TREASURER'), allow_inactive=True)
-        prov = app.config['PROVIDER']
-        if not prov:
-            flash('M-Pesa is not configured yet. ' + app.config['PAY_INSTRUCTIONS'], 'warning')
-            return redirect(url_for('subscription', chama_id=chama_id))
-        phone = S.normalize_phone(request.form.get('phone'))
-        try:
-            plan_id, months = int(request.form.get('plan_id')), int(request.form.get('months', 1))
-        except (TypeError, ValueError):
-            abort(400)
-        if not phone:
-            flash('Enter a valid M-Pesa phone number.', 'danger')
-            return redirect(url_for('subscription', chama_id=chama_id))
-        try:
-            pid = S.create_payment(db(), chama_id, plan_id, months, prov.name, prov.name, phone, g.user['id'], is_test=prov.name == 'TEST')
-        except S.BusinessError as e:
-            flash(str(e), 'danger')
-            return redirect(url_for('subscription', chama_id=chama_id))
-        p = db().one('SELECT * FROM payments WHERE id=?', (pid,))
-        res = prov.initiate(p, phone)
-        if res['ok']:
-            db().execute('UPDATE payments SET provider_txn_id=? WHERE id=?', (res['checkout_id'], pid)); db().commit()
-            flash('Payment request sent. Approve it on your phone. Your chama unlocks when M-Pesa confirms.', 'success')
-        else:
-            db().execute("UPDATE payments SET status='FAILED', notes=?, completed_at=? WHERE id=?", (res['error'][:200], S.iso(S.now_utc()), pid)); db().commit()
-            flash(res['error'], 'danger')
-        return redirect(url_for('subscription', chama_id=chama_id))
-
-    @app.route('/chamas/<int:chama_id>/subscription/plan', methods=['POST'])
-    @login_required
-    def subscription_downgrade(chama_id):
-        ctx(chama_id, roles=('CHAMA_ADMIN',), allow_inactive=True)
-        try:
-            S.downgrade_plan(db(), chama_id, int(request.form.get('plan_id')), g.user['id'])
-            flash('Plan changed.', 'success')
-        except (S.BusinessError, TypeError, ValueError) as e:
-            flash(str(e) if isinstance(e, S.BusinessError) else 'Invalid plan.', 'warning')
-        return redirect(url_for('subscription', chama_id=chama_id))
-
-    @app.route('/chamas/<int:chama_id>/ledger')
-    @login_required
-    def chama_ledger(chama_id):
-        chama, me, sub = ctx(chama_id, roles=('CHAMA_ADMIN', 'TREASURER', 'SECRETARY'), allow_inactive=True)
-        schedules = db().all('SELECT * FROM contribution_schedules WHERE chama_id=? ORDER BY start_date DESC, id DESC', (chama_id,))
-        members = db().all("SELECT u.id, u.name FROM chama_members m JOIN users u ON u.id=m.user_id WHERE m.chama_id=? AND m.status='ACTIVE' ORDER BY u.name", (chama_id,))
-        member_balances = []
-        for member in members:
-            balance = S.get_member_balance(db(), chama_id, member['id'])
-            member_balances.append({
-                'id': member['id'],
-                'name': member['name'],
-                'paid': balance['paid'],
-                'due': balance['due'],
-                'balance': balance['balance'],
-                'in_arrears': balance['in_arrears'],
-                'arrears': balance['arrears'],
-            })
-        stats = S.get_chama_ledger_stats(db(), chama_id)
-        recent = db().all("""SELECT lt.*, u.name member_name FROM ledger_transactions lt JOIN users u ON u.id=lt.user_id
-            WHERE lt.chama_id=? ORDER BY lt.id DESC LIMIT 20""", (chama_id,))
-        return render_template(
-            'chama_ledger.html',
-            chama=chama,
-            schedules=schedules,
-            member_balances=member_balances,
-            recent_transactions=recent,
-            total_contributed=stats['total_contributed'],
-            active_schedules=stats['active_schedules'],
-            members_in_arrears=stats['members_in_arrears'],
-            total_arrears_kes=stats['total_arrears'],
-        )
-
-    @app.route('/chamas/<int:chama_id>/ledger/schedule', methods=['GET', 'POST'])
-    @login_required
-    def contribution_schedule(chama_id):
-        chama, me, sub = ctx(chama_id, roles=('CHAMA_ADMIN', 'TREASURER'), allow_inactive=True)
-        schedule_id = request.args.get('schedule_id', type=int)
-        schedule = None
-        if schedule_id:
-            schedule = db().one('SELECT * FROM contribution_schedules WHERE id=? AND chama_id=?', (schedule_id, chama_id))
-        if request.method == 'POST':
-            raw_amount = request.form.get('amount', '0')
-            frequency = request.form.get('frequency', 'MONTHLY')
-            start_date = request.form.get('start_date')
-            end_date = request.form.get('end_date') or None
-            is_active = request.form.get('is_active', '1') == '1'
-            try:
-                amount_cents = int(float(raw_amount) * 100)
-            except ValueError:
-                flash('Enter a valid amount.', 'danger')
-                return redirect(url_for('contribution_schedule', chama_id=chama_id))
-            try:
-                S.create_contribution_schedule(db(), chama_id, amount_cents, frequency, start_date, end_date, is_active, g.user['id'], schedule_id=schedule_id)
-                flash('Contribution schedule saved.', 'success')
-            except S.BusinessError as e:
-                flash(str(e), 'warning')
-            return redirect(url_for('chama_ledger', chama_id=chama_id))
-        return render_template('contribution_schedule.html', chama=chama, schedule=schedule)
-
-    @app.route('/chamas/<int:chama_id>/ledger/contribution', methods=['GET', 'POST'])
-    @login_required
-    def record_contribution(chama_id):
-        chama, me, sub = ctx(chama_id, roles=('CHAMA_ADMIN', 'TREASURER'), allow_inactive=True)
-        members = db().all("SELECT u.id, u.name FROM chama_members m JOIN users u ON u.id=m.user_id WHERE m.chama_id=? AND m.status='ACTIVE' ORDER BY u.name", (chama_id,))
-        if request.method == 'POST':
-            try:
-                member_id = int(request.form.get('member_id'))
-                amount_cents = int(float(request.form.get('amount', '0')) * 100)
-            except (TypeError, ValueError):
-                flash('Please enter a valid member and amount.', 'danger')
-                return redirect(url_for('record_contribution', chama_id=chama_id))
-            receipt_code = (request.form.get('receipt_code') or '').strip()
-            notes = (request.form.get('notes') or '').strip()
-            try:
-                S.record_contribution(db(), chama_id, member_id, amount_cents, receipt_code, notes, g.user['id'])
-                flash('Contribution recorded to ledger.', 'success')
-            except S.BusinessError as e:
-                flash(str(e), 'warning')
-            return redirect(url_for('chama_ledger', chama_id=chama_id))
-        return render_template('record_contribution.html', chama=chama, members=members, today=S.now_utc().date().isoformat())
-
-    @app.route('/chamas/<int:chama_id>/members/<int:user_id>/statement')
-    @login_required
-    def member_statement(chama_id, user_id):
-        chama, me, sub = ctx(chama_id, roles=('CHAMA_ADMIN', 'TREASURER', 'SECRETARY'), allow_inactive=True)
-        if g.user['id'] != user_id and me['role'] not in ('CHAMA_ADMIN', 'TREASURER', 'SECRETARY'):
-            abort(403)
-        member = db().one("SELECT u.* FROM users u JOIN chama_members m ON m.user_id=u.id WHERE m.chama_id=? AND u.id=? AND m.status='ACTIVE'", (chama_id, user_id))
-        if not member:
-            abort(404)
-        balance = S.get_member_balance(db(), chama_id, user_id)
-        transactions = db().all('SELECT * FROM ledger_transactions WHERE chama_id=? AND user_id=? ORDER BY id DESC', (chama_id, user_id))
-        return render_template('member_statement.html', chama=chama, member=member, balance=balance, transactions=transactions)
-
-    # ---------- payment callbacks ----------
-    @app.route('/webhooks/mpesa/<secret>', methods=['POST'])
-    def mpesa_webhook(secret):
-        want = os.environ.get('MPESA_CALLBACK_SECRET', '')
-        if not want or not hmac.compare_digest(secret, want):
-            abort(403)
-        ev = MpesaPaymentProvider.parse_callback(request.get_json(silent=True) or {})
-        try:
-            S.process_webhook(db(), 'MPESA', ev)
-        except Exception:
-            app.logger.exception('webhook processing failed')
-        return jsonify(ResultCode=0, ResultDesc='Accepted')
-
-    @app.route('/dev/pay/<checkout_id>/<outcome>', methods=['POST'])
-    @login_required
-    def dev_pay(checkout_id, outcome):
-        prov = app.config['PROVIDER']
-        if not prov or prov.name != 'TEST' or app.config['IS_PRODUCTION']:
-            abort(404)
-        p = db().one("SELECT * FROM payments WHERE provider='TEST' AND provider_txn_id=?", (checkout_id,))
-        if not p:
-            abort(404)
-        ctx(p['chama_id'], roles=('CHAMA_ADMIN', 'TREASURER'), allow_inactive=True)
-        code = {'success': 0, 'failed': 1, 'cancelled': 1032}.get(outcome)
-        if code is None:
-            abort(400)
-        S.process_webhook(db(), 'TEST', {'event_id': 'EVT-' + checkout_id + '-' + outcome, 'checkout_id': checkout_id, 'result_code': code,
-                                         'amount_cents': p['amount_cents'], 'receipt': 'TESTRCP' + checkout_id[-8:]})
-        flash(f'Test payment marked {outcome}.', 'info')
-        return redirect(url_for('subscription', chama_id=p['chama_id']))
-
-    # ---------- owner control center ----------
-    @app.route('/owner')
-    @owner_required
-    def owner_home():
-        S.sweep_all(db())
-        st = S.owner_stats(db())
-        recent = db().all("""SELECT p.*, c.name chama FROM payments p JOIN chamas c ON c.id=p.chama_id ORDER BY p.id DESC LIMIT 8""")
-        integrations = [('M-Pesa', 'READY' if MpesaPaymentProvider().configured() else 'CONFIGURATION REQUIRED'),
-                        ('Email', 'NOT BUILT YET'), ('SMS', 'NOT BUILT YET'),
-                        ('Database', 'PostgreSQL' if db().pg else 'SQLite (not safe for production)')]
-        return render_template('owner_home.html', st=st, recent=recent, integrations=integrations)
-
-    @app.route('/owner/chamas')
-    @owner_required
-    def owner_chamas():
-        q, status = (request.args.get('q') or '').strip(), request.args.get('status', '')
-        page = max(1, request.args.get('page', 1, type=int))
-        where, args = ['1=1'], []
-        if q:
-            where.append('LOWER(c.name) LIKE ?'); args.append('%' + q.lower() + '%')
-        if status:
-            where.append('s.status=?'); args.append(status)
-        sql = ' AND '.join(where)
-        total = db().val(f'SELECT COUNT(*) FROM chamas c JOIN subscriptions s ON s.chama_id=c.id WHERE {sql}', args, 0)
-        rows = db().all(f"""SELECT c.id, c.name, c.created_at, s.status, s.due_at, p.name plan_name,
-            (SELECT COUNT(*) FROM chama_members x WHERE x.chama_id=c.id AND x.status='ACTIVE') members
-            FROM chamas c JOIN subscriptions s ON s.chama_id=c.id JOIN subscription_plans p ON p.id=s.plan_id
-            WHERE {sql} ORDER BY c.id DESC LIMIT {PAGE} OFFSET {(page - 1) * PAGE}""", args)
-        return render_template('owner_chamas.html', rows=rows, q=q, status=status, page=page, pages=max(1, -(-total // PAGE)), total=total)
-
-    @app.route('/owner/chamas/<int:chama_id>')
-    @owner_required
-    def owner_chama(chama_id):
-        chama = db().one('SELECT * FROM chamas WHERE id=?', (chama_id,)) or abort(404)
-        sub = S.sync_subscription(db(), chama_id)
-        return render_template('owner_chama.html', chama=chama, sub=sub, plan=S.get_plan(db(), sub['plan_id']),
-            plans=db().all('SELECT * FROM subscription_plans ORDER BY sort_order'),
-            members=db().all("""SELECT u.name, u.phone, u.email, m.role, m.status FROM chama_members m JOIN users u ON u.id=m.user_id
-                WHERE m.chama_id=? ORDER BY m.status, m.joined_at LIMIT 300""", (chama_id,)),
-            pays=db().all('SELECT * FROM payments WHERE chama_id=? ORDER BY id DESC LIMIT 20', (chama_id,)),
-            logs=db().all('SELECT a.*, u.name actor FROM audit_logs a LEFT JOIN users u ON u.id=a.actor_id WHERE a.chama_id=? ORDER BY a.id DESC LIMIT 15', (chama_id,)),
-            count=S.active_member_count(db(), chama_id))
-
-    @app.route('/owner/chamas/<int:chama_id>/<action>', methods=['POST'])
-    @owner_required
-    def owner_action(chama_id, action):
-        db().one('SELECT id FROM chamas WHERE id=?', (chama_id,)) or abort(404)
-        f, me = request.form, g.user['id']
-        try:
-            if action == 'suspend':
-                S.suspend_chama(db(), chama_id, f.get('reason'), me); flash('Chama suspended. All data is kept.', 'success')
-            elif action in ('reactivate', 'extend'):
-                S.grant_access(db(), chama_id, int(f.get('days') or 30), me, reactivate=(action == 'reactivate')); flash('Done.', 'success')
-            elif action == 'manual-payment':
-                S.record_manual_payment(db(), chama_id, int(f.get('plan_id')), int(f.get('months', 1)), f.get('method', 'Cash')[:30],
-                                        f.get('reference', ''), f.get('paid_on', '')[:10], f.get('notes', ''), me); flash('Manual payment recorded and subscription updated.', 'success')
-            else:
-                abort(404)
-        except (S.BusinessError, ValueError, TypeError) as e:
-            flash(str(e) if isinstance(e, S.BusinessError) else 'Please check the values you entered.', 'danger')
-        return redirect(url_for('owner_chama', chama_id=chama_id))
-
-    @app.route('/owner/plans', methods=['GET', 'POST'])
-    @owner_required
-    def owner_plans():
-        if request.method == 'POST':
-            f = request.form
-            try:
-                if f.get('kind') == 'settings':
-                    S.update_settings(db(), f.get('trial_days'), f.get('grace_days'), f.get('billing_period_days'), g.user['id'])
-                else:
-                    S.update_plan(db(), int(f.get('plan_id')), f.get('name'), f.get('price'), f.get('max_members'), f.get('is_active') == '1', g.user['id'])
-                flash('Saved.', 'success')
-            except (S.BusinessError, ValueError, TypeError) as e:
-                flash(str(e) if isinstance(e, S.BusinessError) else 'Invalid values.', 'danger')
-            return redirect(url_for('owner_plans'))
-        return render_template('owner_plans.html', plans=db().all('SELECT * FROM subscription_plans ORDER BY sort_order'),
-                               cfg={k: S.setting(db(), k) for k in ('trial_days', 'grace_days', 'billing_period_days')})
-
-    @app.route('/owner/audit')
-    @owner_required
-    def owner_audit():
-        page = max(1, request.args.get('page', 1, type=int))
-        total = db().val('SELECT COUNT(*) FROM audit_logs', (), 0)
-        rows = db().all(f"""SELECT a.*, u.name actor, c.name chama FROM audit_logs a LEFT JOIN users u ON u.id=a.actor_id
-            LEFT JOIN chamas c ON c.id=a.chama_id ORDER BY a.id DESC LIMIT {PAGE} OFFSET {(page - 1) * PAGE}""")
-        return render_template('owner_audit.html', rows=rows, page=page, pages=max(1, -(-total // PAGE)))
-
-    @app.cli.command('sweep')
-    def sweep_cmd():
-        d = DB(app.config['DATABASE_URL']); print('changed:', S.sweep_all(d)); d.close()
-
-    for code, msg in ((400, 'That request was not valid.'), (403, 'You do not have access to this page.'), (404, 'We could not find that page.'), (429, 'Too many requests.')):
-        app.register_error_handler(code, lambda e, code=code, msg=msg: (render_template('error.html', code=code, msg=msg), code))
-
-    @app.errorhandler(500)
-    def server_error(e):
-        return render_template('error.html', code=500, msg='Something went wrong on our side. Your data is safe. Please try again.'), 500
-
+    init_db(app)
+    register_views(app)
     return app
 
 
-app = create_app() if os.environ.get('RENDER') or os.environ.get('CHAMAPAY_AUTOSTART') else None
+def db():
+    global _db
+    if _db is None:
+        from flask import current_app
+        _db = DB(current_app.config.get('DATABASE_URL', 'sqlite:///app.db'))
+    return _db
+
+
+def register_views(app):
+    @app.before_request
+    def load_session():
+        session.permanent = True
+        g.user = None
+        if 'user_id' in session:
+            user = db().one('SELECT * FROM users WHERE id=?', (session['user_id'],))
+            if user:
+                g.user = user
+
+    @app.route('/')
+    def index():
+        if g.user:
+            return redirect(url_for('dashboard'))
+        return render_template('index.html')
+
+    @app.route('/dashboard')
+    def dashboard():
+        if not g.user:
+            return redirect(url_for('index'))
+        chamas = db().all(
+            'SELECT c.* FROM chama c JOIN chama_members m ON c.id=m.chama_id WHERE m.user_id=? AND m.status="ACTIVE"',
+            (g.user['id'],),
+        )
+        return render_template('dashboard.html', chamas=chamas)
+
+    @app.route('/chamas/<int:chama_id>/finance')
+    def finance(chama_id):
+        if not g.user:
+            return redirect(url_for('index'))
+        
+        chama = db().one('SELECT * FROM chama WHERE id=?', (chama_id,))
+        if not chama:
+            abort(404)
+        
+        member = db().one(
+            'SELECT * FROM chama_members WHERE chama_id=? AND user_id=?',
+            (chama_id, g.user['id']),
+        )
+        if not member or member['status'] != 'ACTIVE':
+            abort(403)
+        
+        is_admin = member['role'] in ('CHAMA_ADMIN', 'TREASURER')
+        
+        members = db().all(
+            'SELECT u.id, u.name FROM chama_members m JOIN users u ON u.id=m.user_id WHERE m.chama_id=? AND m.status="ACTIVE" ORDER BY u.name',
+            (chama_id,),
+        )
+
+        loans = db().all(
+            'SELECT l.*, u.name AS member_name FROM loans l JOIN users u ON u.id=l.user_id WHERE l.chama_id=? ORDER BY l.id DESC',
+            (chama_id,),
+        )
+
+        fines = db().all(
+            'SELECT f.*, u.name AS member_name FROM fines f JOIN users u ON u.id=f.user_id WHERE f.chama_id=? ORDER BY f.id DESC',
+            (chama_id,),
+        )
+
+        summary = S.get_finance_summary(db(), chama_id)
+
+        return render_template(
+            'finance.html',
+            chama=chama,
+            is_admin=is_admin,
+            members=members,
+            loans=loans,
+            fines=fines,
+            summary=summary,
+        )
+
+    @app.route('/chamas/<int:chama_id>/finance/loan', methods=['POST'])
+    def finance_loan(chama_id):
+        if not g.user:
+            return redirect(url_for('index'))
+        
+        member = db().one(
+            'SELECT * FROM chama_members WHERE chama_id=? AND user_id=?',
+            (chama_id, g.user['id']),
+        )
+        if not member or member['role'] not in ('CHAMA_ADMIN', 'TREASURER'):
+            abort(403)
+
+        try:
+            member_id = int(request.form.get('member_id'))
+            amount = float(request.form.get('amount', '0'))
+            due_date = request.form.get('due_date') or None
+            reason = request.form.get('reason', '')
+        except (TypeError, ValueError):
+            flash('Please enter a valid member, amount, and due date.', 'danger')
+            return redirect(url_for('finance', chama_id=chama_id))
+
+        try:
+            amount_cents = int(round(amount * 100))
+            S.create_loan(
+                db(),
+                chama_id,
+                member_id,
+                amount_cents,
+                reason,
+                g.user['id'],
+                due_date=due_date,
+            )
+            flash('Loan approved.', 'success')
+        except S.BusinessError as e:
+            flash(str(e), 'warning')
+
+        return redirect(url_for('finance', chama_id=chama_id))
+
+    @app.route('/chamas/<int:chama_id>/finance/fine', methods=['POST'])
+    def finance_fine(chama_id):
+        if not g.user:
+            return redirect(url_for('index'))
+        
+        member = db().one(
+            'SELECT * FROM chama_members WHERE chama_id=? AND user_id=?',
+            (chama_id, g.user['id']),
+        )
+        if not member or member['role'] not in ('CHAMA_ADMIN', 'TREASURER'):
+            abort(403)
+
+        try:
+            member_id = int(request.form.get('member_id'))
+            amount = float(request.form.get('amount', '0'))
+            reason = request.form.get('reason', '')
+        except (TypeError, ValueError):
+            flash('Please enter a valid member and amount.', 'danger')
+            return redirect(url_for('finance', chama_id=chama_id))
+
+        try:
+            amount_cents = int(round(amount * 100))
+            S.create_fine(
+                db(),
+                chama_id,
+                member_id,
+                amount_cents,
+                reason,
+                g.user['id'],
+            )
+            flash('Fine recorded.', 'success')
+        except S.BusinessError as e:
+            flash(str(e), 'warning')
+
+        return redirect(url_for('finance', chama_id=chama_id))
+
+    @app.route('/chamas/<int:chama_id>/finance/loan/<int:loan_id>/repay', methods=['POST'])
+    def loan_repay(chama_id, loan_id):
+        if not g.user:
+            return redirect(url_for('index'))
+        
+        member = db().one(
+            'SELECT * FROM chama_members WHERE chama_id=? AND user_id=?',
+            (chama_id, g.user['id']),
+        )
+        if not member or member['role'] not in ('CHAMA_ADMIN', 'TREASURER'):
+            abort(403)
+
+        try:
+            amount = float(request.form.get('amount', '0'))
+        except (TypeError, ValueError):
+            flash('Please enter a valid repayment amount.', 'danger')
+            return redirect(url_for('finance', chama_id=chama_id))
+
+        try:
+            amount_cents = int(round(amount * 100))
+            S.record_loan_repayment(
+                db(),
+                loan_id,
+                amount_cents,
+                g.user['id'],
+                notes='Manual repayment',
+            )
+            flash('Loan repayment recorded.', 'success')
+        except S.BusinessError as e:
+            flash(str(e), 'warning')
+
+        return redirect(url_for('finance', chama_id=chama_id))
+
+    @app.route('/chamas/<int:chama_id>/finance/fine/<int:fine_id>/pay', methods=['POST'])
+    def fine_pay(chama_id, fine_id):
+        if not g.user:
+            return redirect(url_for('index'))
+        
+        member = db().one(
+            'SELECT * FROM chama_members WHERE chama_id=? AND user_id=?',
+            (chama_id, g.user['id']),
+        )
+        if not member or member['role'] not in ('CHAMA_ADMIN', 'TREASURER'):
+            abort(403)
+
+        try:
+            amount = float(request.form.get('amount', '0'))
+        except (TypeError, ValueError):
+            flash('Please enter a valid fine payment amount.', 'danger')
+            return redirect(url_for('finance', chama_id=chama_id))
+
+        try:
+            amount_cents = int(round(amount * 100))
+            S.pay_fine(
+                db(),
+                fine_id,
+                amount_cents,
+                g.user['id'],
+                receipt='manual-' + str(fine_id),
+            )
+            flash('Fine payment recorded.', 'success')
+        except S.BusinessError as e:
+            flash(str(e), 'warning')
+
+        return redirect(url_for('finance', chama_id=chama_id))
+
 
 if __name__ == '__main__':
-    create_app().run(debug=False, port=int(os.environ.get('PORT', 5000)))
+    app = create_app()
+    app.run(debug=True)
