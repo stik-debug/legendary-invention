@@ -1,19 +1,7 @@
-{% extends "base.html" %}{% block title %}Log in - ChamaPay Kenya{% endblock %}
-{% block content %}
-<div class="auth">
-  <h1>Log in</h1>
-  <p class="mute">Enter your email or phone number and password.</p>
-  <form method="POST" action="{{ url_for('login') }}{% if request.args.get('next') %}?next={{ request.args.get('next') }}{% endif %}">
-    <div class="field">
-      <label for="login">Email or phone</label>
-      <input type="text" id="login" name="login" required>
-    </div>
-    <div class="field">
-      <label for="password">Password</label>
-      <input type="password" id="password" name="password" required>
-    </div>
-    <button type="submit" class="btn pri block" style="margin-top:6px">Log in</button>
-  </form>
-  <p style="margin-top:20px;text-align:center;color:var(--mute)">No account yet? <a href="{{ url_for('register') }}">Register here</a></p>
-</div>
-{% endblock %}
+{% extends "base.html" %}{% block title %}Log in - ChamaPay{% endblock %}
+{% block content %}<div class="auth card"><h1>Welcome back</h1><p class="mute">Log in with your email or phone number.</p>
+<form method="POST">{{ csrf_input() }}
+<div class="field"><label for="l">Email or phone</label><input id="l" name="login" autocomplete="username" required autofocus></div>
+<div class="field"><label for="p">Password</label><input id="p" type="password" name="password" autocomplete="current-password" required></div>
+<button class="btn pri block">Log in</button></form>
+<p class="mute" style="text-align:center;margin-bottom:0">New here? <a href="{{ url_for('register') }}">Create an account</a></p></div>{% endblock %}

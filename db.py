@@ -140,15 +140,43 @@ CREATE TABLE IF NOT EXISTS audit_logs(
   id {PK}, actor_id INTEGER, action TEXT NOT NULL, entity_type TEXT, entity_id TEXT, chama_id INTEGER,
   metadata TEXT, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS login_attempts(id {PK}, key TEXT NOT NULL, at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS contribution_schedules(
-  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id),
-  amount_cents INTEGER NOT NULL CHECK(amount_cents>0), frequency TEXT NOT NULL,
-  start_date TEXT NOT NULL, end_date TEXT, is_active INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS ledger_transactions(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), user_id INTEGER REFERENCES users(id), kind TEXT NOT NULL,
+  direction TEXT NOT NULL CHECK(direction IN ('IN','OUT','MEMO')), amount_cents BIGINT NOT NULL CHECK(amount_cents>0),
+  ref_type TEXT, ref_id INTEGER, description TEXT, occurred_on TEXT NOT NULL, created_by INTEGER REFERENCES users(id), created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS contributions(
   id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), user_id INTEGER NOT NULL REFERENCES users(id),
-  type TEXT NOT NULL, amount_cents INTEGER NOT NULL CHECK(amount_cents>0),
-  reference TEXT, notes TEXT, created_at TEXT NOT NULL);
+  amount_cents BIGINT NOT NULL CHECK(amount_cents>0), paid_on TEXT NOT NULL, period TEXT NOT NULL, method TEXT NOT NULL,
+  reference TEXT, notes TEXT, status TEXT NOT NULL DEFAULT 'PAID', created_by INTEGER REFERENCES users(id), created_at TEXT NOT NULL,
+  voided_by INTEGER, voided_at TEXT, void_reason TEXT);
+CREATE TABLE IF NOT EXISTS loans(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), user_id INTEGER NOT NULL REFERENCES users(id),
+  principal_cents BIGINT NOT NULL CHECK(principal_cents>0), interest_cents BIGINT NOT NULL CHECK(interest_cents>=0),
+  total_due_cents BIGINT NOT NULL, paid_cents BIGINT NOT NULL DEFAULT 0, rate_bps INTEGER NOT NULL, purpose TEXT,
+  status TEXT NOT NULL, applied_at TEXT NOT NULL, decided_by INTEGER, decided_at TEXT, disbursed_by INTEGER, disbursed_at TEXT);
+CREATE TABLE IF NOT EXISTS loan_repayments(
+  id {PK}, loan_id INTEGER NOT NULL REFERENCES loans(id), chama_id INTEGER NOT NULL REFERENCES chamas(id), user_id INTEGER NOT NULL,
+  amount_cents BIGINT NOT NULL CHECK(amount_cents>0), paid_on TEXT NOT NULL, method TEXT NOT NULL, reference TEXT,
+  status TEXT NOT NULL DEFAULT 'PAID', created_by INTEGER, created_at TEXT NOT NULL, voided_at TEXT, void_reason TEXT);
+CREATE TABLE IF NOT EXISTS fines(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), user_id INTEGER NOT NULL REFERENCES users(id),
+  amount_cents BIGINT NOT NULL CHECK(amount_cents>0), paid_cents BIGINT NOT NULL DEFAULT 0, reason TEXT NOT NULL, due_on TEXT,
+  status TEXT NOT NULL DEFAULT 'UNPAID', created_by INTEGER, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS fine_payments(
+  id {PK}, fine_id INTEGER NOT NULL REFERENCES fines(id), chama_id INTEGER NOT NULL REFERENCES chamas(id), user_id INTEGER NOT NULL,
+  amount_cents BIGINT NOT NULL CHECK(amount_cents>0), paid_on TEXT NOT NULL, method TEXT NOT NULL, reference TEXT,
+  status TEXT NOT NULL DEFAULT 'PAID', created_by INTEGER, created_at TEXT NOT NULL, voided_at TEXT, void_reason TEXT);
+CREATE TABLE IF NOT EXISTS messages(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), sender_id INTEGER NOT NULL REFERENCES users(id), body TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS message_reads(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), user_id INTEGER NOT NULL REFERENCES users(id),
+  last_read_id BIGINT NOT NULL DEFAULT 0, UNIQUE(chama_id, user_id));
+CREATE INDEX IF NOT EXISTS ix_ledger_chama ON ledger_transactions(chama_id, id);
+CREATE INDEX IF NOT EXISTS ix_contrib_chama ON contributions(chama_id, period, user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_contrib_ref ON contributions(chama_id, reference) WHERE reference IS NOT NULL AND status='PAID';
+CREATE INDEX IF NOT EXISTS ix_loans_chama ON loans(chama_id, user_id, status);
+CREATE INDEX IF NOT EXISTS ix_fines_chama ON fines(chama_id, user_id, status);
+CREATE INDEX IF NOT EXISTS ix_messages_chama ON messages(chama_id, id);
 CREATE INDEX IF NOT EXISTS ix_members_chama ON chama_members(chama_id, status);
 CREATE INDEX IF NOT EXISTS ix_members_user ON chama_members(user_id);
 CREATE INDEX IF NOT EXISTS ix_pay_chama ON payments(chama_id, created_at);
@@ -156,9 +184,6 @@ CREATE INDEX IF NOT EXISTS ix_pay_status ON payments(status, completed_at);
 CREATE INDEX IF NOT EXISTS ix_audit_chama ON audit_logs(chama_id, created_at);
 CREATE INDEX IF NOT EXISTS ix_sub_status ON subscriptions(status);
 CREATE INDEX IF NOT EXISTS ix_attempts ON login_attempts(key, at);
-CREATE INDEX IF NOT EXISTS ix_contrib_chama ON contribution_schedules(chama_id);
-CREATE INDEX IF NOT EXISTS ix_ledger_chama ON ledger_transactions(chama_id, created_at);
-CREATE INDEX IF NOT EXISTS ix_ledger_user ON ledger_transactions(user_id);
 """
 
 DEFAULT_PLANS = [('starter', 'Starter', 50000, 15, 1), ('growth', 'Growth', 150000, 70, 2), ('business', 'Business', 200000, 100, 3)]
@@ -181,6 +206,9 @@ def init_db(db):
         ensure_column(db, 'users', 'claimed', 'INTEGER NOT NULL DEFAULT 1')
         ensure_column(db, 'users', 'claim_code_hash', 'TEXT')
         ensure_column(db, 'users', 'claim_fails', 'INTEGER NOT NULL DEFAULT 0')
+        ensure_column(db, 'chamas', 'contribution_cents', 'BIGINT NOT NULL DEFAULT 100000')
+        ensure_column(db, 'chamas', 'loan_rate_bps', 'INTEGER NOT NULL DEFAULT 1000')
+        ensure_column(db, 'chamas', 'loan_multiplier', 'INTEGER NOT NULL DEFAULT 3')
         if not db.val('SELECT COUNT(*) FROM subscription_plans'):
             for code, name, price, mx, order in DEFAULT_PLANS:
                 db.insert('subscription_plans', code=code, name=name, price_cents=price, max_members=mx, sort_order=order)

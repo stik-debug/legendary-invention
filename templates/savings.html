@@ -1,0 +1,25 @@
+{% extends "base.html" %}{% from "_macros.html" import pager, pill %}{% block title %}Savings - {{ chama.name }}{% endblock %}
+{% block content %}
+<div class="head"><div><h2>Savings</h2><p>{{ chama.name }} · KES {{ chama.contribution_cents|kes }} per member each month</p></div>{% if can %}<button class="btn pri" data-open="add">Record contribution</button>{% endif %}</div>
+{% include '_chama_nav.html' %}
+<form method="GET" class="card" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap"><div style="flex:1;min-width:150px"><label for="pr">Month</label><input id="pr" type="month" name="period" value="{{ period }}"></div><button class="btn">Show</button></form>
+<div class="card hero3d tilt"><div><small>{{ period }}</small><h2>KES {{ collected|kes }} collected</h2><p>{{ paid_count }} of {{ status|length }} members fully paid</p></div></div>
+<div class="card tight"><h3 style="padding:18px 20px 0">Who has paid</h3><ul class="list">
+{% for s in status %}<li><span class="av">{{ s.name[:1] }}</span><span class="grow">{{ s.name }}<br><small>KES {{ s.paid|kes }} of {{ s.expected|kes }}</small></span><span class="pill {{ {'PAID':'ok','PARTIAL':'warn','PENDING':'bad'}[s.status] }}">{{ {'PAID':'Paid','PARTIAL':'Part paid','PENDING':'Not yet'}[s.status] }}</span></li>{% else %}<li class="empty grow">No members.</li>{% endfor %}</ul></div>
+<div class="card tight"><h3 style="padding:18px 20px 0">All contributions</h3><ul class="list">
+{% for c in rows %}<li><span class="grow">{{ c.name }} · KES {{ c.amount_cents|kes }}<br><small>{{ c.paid_on|date }} · {{ c.method }}{% if c.reference %} · {{ c.reference }}{% endif %}{% if c.status!='PAID' %} · cancelled: {{ c.void_reason }}{% endif %}</small></span>
+{% if c.status=='PAID' %}<span class="pill ok">Paid</span>{% if can %}<button class="btn sm bad" data-form-open="void" data-action="{{ url_for('savings_void', chama_id=chama.id, cid=c.id) }}" data-text="{{ c.name }} · KES {{ c.amount_cents|kes }}">Cancel</button>{% endif %}{% else %}<span class="pill bad">Cancelled</span>{% endif %}</li>{% else %}<li class="empty grow">No contributions recorded yet.</li>{% endfor %}</ul></div>
+{{ pager(page, pages) }}
+{% if can %}
+<dialog id="add"><form method="POST" action="{{ url_for('savings_add', chama_id=chama.id) }}">{{ csrf_input() }}<h3>Record a contribution</h3>
+<div class="field"><label>Member</label><select name="user_id">{% for s in status %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select></div>
+<div class="field"><label>Amount (KES)</label><input name="amount" inputmode="decimal" value="{{ (chama.contribution_cents/100)|int }}" required></div>
+<div class="field"><label>Date paid</label><input type="date" name="paid_on" value="{{ today }}" max="{{ today }}" required></div>
+<div class="field"><label>How did they pay?</label><select name="method">{% for m in methods %}<option>{{ m }}</option>{% endfor %}</select></div>
+<div class="field"><label>M-Pesa code (optional)</label><input name="reference" maxlength="40" autocapitalize="characters"><small>The same code cannot be recorded twice.</small></div>
+<div class="field"><label>Note (optional)</label><input name="notes" maxlength="200"></div>
+<div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn pri">Save</button></div></form></dialog>
+<dialog id="void"><form method="POST" action="">{{ csrf_input() }}<h3>Cancel this contribution?</h3><p class="mute" data-text-slot></p><p class="mute">It stays in the history and the ledger is corrected. Use this for mistakes.</p>
+<div class="field"><label>Reason</label><input name="reason" required maxlength="200"></div><div class="actions"><button type="button" class="btn" data-close>Keep it</button><button class="btn bad">Cancel contribution</button></div></form></dialog>
+{% endif %}
+{% endblock %}

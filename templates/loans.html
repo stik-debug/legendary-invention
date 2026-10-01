@@ -1,0 +1,37 @@
+{% extends "base.html" %}{% from "_macros.html" import pill %}{% block title %}Loans - {{ chama.name }}{% endblock %}
+{% block content %}
+<div class="head"><div><h2>Loans</h2><p>{{ chama.name }} · {{ (chama.loan_rate_bps/100)|round(1) }}% interest · up to {{ chama.loan_multiplier }}× savings</p></div>
+{% if not open_loan %}<button class="btn pri" data-open="apply">Ask for a loan</button>{% endif %}</div>
+{% include '_chama_nav.html' %}
+{% if staff %}<div class="stats"><div class="stat dark"><small>Cash available to lend</small><b>KES {{ cash|kes }}</b></div></div>{% endif %}
+<div class="card tight"><ul class="list">
+{% for l in loans %}
+<li style="align-items:flex-start"><span class="av">{{ l.name[:1] }}</span>
+<span class="grow"><b>{{ l.name }}</b> · KES {{ l.principal_cents|kes }}<br>
+<small>Interest KES {{ l.interest_cents|kes }} · Total due KES {{ l.total_due_cents|kes }} · Paid KES {{ l.paid_cents|kes }} · <b>Balance KES {{ (l.total_due_cents - l.paid_cents)|kes }}</b>{% if l.purpose %}<br>For: {{ l.purpose }}{% endif %}</small>
+{% for r in reps.get(l.id, []) %}<br><small>Paid KES {{ r.amount_cents|kes }} on {{ r.paid_on|date }} ({{ r.method }}){% if staff %} <button class="btn sm bad" data-form-open="void" data-action="{{ url_for('repayment_void', chama_id=chama.id, rid=r.id) }}" data-text="Repayment of KES {{ r.amount_cents|kes }}">Cancel</button>{% endif %}</small>{% endfor %}</span>
+{{ pill(l.status) }}
+{% if staff and l.user_id != user.id %}
+{% if l.status=='PENDING' %}<form method="POST" action="{{ url_for('loan_action', chama_id=chama.id, lid=l.id, action='approve') }}" style="margin:0">{{ csrf_input() }}<button class="btn sm pri">Approve</button></form>
+<form method="POST" action="{{ url_for('loan_action', chama_id=chama.id, lid=l.id, action='reject') }}" style="margin:0">{{ csrf_input() }}<button class="btn sm bad">Decline</button></form>{% endif %}
+{% if l.status=='APPROVED' %}<form method="POST" action="{{ url_for('loan_action', chama_id=chama.id, lid=l.id, action='disburse') }}" data-confirm="Pay out KES {{ l.principal_cents|kes }} to {{ l.name }}?" style="margin:0">{{ csrf_input() }}<button class="btn sm gold">Pay out</button></form>{% endif %}
+{% endif %}
+{% if staff and l.status=='ACTIVE' %}<button class="btn sm pri" data-form-open="repay" data-action="{{ url_for('loan_action', chama_id=chama.id, lid=l.id, action='repay') }}" data-amount="{{ ((l.total_due_cents - l.paid_cents)/100)|round(2) }}" data-text="{{ l.name }} owes KES {{ (l.total_due_cents - l.paid_cents)|kes }}">Record repayment</button>{% endif %}
+</li>{% else %}<li class="empty grow">No loans yet.</li>{% endfor %}</ul></div>
+{% if staff %}<p class="mute">You cannot approve or pay out your own loan. Another official must do it.</p>{% endif %}
+{% if not open_loan %}<dialog id="apply"><form method="POST" action="{{ url_for('loan_apply', chama_id=chama.id) }}">{{ csrf_input() }}<h3>Ask for a loan</h3>
+<p class="mute">You can borrow up to <b>KES {{ limit|kes }}</b> ({{ chama.loan_multiplier }} times your savings). Interest is {{ (chama.loan_rate_bps/100)|round(1) }}%.</p>
+<div class="field"><label>Amount (KES)</label><input name="amount" inputmode="decimal" required></div>
+<div class="field"><label>What is it for?</label><input name="purpose" maxlength="200"></div>
+<div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn pri">Send request</button></div></form></dialog>{% endif %}
+{% if staff %}
+<dialog id="repay"><form method="POST" action="">{{ csrf_input() }}<h3>Record a repayment</h3><p class="mute" data-text-slot></p>
+<div class="field"><label>Amount (KES)</label><input name="amount" inputmode="decimal" required></div>
+<div class="field"><label>Date paid</label><input type="date" name="paid_on" value="{{ today }}" max="{{ today }}" required></div>
+<div class="field"><label>How did they pay?</label><select name="method">{% for m in methods %}<option>{{ m }}</option>{% endfor %}</select></div>
+<div class="field"><label>M-Pesa code (optional)</label><input name="reference" maxlength="40"></div>
+<div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn pri">Save</button></div></form></dialog>
+<dialog id="void"><form method="POST" action="">{{ csrf_input() }}<h3>Cancel this repayment?</h3><p class="mute" data-text-slot></p>
+<div class="field"><label>Reason</label><input name="reason" required maxlength="200"></div><div class="actions"><button type="button" class="btn" data-close>Keep it</button><button class="btn bad">Cancel repayment</button></div></form></dialog>
+{% endif %}
+{% endblock %}

@@ -1,82 +1,37 @@
-{% extends "base.html" %}{% block title %}{{ chama.name }} - ChamaPay Kenya{% endblock %}
+{% extends "base.html" %}{% block title %}{{ chama.name }} - ChamaPay{% endblock %}
 {% block content %}
-<div class="head">
-  <div>
-    <h1>{{ chama.name }}</h1>
-    <p>{{ chama.description }}</p>
-  </div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-    <span class="pill {% if sub.status=='TRIAL' %}info{% elif sub.status in ('ACTIVE','PAST_DUE') %}ok{% elif sub.status=='GRACE_PERIOD' %}warn{% else %}bad{% endif %}">{{ sub.status }}</span>
-    {% if is_admin %}<a href="{{ url_for('chama_ledger', chama_id=chama.id) }}" class="btn sm">Ledger</a>{% endif %}
-  </div>
+<div class="head"><div><h2>{{ chama.name }}</h2><p>{{ chama.description or 'Your chama' }}</p></div>
+<div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn" href="{{ url_for('statement', chama_id=chama.id) }}">My statement</a><a class="btn" href="{{ url_for('subscription', chama_id=chama.id) }}">Subscription</a></div></div>
+{% include '_chama_nav.html' %}
+{% if sub.status in ('PAST_DUE','GRACE_PERIOD') %}<div class="banner"><h3>Payment overdue</h3><p>Pay before the grace period ends or access will be suspended. Nothing is deleted.</p><a class="btn gold" href="{{ url_for('subscription', chama_id=chama.id) }}">Pay now</a></div>{% endif %}
+<div class="stats">
+<div class="stat dark tilt"><small>Chama cash balance</small><b>KES {{ balance|kes }}</b></div>
+<div class="stat gold tilt"><small>My savings</small><b>KES {{ my_savings|kes }}</b></div>
+<div class="stat"><small>I owe on loans</small><b>KES {{ st.loan_balance|kes }}</b></div>
+<div class="stat"><small>Fines I owe</small><b>KES {{ st.fine_balance|kes }}</b></div>
 </div>
-<div class="stats" style="margin-bottom:28px">
-  <div class="stat"><b>{{ members|length }}</b><small>members</small></div>
-  <div class="stat"><b>{{ plan.max_members }}</b><small>limit</small></div>
-  <div class="stat gold"><b>{{ plan.name }}</b><small>plan</small></div>
-  <div class="stat"><b>{{ sub.due_at|date }}</b><small>paid until</small></div>
+<div class="card hero3d tilt">
+<div><small>{{ plan.name }} plan · {{ 'Free trial until' if sub.status=='TRIAL' else 'Paid until' }} {{ sub.due_at|date }}</small><h2>{{ members|length }} of {{ plan.max_members }} members</h2>
+<p>This month: {{ month_paid }} of {{ members|length }} members have paid KES {{ chama.contribution_cents|kes }}</p></div>
+<div class="ring" style="--p:{{ (month_paid / members|length * 100)|round|int if members else 0 }}"><span><div>{{ month_paid }}/{{ members|length }}<small>paid</small></div></span></div>
 </div>
+<div class="card tight"><div style="padding:18px 20px 4px;display:flex;justify-content:space-between;align-items:center;gap:10px"><h3 style="margin:0">Members</h3>
+<span style="display:flex;gap:8px">{% if is_admin %}<button class="btn sm" data-open="set">Chama settings</button><button class="btn sm pri" data-open="add">Add member</button>{% endif %}</span></div>
+<ul class="list">
+{% for m in members %}<li><span class="av">{{ m.name[:1] }}</span><span class="grow">{{ m.name }}<br><small>{{ m.phone }}</small></span><span class="pill {{ 'ok' if m.role!='MEMBER' else '' }}">{{ m.role.replace('_',' ')|title }}</span>{% if not m.claimed %}<span class="pill warn">Not registered yet</span>{% if is_admin %}<form method="POST" action="{{ url_for('member_code', chama_id=chama.id, user_id=m.id) }}" style="margin:0">{{ csrf_input() }}<button class="btn sm">New join code</button></form>{% endif %}{% endif %}
+{% if can_view_statements %}<a class="btn sm" href="{{ url_for('statement', chama_id=chama.id, user_id=m.id) }}">Statement</a>{% endif %}
+{% if is_admin and m.id!=user.id %}<form method="POST" action="{{ url_for('member_remove', chama_id=chama.id, user_id=m.id) }}" data-confirm="Remove {{ m.name }}? Their history is kept." style="margin:0">{{ csrf_input() }}<button class="btn sm bad">Remove</button></form>{% endif %}</li>{% endfor %}
+</ul></div>
 {% if is_admin %}
-<section style="margin-bottom:28px">
-  <h2>Contributions</h2>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px">
-    <a href="{{ url_for('contribution_schedule', chama_id=chama.id) }}" class="btn block">Manage schedules</a>
-    <a href="{{ url_for('record_contribution', chama_id=chama.id) }}" class="btn block pri">Record payment</a>
-  </div>
-</section>
+<dialog id="add"><form method="POST" action="{{ url_for('member_add', chama_id=chama.id) }}">{{ csrf_input() }}<h3>Add a member</h3>
+<div class="field"><label for="nm">Full name</label><input id="nm" name="name" autocomplete="off" maxlength="80"><small>Needed if they are new to ChamaPay.</small></div>
+<div class="field"><label for="ph">Phone number</label><input id="ph" type="tel" name="phone" placeholder="0712345678" required></div>
+<div class="field"><label for="ro">Role</label><select id="ro" name="role">{% for r in roles %}<option value="{{ r }}">{{ r.replace('_',' ')|title }}</option>{% endfor %}</select></div>
+<div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn pri">Add member</button></div></form></dialog>
+<dialog id="set"><form method="POST" action="{{ url_for('chama_settings', chama_id=chama.id) }}">{{ csrf_input() }}<h3>Chama settings</h3>
+<div class="field"><label>Monthly contribution per member (KES)</label><input name="contribution" value="{{ (chama.contribution_cents/100)|int }}" inputmode="decimal" required></div>
+<div class="field"><label>Loan interest (% flat, one-time)</label><input name="rate" value="{{ chama.loan_rate_bps/100 }}" inputmode="decimal" required></div>
+<div class="field"><label>Members can borrow up to (times their savings)</label><input name="multiplier" type="number" min="1" max="10" value="{{ chama.loan_multiplier }}" required></div>
+<div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn pri">Save</button></div></form></dialog>
 {% endif %}
-<section style="margin-bottom:28px">
-  <h2>Add a member</h2>
-  <form method="POST" action="{{ url_for('member_add', chama_id=chama.id) }}" style="max-width:600px">
-    {{ csrf_input() }}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-      <div class="field" style="margin:0">
-        <label for="name">Name</label>
-        <input type="text" id="name" name="name">
-      </div>
-      <div class="field" style="margin:0">
-        <label for="phone">Phone</label>
-        <input type="tel" id="phone" name="phone" placeholder="0712345678">
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-      <div class="field" style="margin:0">
-        <label for="role">Role</label>
-        <select id="role" name="role">
-          {% for r in roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
-        </select>
-      </div>
-      <div style="display:flex;align-items:flex-end">
-        <button type="submit" class="btn block pri">Add member</button>
-      </div>
-    </div>
-  </form>
-</section>
-<h2>Members</h2>
-{% if not members %}
-<div class="card empty">No members yet.</div>
-{% else %}
-<div class="card tight">
-  <ul class="list">
-  {% for m in members %}
-    <li>
-      <div class="av">{{ m.name[0].upper() }}</div>
-      <div class="grow">
-        <div><b>{{ m.name }}</b> {% if not m.claimed %}<span class="pill info">Pending</span>{% endif %}</div>
-        <small>{{ m.phone }} • {{ m.role }}</small>
-      </div>
-      {% if is_admin and m.id != user.id %}
-      <div style="display:flex;gap:6px">
-        <button class="btn sm" onclick="if(confirm('Reset join code for {{ m.name }}?')){fetch('{{ url_for('member_code', chama_id=chama.id, user_id=m.id) }}',{method:'POST',headers:{'X-CSRFToken':'{{ token() }}'}}).then(r=>location.reload())}">Code</button>
-        <button class="btn sm bad" onclick="if(confirm('Remove {{ m.name }}?')){fetch('{{ url_for('member_remove', chama_id=chama.id, user_id=m.id) }}',{method:'POST',headers:{'X-CSRFToken':'{{ token() }}'}}).then(r=>location.reload())}">Remove</button>
-      </div>
-      {% endif %}
-    </li>
-  {% endfor %}
-  </ul>
-</div>
-{% endif %}
-<div style="margin-top:28px">
-  <a href="{{ url_for('subscription', chama_id=chama.id) }}" class="btn pri block" style="max-width:300px">Go to subscription & payment</a>
-</div>
 {% endblock %}

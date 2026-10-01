@@ -1,120 +1,32 @@
-{% extends "base.html" %}{% block title %}Subscription - {{ chama.name }} - ChamaPay Kenya{% endblock %}
+{% extends "base.html" %}{% block title %}Subscription - {{ chama.name }}{% endblock %}
 {% block content %}
-<div class="head">
-  <div><h1>{{ chama.name }}: Subscription</h1><p>{{ plan.name }} plan</p></div>
-  <span class="pill {% if sub.status=='TRIAL' %}info{% elif sub.status in ('ACTIVE','PAST_DUE') %}ok{% elif sub.status=='GRACE_PERIOD' %}warn{% else %}bad{% endif %}">{{ sub.status }}</span>
-</div>
-{% if not active %}
-<div class="banner bad">
-  <b>Subscription inactive</b>
-  <p>Your chama is not active. Make a payment or contact support.</p>
-</div>
-{% endif %}
+<div class="head"><div><h2>Subscription</h2><p>{{ chama.name }}</p></div><a class="btn" href="{{ url_for('dashboard') }}">My chamas</a></div>
+{% if not active %}<div class="banner bad"><h3>Access is suspended</h3><p>This chama's subscription needs payment. <b>All your members, records and history are safe.</b> Pay below and access returns automatically.{% if sub.suspend_reason %} <br><small>Reason: {{ sub.suspend_reason }}</small>{% endif %}</p></div>{% endif %}
 <div class="stats">
-  <div class="stat"><b>{{ members }}</b><small>active members</small></div>
-  <div class="stat"><b>KES {{ plan.price_cents|kes }}</b><small>per month</small></div>
-  <div class="stat"><b>{{ sub.due_at|date }}</b><small>paid until</small></div>
-  {% if sub.status=='SUSPENDED' %}
-  <div class="stat"><b>SUSPENDED</b><small>{{ sub.suspend_reason }}</small></div>
-  {% endif %}
+<div class="stat dark"><small>Status</small><b>{{ sub.status.replace('_',' ') }}</b></div>
+<div class="stat gold"><small>{{ 'Due since' if not active else 'Next payment due' }}</small><b style="font-size:22px">{{ sub.due_at|date }}</b></div>
+<div class="stat"><small>Plan</small><b style="font-size:22px">{{ plan.name }}</b></div>
+<div class="stat"><small>Members</small><b>{{ members }} / {{ plan.max_members }}</b></div>
 </div>
 {% if can_pay %}
-<section style="margin:28px 0">
-  <h2>Make a payment</h2>
-  <form method="POST" action="{{ url_for('subscription_pay', chama_id=chama.id) }}" style="max-width:600px">
-    {{ csrf_input() }}
-    <div class="field">
-      <label for="plan_id">Upgrade to</label>
-      <select id="plan_id" name="plan_id" required>
-        <option value="{{ sub.plan_id }}" selected>{{ plan.name }} (current)</option>
-        {% for p in plans %}
-          {% if p.id != sub.plan_id %}<option value="{{ p.id }}">{{ p.name }}: KES {{ p.price_cents|kes }}/month</option>{% endif %}
-        {% endfor %}
-      </select>
-    </div>
-    <div class="field">
-      <label for="months">Duration</label>
-      <select id="months" name="months" required>
-        <option value="1">1 month</option>
-        <option value="3">3 months</option>
-        <option value="6">6 months</option>
-        <option value="12">12 months</option>
-      </select>
-    </div>
-    <div class="field">
-      <label for="phone">M-Pesa phone</label>
-      <input type="tel" id="phone" name="phone" placeholder="0712345678" required>
-    </div>
-    {% if dev %}
-    <p class="mute" style="font-size:14px;margin-bottom:12px"><b>Test mode:</b> After clicking Pay, use the test payment button below.</p>
-    {% endif %}
-    {% if provider %}
-    <button type="submit" class="btn block pri">Pay with M-Pesa</button>
-    {% else %}
-    <div class="banner">M-Pesa is not configured yet. {{ provider if provider else 'Contact support to pay.' }}</div>
-    {% endif %}
-  </form>
-</section>
+{% if provider %}
+<form method="POST" action="{{ url_for('subscription_pay', chama_id=chama.id) }}" class="card">{{ csrf_input() }}<h3>Pay with {{ 'M-Pesa' if provider.name=='MPESA' else 'test payments' }}</h3>
+{% if provider.name=='TEST' %}<div class="flash warning">Development mode: no real money moves. Use the buttons under "Payments" to simulate the result.</div>{% endif %}
+<div class="field"><label>Plan (price is per chama, per month)</label>
+{% for p in plans %}<label class="radio"><input type="radio" name="plan_id" value="{{ p.id }}" {% if p.id==plan.id %}checked{% endif %}><span><b>{{ p.name }}</b>, KES {{ p.price_cents|kes }}/month<br><span class="mute">Up to {{ p.max_members }} members{% if p.max_members < members %} · too small for your {{ members }} members{% endif %}</span></span></label>{% endfor %}</div>
+<div class="field"><label for="mo">Months</label><select id="mo" name="months"><option value="1">1 month</option><option value="3">3 months</option><option value="6">6 months</option><option value="12">12 months</option></select></div>
+<div class="field"><label for="ph">M-Pesa phone number</label><input id="ph" type="tel" name="phone" value="{{ user.phone }}" required></div>
+<button class="btn pri block">Send payment request</button></form>
+{% else %}
+<div class="card"><h3>M-Pesa: CONFIGURATION REQUIRED</h3><p class="mute" style="margin:0">Online payment is not switched on yet. {{ config.PAY_INSTRUCTIONS }}</p></div>
 {% endif %}
-{% if not sub.plan_id == plan.id or sub.status in ('TRIAL', 'ACTIVE') %}
-<section style="margin:28px 0">
-  <h2>Change plan</h2>
-  <p class="mute">Downgrade is free and immediate. Upgrade requires a payment.</p>
-  <form method="POST" action="{{ url_for('subscription_downgrade', chama_id=chama.id) }}" style="max-width:600px">
-    {{ csrf_input() }}
-    <div class="field">
-      <label for="plan_id2">Choose a plan</label>
-      <select id="plan_id2" name="plan_id" required>
-        <option value="" selected>Select a plan...</option>
-        {% for p in plans %}
-          {% if p.id != sub.plan_id %}<option value="{{ p.id }}">{{ p.name }}: KES {{ p.price_cents|kes }}/month ({{ p.max_members }} members max)</option>{% endif %}
-        {% endfor %}
-      </select>
-    </div>
-    <button type="submit" class="btn block">Change plan</button>
-  </form>
-</section>
-{% endif %}
-<section>
-  <h2>Recent payments</h2>
-  {% if not pays %}
-  <div class="card empty">No payments yet.</div>
-  {% else %}
-  <div class="card tight scroll">
-    <table>
-      <thead><tr><th>Date</th><th>Amount</th><th>Plan</th><th>Status</th></tr></thead>
-      <tbody>
-      {% for p in pays %}
-        <tr>
-          <td>{{ p.created_at|datetime }}</td>
-          <td class="amt">KES {{ p.amount_cents|kes }}</td>
-          <td>{{ S.get_plan(db, p.plan_id).name if p.plan_id else '-' }}</td>
-          <td><span class="pill {% if p.status=='SUCCESS' %}ok{% elif p.status=='FAILED' %}bad{% else %}info{% endif %}">{{ p.status }}</span></td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% endif %}
-</section>
-{% if dev %}
-<section style="margin-top:28px;padding-top:28px;border-top:1px solid var(--line)">
-  <h2>Test payments</h2>
-  <p class="mute">In development mode, simulate M-Pesa outcomes here.</p>
-  {% for p in pays %}
-    {% if p.status=='PENDING' and p.provider=='TEST' %}
-    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-      <form method="POST" action="{{ url_for('dev_pay', checkout_id=p.provider_txn_id, outcome='success') }}" style="margin:0">
-        {{ csrf_input() }}
-        <button type="submit" class="btn sm pri">✓ Success for {{ p.provider_txn_id[-8:] }}</button>
-      </form>
-      <form method="POST" action="{{ url_for('dev_pay', checkout_id=p.provider_txn_id, outcome='failed') }}" style="margin:0">
-        {{ csrf_input() }}
-        <button type="submit" class="btn sm bad">✗ Fail</button>
-      </form>
-    </div>
-    {% endif %}
-  {% endfor %}
-</section>
-{% endif %}
+{% if active and plans|length > 1 %}<form method="POST" action="{{ url_for('subscription_downgrade', chama_id=chama.id) }}" class="card">{{ csrf_input() }}<h3>Move to a cheaper plan</h3>
+<div class="field"><select name="plan_id" aria-label="Plan">{% for p in plans %}{% if p.price_cents <= plan.price_cents and p.id!=plan.id %}<option value="{{ p.id }}">{{ p.name }}: KES {{ p.price_cents|kes }}/month, up to {{ p.max_members }} members</option>{% endif %}{% endfor %}</select><small>No members are ever removed automatically. It only works if your members fit the smaller plan.</small></div><button class="btn">Change plan</button></form>{% endif %}
+{% else %}<div class="card"><p class="mute" style="margin:0">Ask your chairperson or treasurer to pay the subscription.</p></div>{% endif %}
+<div class="card tight"><h3 style="padding:18px 20px 0">Payments</h3><ul class="list">
+{% for p in pays %}<li><span class="grow">KES {{ p.amount_cents|kes }} · {{ p.period_days }} days<br><small>{{ p.created_at|datetime }} · {{ p.method }}{% if p.provider_receipt %} · {{ p.provider_receipt }}{% endif %}</small></span>
+<span class="pill {{ {'SUCCESS':'ok','PENDING':'info'}.get(p.status,'bad') }}">{{ p.status }}</span>
+{% if dev and p.status=='PENDING' and p.provider=='TEST' and p.provider_txn_id and can_pay %}
+{% for o in ('success','failed','cancelled') %}<form method="POST" action="{{ url_for('dev_pay', checkout_id=p.provider_txn_id, outcome=o) }}" style="margin:0">{{ csrf_input() }}<button class="btn sm">{{ o|title }}</button></form>{% endfor %}{% endif %}</li>
+{% else %}<li class="empty grow">No payments yet.</li>{% endfor %}</ul></div>
 {% endblock %}

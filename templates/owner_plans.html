@@ -1,60 +1,16 @@
-{% extends "base.html" %}{% block title %}Plans - Control Center - ChamaPay Kenya{% endblock %}
+{% extends "base.html" %}{% block title %}Plans - Control Center{% endblock %}
 {% block content %}
-<div class="head">
-  <h1>Subscription plans</h1>
-  {% include '_owner_nav.html' %}
-</div>
-<section style="margin-bottom:28px">
-  <h2>Settings</h2>
-  <form method="POST" action="{{ url_for('owner_plans') }}" style="max-width:600px">
-    {{ csrf_input() }}
-    <input type="hidden" name="kind" value="settings">
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
-      <div class="field" style="margin:0">
-        <label for="trial_days">Trial days</label>
-        <input type="number" id="trial_days" name="trial_days" value="{{ cfg.trial_days }}" min="0" max="90" required>
-      </div>
-      <div class="field" style="margin:0">
-        <label for="grace_days">Grace period days</label>
-        <input type="number" id="grace_days" name="grace_days" value="{{ cfg.grace_days }}" min="0" max="30" required>
-      </div>
-      <div class="field" style="margin:0">
-        <label for="billing_period_days">Billing period (days)</label>
-        <input type="number" id="billing_period_days" name="billing_period_days" value="{{ cfg.billing_period_days }}" min="1" max="366" required>
-      </div>
-    </div>
-    <button type="submit" class="btn pri block" style="margin-top:12px;max-width:140px">Save settings</button>
-  </form>
-</section>
-<h2>Plans</h2>
-{% for p in plans %}
-<form method="POST" action="{{ url_for('owner_plans') }}" style="max-width:600px;margin-bottom:20px">
-  {{ csrf_input() }}
-  <input type="hidden" name="plan_id" value="{{ p.id }}">
-  <div class="card">
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px">
-      <div class="field" style="margin:0">
-        <label for="name">Name</label>
-        <input type="text" name="name" value="{{ p.name }}" required>
-      </div>
-      <div class="field" style="margin:0">
-        <label for="price">Price (KES)</label>
-        <input type="number" name="price" value="{{ p.price_cents / 100 }}" step="0.01" required>
-      </div>
-      <div class="field" style="margin:0">
-        <label for="max_members">Max members</label>
-        <input type="number" name="max_members" value="{{ p.max_members }}" min="1" required>
-      </div>
-      <div class="field" style="margin:0">
-        <label for="is_active">Active</label>
-        <select name="is_active">
-          <option value="1" {% if p.is_active %}selected{% endif %}>Yes</option>
-          <option value="0" {% if not p.is_active %}selected{% endif %}>No</option>
-        </select>
-      </div>
-    </div>
-    <button type="submit" class="btn block" style="margin-top:12px">Save plan</button>
-  </div>
-</form>
-{% endfor %}
+<div class="head"><div><h2>Plans and settings</h2><p>Changes apply to new payments. Existing members are never removed.</p></div></div>{% include '_owner_nav.html' %}
+<div class="grid">{% for p in plans %}
+<form method="POST" class="card">{{ csrf_input() }}<input type="hidden" name="plan_id" value="{{ p.id }}"><h3>{{ p.code|upper }}</h3>
+<div class="field"><label>Name</label><input name="name" value="{{ p.name }}" required></div>
+<div class="field"><label>Price per chama per month (KES)</label><input type="number" name="price" value="{{ p.price_cents/100 }}" min="0" step="1" required></div>
+<div class="field"><label>Maximum members</label><input type="number" name="max_members" value="{{ p.max_members }}" min="1" required></div>
+<div class="field"><label>Available to new chamas</label><select name="is_active"><option value="1" {% if p.is_active %}selected{% endif %}>Yes</option><option value="0" {% if not p.is_active %}selected{% endif %}>No</option></select></div>
+<button class="btn pri block">Save {{ p.name }}</button></form>{% endfor %}</div>
+<form method="POST" class="card">{{ csrf_input() }}<input type="hidden" name="kind" value="settings"><h3>Billing rules</h3>
+<div class="field"><label>Free trial (days)</label><input type="number" name="trial_days" value="{{ cfg.trial_days }}" min="0" max="90"></div>
+<div class="field"><label>Grace period after due date (days)</label><input type="number" name="grace_days" value="{{ cfg.grace_days }}" min="0" max="30"></div>
+<div class="field"><label>Days per paid month</label><input type="number" name="billing_period_days" value="{{ cfg.billing_period_days }}" min="1" max="366"></div>
+<button class="btn pri">Save rules</button></form>
 {% endblock %}

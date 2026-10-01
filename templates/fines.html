@@ -1,0 +1,29 @@
+{% extends "base.html" %}{% from "_macros.html" import pill %}{% block title %}Fines - {{ chama.name }}{% endblock %}
+{% block content %}
+<div class="head"><div><h2>Fines</h2><p>{{ chama.name }}</p></div>{% if can_create %}<button class="btn pri" data-open="add">Add fine</button>{% endif %}</div>
+{% include '_chama_nav.html' %}
+<div class="card tight"><ul class="list">
+{% for f in fines %}<li style="align-items:flex-start"><span class="av">{{ f.name[:1] }}</span>
+<span class="grow"><b>{{ f.name }}</b> · KES {{ f.amount_cents|kes }}<br><small>{{ f.reason }}{% if f.due_on %} · due {{ f.due_on|date }}{% endif %} · Paid KES {{ f.paid_cents|kes }}{% if f.status in ('UNPAID','PARTIAL') %} · <b>Owes KES {{ (f.amount_cents - f.paid_cents)|kes }}</b>{% endif %}</small>
+{% for p in pays.get(f.id, []) %}<br><small>Paid KES {{ p.amount_cents|kes }} on {{ p.paid_on|date }}{% if can_pay %} <button class="btn sm bad" data-form-open="void" data-action="{{ url_for('fine_payment_void', chama_id=chama.id, pid=p.id) }}" data-text="Payment of KES {{ p.amount_cents|kes }}">Cancel</button>{% endif %}</small>{% endfor %}</span>
+{{ pill(f.status) }}
+{% if can_pay and f.status in ('UNPAID','PARTIAL') %}<button class="btn sm pri" data-form-open="pay" data-action="{{ url_for('fine_action', chama_id=chama.id, fid=f.id, action='pay') }}" data-amount="{{ ((f.amount_cents - f.paid_cents)/100)|round(2) }}" data-text="{{ f.name }} owes KES {{ (f.amount_cents - f.paid_cents)|kes }}">Record payment</button>{% endif %}
+{% if is_admin and f.status in ('UNPAID','PARTIAL') %}<form method="POST" action="{{ url_for('fine_action', chama_id=chama.id, fid=f.id, action='waive') }}" data-confirm="Waive the rest of this fine?" style="margin:0">{{ csrf_input() }}<button class="btn sm">Waive</button></form>{% endif %}
+</li>{% else %}<li class="empty grow">No fines. {% if not can_create %}Only your own fines are shown here.{% endif %}</li>{% endfor %}</ul></div>
+{% if can_create %}<dialog id="add"><form method="POST" action="{{ url_for('fine_add', chama_id=chama.id) }}">{{ csrf_input() }}<h3>Add a fine</h3>
+<div class="field"><label>Member</label><select name="user_id">{% for m in members %}<option value="{{ m.id }}">{{ m.name }}</option>{% endfor %}</select></div>
+<div class="field"><label>Amount (KES)</label><input name="amount" inputmode="decimal" required></div>
+<div class="field"><label>Reason</label><input name="reason" required maxlength="200" placeholder="Late to meeting"></div>
+<div class="field"><label>Due date (optional)</label><input type="date" name="due_on"></div>
+<div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn pri">Add fine</button></div></form></dialog>{% endif %}
+{% if can_pay %}
+<dialog id="pay"><form method="POST" action="">{{ csrf_input() }}<h3>Record a fine payment</h3><p class="mute" data-text-slot></p>
+<div class="field"><label>Amount (KES)</label><input name="amount" inputmode="decimal" required></div>
+<div class="field"><label>Date paid</label><input type="date" name="paid_on" value="{{ today }}" max="{{ today }}" required></div>
+<div class="field"><label>How did they pay?</label><select name="method">{% for m in methods %}<option>{{ m }}</option>{% endfor %}</select></div>
+<div class="field"><label>M-Pesa code (optional)</label><input name="reference" maxlength="40"></div>
+<div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn pri">Save</button></div></form></dialog>
+<dialog id="void"><form method="POST" action="">{{ csrf_input() }}<h3>Cancel this payment?</h3><p class="mute" data-text-slot></p>
+<div class="field"><label>Reason</label><input name="reason" required maxlength="200"></div><div class="actions"><button type="button" class="btn" data-close>Keep it</button><button class="btn bad">Cancel payment</button></div></form></dialog>
+{% endif %}
+{% endblock %}

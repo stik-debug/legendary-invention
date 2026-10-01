@@ -1,6 +1,6 @@
-# ChamaPay Kenya (fresh build, stage 1)
+# ChamaPay Kenya (stage 2)
 
-A multi-tenant SaaS for Kenyan chamas. **Stage 1 is the money-and-security foundation plus the full Control Center and a 3D interface.** See "What is and is not built" below. Please read it.
+A multi-tenant SaaS for Kenyan chamas. **Stage 1 (billing, security, Control Center, 3D interface) and stage 2 (contributions, ledger, loans, fines, statements, chat) are built.** See "What is and is not built" below. Please read it.
 
 ## What is and is not built
 
@@ -23,18 +23,23 @@ A multi-tenant SaaS for Kenyan chamas. **Stage 1 is the money-and-security found
 | M-Pesa STK push | Built, NOT tested live | Needs your Daraja credentials. Shows CONFIGURATION REQUIRED until set |
 | Control Center (stats, search, suspend, reactivate, extend, manual payment, plans, audit) | Built, tested | All numbers come from the database |
 | Audit log | Built, tested | Append-only, no edit/delete screens |
-| Contributions, ledger, loans, repayments, fines | NOT built | Stage 2 |
+| Contributions | Built, tested | Treasurer/chairperson records them. Duplicate M-Pesa codes refused. Mistakes are cancelled, never deleted |
+| Financial ledger | Built, tested | One row per cash movement, written in the same transaction. Cash balance can never go negative. CSV export |
+| Loans and repayments | Built, tested | Limit = savings x multiple. Flat interest. Approver cannot be the borrower. Cannot lend more cash than the chama has |
+| Fines | Built, tested | Unpaid / part paid / paid / waived. Payments go to the ledger |
+| Member statements | Built, tested | Members see their own. Officials see anyone's. CSV download |
+| In-app chat | Built, tested | One room per chama, unread badge, auto-refresh every 10 seconds, XSS-safe |
 | Meetings, attendance, announcements, messaging, notifications | NOT built | Stage 3 |
 | Reports and CSV export | NOT built | Stage 3 |
 | Email and SMS | NOT built | Shown as NOT BUILT YET, never faked |
 | Test-data commands (seed/reset/validate) | NOT built | Stage 4. Automated tests use their own throwaway database |
 | Two-factor login for owner | NOT built | Use a strong password meanwhile |
 
-## Tests (59 automated, all passing when this was packaged)
+## Tests (104 automated, all passing when this was packaged)
 
     python -m unittest discover -s tests -v
 
-`test_services.py` covers plan limits, the subscription timeline, payments and idempotency. `test_web.py` covers login, CSRF, authorization, tenant isolation, suspension and the owner screens over real HTTP.
+`test_services.py` covers plan limits, the subscription timeline, payments and idempotency. `test_finance.py` covers the money rules, including a KES 10,000 loan with KES 1,000 interest repaid in two parts. `test_web_finance.py` covers roles, privacy, tenant isolation and the full loan, fine and chat journeys over HTTP. `test_web.py` covers login, CSRF, authorization, tenant isolation, suspension and the owner screens over real HTTP.
 Not covered here: a real PostgreSQL run, a real M-Pesa payment, real phones. You must test those.
 
 ## Deploy on Render

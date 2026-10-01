@@ -1,6 +1,2 @@
-<nav style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-  <a href="{{ url_for('owner_home') }}" class="btn sm">Dashboard</a>
-  <a href="{{ url_for('owner_chamas') }}" class="btn sm">Chamas</a>
-  <a href="{{ url_for('owner_plans') }}" class="btn sm">Plans</a>
-  <a href="{{ url_for('owner_audit') }}" class="btn sm">Audit</a>
-</nav>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
+<a class="btn sm" href="{{ url_for('owner_home') }}">Overview</a><a class="btn sm" href="{{ url_for('owner_chamas') }}">Chamas</a><a class="btn sm" href="{{ url_for('owner_plans') }}">Plans and settings</a><a class="btn sm" href="{{ url_for('owner_audit') }}">Audit log</a></div>

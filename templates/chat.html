@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block title %}Chat - {{ chama.name }}{% endblock %}
+{% block content %}
+<div class="head"><div><h2>Chat</h2><p>Messages here are seen only by members of {{ chama.name }}</p></div></div>
+{% include '_chama_nav.html' %}
+<div class="card chat" id="chat" data-poll="{{ url_for('chat_poll', chama_id=chama.id) }}" data-last="{{ last }}">
+{% if older %}<a class="btn sm" href="?before={{ older }}" style="align-self:center">Older messages</a>{% endif %}
+<div id="msgs">{% for m in msgs %}<div class="msg {{ 'mine' if m.sender_id==user.id else '' }}"><b>{{ 'You' if m.sender_id==user.id else m.sender }}</b><p>{{ m.body }}</p><small>{{ m.created_at|datetime }}</small></div>{% else %}<p class="empty" id="none">No messages yet. Say hello.</p>{% endfor %}</div><span id="end"></span></div>
+<form method="POST" action="{{ url_for('chat_send', chama_id=chama.id) }}" class="card chatbox">{{ csrf_input() }}<input name="body" maxlength="1000" placeholder="Write a message" autocomplete="off" required aria-label="Message"><button class="btn pri">Send</button></form>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/chat.js') }}"></script>{% endblock %}

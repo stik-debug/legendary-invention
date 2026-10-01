@@ -1,8 +1,2 @@
-{% extends "base.html" %}{% block title %}Error {{ code }}{% endblock %}
-{% block content %}
-<div style="max-width:600px;text-align:center;padding:40px 0">
-  <h1>{{ code }}</h1>
-  <p class="lead" style="margin-bottom:20px">{{ msg }}</p>
-  <a href="{{ url_for('index') }}" class="btn pri">Go home</a>
-</div>
-{% endblock %}
+{% extends "base.html" %}{% block title %}{{ code }} - ChamaPay{% endblock %}
+{% block content %}<div class="auth card" style="text-align:center"><h1>{{ code }}</h1><p class="mute">{{ msg }}</p><a class="btn pri" href="{{ url_for('index') }}">Go home</a></div>{% endblock %}
