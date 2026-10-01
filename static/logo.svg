@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="ChamaPay logo">
+  <defs>
+    <style>
+      .bg { fill: #0d5fe0; }
+      .fg { fill: #ffffff; }
+    </style>
+  </defs>
+  <rect class="bg" x="0" y="0" width="240" height="240" rx="42"/>
+
+  <g transform="translate(24 20)">
+    <g class="fg" transform="translate(18 0)">
+      <circle cx="30" cy="36" r="22"/>
+      <rect x="10" y="60" width="40" height="54" rx="18"/>
+    </g>
+
+    <g class="fg" transform="translate(70 0)">
+      <circle cx="30" cy="36" r="22"/>
+      <rect x="10" y="60" width="40" height="54" rx="18"/>
+    </g>
+
+    <g class="fg" transform="translate(122 0)">
+      <circle cx="30" cy="36" r="22"/>
+      <rect x="10" y="60" width="40" height="54" rx="18"/>
+    </g>
+
+    <g class="fg" transform="translate(18 76)">
+      <path d="M10 54C30 92, 50 102, 70 102C90 102, 110 92, 130 54V86H10V54Z"/>
+    </g>
+
+    <path class="fg" d="M14 166C52 188, 83 196, 116 196C148 196, 177 188, 204 166" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round"/>
+  </g>
+</svg>
