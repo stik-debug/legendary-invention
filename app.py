@@ -1,6 +1,7 @@
 import hmac
 import os
 import secrets
+import time
 from datetime import date, timedelta
 from functools import wraps
 
@@ -8,9 +9,14 @@ from flask import Flask, abort, flash, g, jsonify, redirect, render_template, re
 from markupsafe import Markup
 from werkzeug.security import check_password_hash, generate_password_hash
 
+import devtools
 import finance as F
+import notify as N
+import routes_community
 import routes_finance
+import routes_security
 import services as S
+import twofactor as TF
 from db import DB, audit, init_db
 from providers import MpesaPaymentProvider, get_provider
 
@@ -27,7 +33,8 @@ def create_app(overrides=None):
         DATABASE_URL=os.environ.get('DATABASE_URL') or 'sqlite:///' + os.path.join(app.instance_path, 'chamapay.db'),
         PAY_INSTRUCTIONS=os.environ.get('PAY_INSTRUCTIONS', 'Contact ChamaPay support to pay. Your chama is reactivated as soon as we record your payment.'),
         SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax', SESSION_COOKIE_SECURE=production,
-        PERMANENT_SESSION_LIFETIME=timedelta(days=14), MAX_CONTENT_LENGTH=256 * 1024)
+        PERMANENT_SESSION_LIFETIME=timedelta(days=14), MAX_CONTENT_LENGTH=256 * 1024,
+        REQUIRE_OWNER_2FA=os.environ.get('REQUIRE_OWNER_2FA') == '1')
     app.config.update(overrides or {})
     if len(app.config['SECRET_KEY']) < 32:
         if production:
@@ -51,6 +58,8 @@ def create_app(overrides=None):
                 print('OWNER SETUP failed:', type(ex).__name__)
     elif not boot.val('SELECT COUNT(*) FROM users WHERE is_super_admin=1'):
         print('OWNER SETUP: no owner exists. Set OWNER_EMAIL, OWNER_PHONE and OWNER_PASSWORD in the environment.')
+    if os.environ.get('OWNER_RESET_2FA') == '1':
+        print('OWNER 2FA RESET:', 'two-factor login switched off for ' + e if TF.force_disable(boot, e) else 'no owner with OWNER_EMAIL found, nothing changed', '(remove OWNER_RESET_2FA now)')
     boot.close()
 
     # ---------- plumbing ----------
@@ -100,13 +109,15 @@ def create_app(overrides=None):
 
     @app.context_processor
     def inject():
-        unread, cid = 0, (request.view_args or {}).get('chama_id')
-        if cid and g.get('user'):
+        unread, notif, cid = 0, 0, (request.view_args or {}).get('chama_id')
+        if g.get('user'):
             try:
-                unread = F.unread_count(db(), cid, g.user['id'])
+                notif = N.unread_count(db(), g.user['id'])
+                if cid:
+                    unread = F.unread_count(db(), cid, g.user['id'])
             except Exception:
-                unread = 0
-        return {'user': g.get('user'), 'S': S, 'unread': unread}
+                pass
+        return {'user': g.get('user'), 'S': S, 'unread': unread, 'notif_unread': notif}
 
     @app.after_request
     def headers(r):
@@ -135,6 +146,9 @@ def create_app(overrides=None):
         def w(*a, **k):
             if not g.user['is_super_admin']:
                 abort(403)
+            if app.config['REQUIRE_OWNER_2FA'] and not g.user['totp_enabled'] and request.endpoint not in ('owner_security', 'owner_2fa_start', 'owner_2fa_confirm'):
+                flash('This server requires two-factor login for the owner. Set it up now.', 'warning')
+                return redirect(url_for('owner_security'))
             return f(*a, **k)
         return w
 
@@ -200,6 +214,9 @@ def create_app(overrides=None):
             u = db().one('SELECT * FROM users WHERE is_active=1 AND (email=? OR phone=?)', (ident, phone or '-'))
             if u and u['claimed'] and u['password_hash'] and check_password_hash(u['password_hash'], request.form.get('password', '')):
                 nxt = safe_next(request.args.get('next'))
+                if u['is_super_admin'] and u['totp_enabled']:
+                    session.clear(); session['pre2fa'] = u['id']; session['pre2fa_at'] = time.time(); session['pre2fa_next'] = nxt
+                    return redirect(url_for('login_2fa'))
                 session.clear(); session['uid'] = u['id']; session.permanent = True
                 audit(db(), u['id'], 'LOGIN', 'user', u['id']); db().commit()
                 return redirect(nxt or url_for('owner_home' if u['is_super_admin'] else 'dashboard'))
@@ -369,6 +386,9 @@ def create_app(overrides=None):
         return redirect(url_for('subscription', chama_id=p['chama_id']))
 
     routes_finance.register(app, db, ctx, login_required)
+    routes_community.register(app, db, ctx, login_required)
+    routes_security.register(app, db, owner_required, safe_next)
+    devtools.register(app)
 
     # ---------- owner control center ----------
     @app.route('/owner')

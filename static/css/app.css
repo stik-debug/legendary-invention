@@ -91,3 +91,7 @@ footer{padding:30px 0 50px;color:var(--mute);font-size:14px;text-align:center}
 .list li .btn.sm,.list li form{flex:none}
 @media (max-width:520px){.list li{row-gap:8px}}
 #msgs{display:flex;flex-direction:column;gap:10px}
+.barrow{display:grid;grid-template-columns:78px 1fr auto;gap:10px;align-items:center;padding:5px 0;font-size:14px}
+.bar{height:12px;border-radius:99px;background:var(--line);overflow:hidden;display:block}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--em),var(--gold));border-radius:99px}
+textarea{min-height:90px;resize:vertical}
+@media (max-width:520px){.barrow{grid-template-columns:62px 1fr;}.barrow span:last-child{grid-column:1/-1;color:var(--mute)}}

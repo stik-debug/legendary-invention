@@ -5,5 +5,8 @@
 <a href="{{ url_for('loans', chama_id=chama.id) }}" {% if ep=='loans' %}aria-current="page"{% endif %}>Loans</a>
 <a href="{{ url_for('fines', chama_id=chama.id) }}" {% if ep=='fines' %}aria-current="page"{% endif %}>Fines</a>
 <a href="{{ url_for('ledger', chama_id=chama.id) }}" {% if ep=='ledger' %}aria-current="page"{% endif %}>Ledger</a>
+<a href="{{ url_for('meetings', chama_id=chama.id) }}" {% if ep in ('meetings','meeting_view') %}aria-current="page"{% endif %}>Meetings</a>
+<a href="{{ url_for('notices', chama_id=chama.id) }}" {% if ep=='notices' %}aria-current="page"{% endif %}>Notices</a>
+{% if me is defined and me and me.role in ('CHAMA_ADMIN','TREASURER','SECRETARY') %}<a href="{{ url_for('reports', chama_id=chama.id) }}" {% if ep=='reports' %}aria-current="page"{% endif %}>Reports</a>{% endif %}
 <a href="{{ url_for('chat', chama_id=chama.id) }}" {% if ep=='chat' %}aria-current="page"{% endif %}>Chat{% if unread %}<span class="dot">{{ unread if unread<100 else '99+' }}</span>{% endif %}</a>
 </nav>

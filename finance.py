@@ -6,6 +6,7 @@ from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from db import IntegrityError, audit
+from notify import notify, notify_roles
 from services import BusinessError, iso, now_utc
 
 MAX_CENTS = 500_000_000  # KES 5,000,000 in one transaction
@@ -116,6 +117,7 @@ def record_contribution(db, chama_id, user_id, cents, paid_on, method, reference
                             method=method, reference=ref, notes=(notes or '')[:200], created_by=actor, created_at=iso(now))
             _ledger(db, chama_id, 'CONTRIBUTION', 'IN', cents, user_id, 'contribution', cid, 'Contribution', paid_on, actor, now)
             audit(db, actor, 'CONTRIBUTION_CREATED', 'contribution', cid, chama_id, {'user_id': user_id, 'amount_cents': cents})
+            notify(db, user_id, chama_id, f'Your contribution of KES {cents / 100:,.0f} was recorded.', f'/chamas/{chama_id}/statement', actor, now)
     except IntegrityError:
         raise BusinessError(f'The reference {ref} has already been recorded.')
     return cid
@@ -187,6 +189,8 @@ def apply_loan(db, chama_id, user_id, cents, purpose, now=None):
         lid = db.insert('loans', chama_id=chama_id, user_id=user_id, principal_cents=cents, interest_cents=interest, total_due_cents=cents + interest,
                         rate_bps=bps, purpose=(purpose or '').strip()[:200], status='PENDING', applied_at=iso(now))
         audit(db, user_id, 'LOAN_APPLIED', 'loan', lid, chama_id, {'principal_cents': cents})
+        who = db.val('SELECT name FROM users WHERE id=?', (user_id,), 'A member')
+        notify_roles(db, chama_id, FINANCE_ROLES, f'{who} asked for a loan of KES {cents / 100:,.0f}.', f'/chamas/{chama_id}/loans', user_id, now)
     return lid
 
 
@@ -207,6 +211,7 @@ def decide_loan(db, chama_id, loan_id, approve, actor, now=None):
             raise BusinessError('You cannot approve your own loan. Another official must do it.')
         db.execute('UPDATE loans SET status=?, decided_by=?, decided_at=? WHERE id=?', ('APPROVED' if approve else 'REJECTED', actor, iso(now), loan_id))
         audit(db, actor, 'LOAN_APPROVED' if approve else 'LOAN_REJECTED', 'loan', loan_id, chama_id)
+        notify(db, loan['user_id'], chama_id, 'Your loan request was ' + ('approved. It will be paid out soon.' if approve else 'declined.'), f'/chamas/{chama_id}/loans', actor, now)
 
 
 def disburse_loan(db, chama_id, loan_id, actor, now=None):
@@ -224,6 +229,7 @@ def disburse_loan(db, chama_id, loan_id, actor, now=None):
         db.execute("UPDATE loans SET status='ACTIVE', disbursed_by=?, disbursed_at=? WHERE id=?", (actor, iso(now), loan_id))
         _ledger(db, chama_id, 'LOAN_DISBURSEMENT', 'OUT', loan['principal_cents'], loan['user_id'], 'loan', loan_id, 'Loan paid out', now.date().isoformat(), actor, now)
         audit(db, actor, 'LOAN_DISBURSED', 'loan', loan_id, chama_id, {'principal_cents': loan['principal_cents']})
+        notify(db, loan['user_id'], chama_id, f"Your loan of KES {loan['principal_cents'] / 100:,.0f} was paid out. You owe KES {loan['total_due_cents'] / 100:,.0f}.", f'/chamas/{chama_id}/loans', actor, now)
 
 
 def repay_loan(db, chama_id, loan_id, cents, paid_on, method, reference, actor, now=None):
@@ -243,6 +249,7 @@ def repay_loan(db, chama_id, loan_id, cents, paid_on, method, reference, actor, 
         db.execute('UPDATE loans SET paid_cents=?, status=? WHERE id=?', (paid, 'PAID' if paid >= loan['total_due_cents'] else 'ACTIVE', loan_id))
         _ledger(db, chama_id, 'LOAN_REPAYMENT', 'IN', cents, loan['user_id'], 'loan_repayment', rid, 'Loan repayment', paid_on, actor, now)
         audit(db, actor, 'LOAN_REPAYMENT', 'loan', loan_id, chama_id, {'amount_cents': cents, 'repayment_id': rid})
+        notify(db, loan['user_id'], chama_id, f'Loan repayment of KES {cents / 100:,.0f} recorded. Balance KES {(remaining - cents) / 100:,.0f}.', f'/chamas/{chama_id}/loans', actor, now)
     return rid
 
 
@@ -272,6 +279,7 @@ def create_fine(db, chama_id, user_id, cents, reason, due_on, actor, now=None):
                         created_by=actor, created_at=iso(now))
         _ledger(db, chama_id, 'FINE', 'MEMO', cents, user_id, 'fine', fid, reason.strip(), now.date().isoformat(), actor, now)
         audit(db, actor, 'FINE_CREATED', 'fine', fid, chama_id, {'user_id': user_id, 'amount_cents': cents})
+        notify(db, user_id, chama_id, f'You were fined KES {cents / 100:,.0f}: {reason.strip()[:80]}', f'/chamas/{chama_id}/fines', actor, now)
     return fid
 
 
@@ -299,6 +307,7 @@ def pay_fine(db, chama_id, fine_id, cents, paid_on, method, reference, actor, no
         db.execute('UPDATE fines SET paid_cents=?, status=? WHERE id=?', (paid, 'PAID' if paid >= f['amount_cents'] else 'PARTIAL', fine_id))
         _ledger(db, chama_id, 'FINE_PAYMENT', 'IN', cents, f['user_id'], 'fine_payment', pid, 'Fine payment', paid_on, actor, now)
         audit(db, actor, 'FINE_PAYMENT', 'fine', fine_id, chama_id, {'amount_cents': cents, 'payment_id': pid})
+        notify(db, f['user_id'], chama_id, f'Fine payment of KES {cents / 100:,.0f} recorded.', f'/chamas/{chama_id}/fines', actor, now)
     return pid
 
 

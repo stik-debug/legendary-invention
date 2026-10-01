@@ -171,6 +171,20 @@ CREATE TABLE IF NOT EXISTS messages(
 CREATE TABLE IF NOT EXISTS message_reads(
   id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), user_id INTEGER NOT NULL REFERENCES users(id),
   last_read_id BIGINT NOT NULL DEFAULT 0, UNIQUE(chama_id, user_id));
+CREATE TABLE IF NOT EXISTS notifications(
+  id {PK}, user_id INTEGER NOT NULL REFERENCES users(id), chama_id INTEGER, text TEXT NOT NULL, link TEXT, created_at TEXT NOT NULL, read_at TEXT);
+CREATE TABLE IF NOT EXISTS meetings(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), title TEXT NOT NULL, venue TEXT, held_at TEXT NOT NULL, agenda TEXT, minutes TEXT,
+  status TEXT NOT NULL DEFAULT 'SCHEDULED', absent_fine_cents BIGINT NOT NULL DEFAULT 0, created_by INTEGER, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS attendance(
+  id {PK}, meeting_id INTEGER NOT NULL REFERENCES meetings(id), chama_id INTEGER NOT NULL REFERENCES chamas(id),
+  user_id INTEGER NOT NULL REFERENCES users(id), status TEXT NOT NULL, fine_id INTEGER, marked_by INTEGER, marked_at TEXT, UNIQUE(meeting_id, user_id));
+CREATE TABLE IF NOT EXISTS announcements(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), title TEXT NOT NULL, body TEXT NOT NULL, pinned INTEGER NOT NULL DEFAULT 0,
+  created_by INTEGER, created_at TEXT NOT NULL, deleted_at TEXT);
+CREATE INDEX IF NOT EXISTS ix_notif_user ON notifications(user_id, read_at, id);
+CREATE INDEX IF NOT EXISTS ix_meetings_chama ON meetings(chama_id, held_at);
+CREATE INDEX IF NOT EXISTS ix_announce_chama ON announcements(chama_id, id);
 CREATE INDEX IF NOT EXISTS ix_ledger_chama ON ledger_transactions(chama_id, id);
 CREATE INDEX IF NOT EXISTS ix_contrib_chama ON contributions(chama_id, period, user_id);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_contrib_ref ON contributions(chama_id, reference) WHERE reference IS NOT NULL AND status='PAID';
@@ -206,6 +220,10 @@ def init_db(db):
         ensure_column(db, 'users', 'claimed', 'INTEGER NOT NULL DEFAULT 1')
         ensure_column(db, 'users', 'claim_code_hash', 'TEXT')
         ensure_column(db, 'users', 'claim_fails', 'INTEGER NOT NULL DEFAULT 0')
+        ensure_column(db, 'users', 'totp_secret', 'TEXT')
+        ensure_column(db, 'users', 'totp_enabled', 'INTEGER NOT NULL DEFAULT 0')
+        ensure_column(db, 'users', 'totp_last_step', 'BIGINT NOT NULL DEFAULT 0')
+        ensure_column(db, 'users', 'totp_recovery', 'TEXT')
         ensure_column(db, 'chamas', 'contribution_cents', 'BIGINT NOT NULL DEFAULT 100000')
         ensure_column(db, 'chamas', 'loan_rate_bps', 'INTEGER NOT NULL DEFAULT 1000')
         ensure_column(db, 'chamas', 'loan_multiplier', 'INTEGER NOT NULL DEFAULT 3')

@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% block title %}Reports - {{ chama.name }}{% endblock %}
+{% block content %}
+<div class="head"><div><h2>Reports</h2><p>{{ chama.name }} · for officials</p></div></div>
+{% include '_chama_nav.html' %}
+<form method="GET" class="card" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap"><div style="flex:1;min-width:150px"><label for="pr">Month</label><input id="pr" type="month" name="period" value="{{ r.period }}"></div><button class="btn">Show</button></form>
+<div class="stats">
+<div class="stat dark"><small>Cash in hand</small><b>KES {{ r.cash|kes }}</b></div>
+<div class="stat gold"><small>Total savings</small><b>KES {{ r.savings_total|kes }}</b></div>
+<div class="stat"><small>Out on loan</small><b>KES {{ r.loans_out|kes }}</b></div>
+<div class="stat"><small>Fines owed</small><b>KES {{ r.fines_owed|kes }}</b></div>
+</div>
+<div class="card"><h3>{{ r.period }}: contributions</h3>
+<p style="margin:0 0 8px"><b>KES {{ r.collected|kes }}</b> collected of KES {{ r.expected|kes }} expected · {{ r.paid_count }} of {{ r.members }} members fully paid</p>
+{% if r.unpaid %}<ul class="list" style="margin:0">{% for s in r.unpaid %}<li><span class="av">{{ s.name[:1] }}</span><span class="grow">{{ s.name }}<br><small>KES {{ s.paid|kes }} of {{ s.expected|kes }}</small></span><span class="pill {{ 'warn' if s.status=='PARTIAL' else 'bad' }}">{{ 'Part paid' if s.status=='PARTIAL' else 'Not yet' }}</span></li>{% endfor %}</ul>{% else %}<p class="mute" style="margin:0">Everyone has paid for this month.</p>{% endif %}</div>
+<div class="card"><h3>Collections by month</h3>
+{% for h in r.history %}<div class="barrow"><span>{{ h.period }}</span><span class="bar"><i style="width:{{ (h.total / peak * 100)|round|int }}%"></i></span><span>KES {{ h.total|kes }} · {{ h.payers }} paid</span></div>{% else %}<p class="mute" style="margin:0">No contributions yet.</p>{% endfor %}</div>
+<div class="grid">
+<div class="card"><h3>Loans</h3><p style="margin:0">{{ r.loans_active }} running · {{ r.loans_pending }} waiting for a decision · {{ r.loans_repaid }} fully repaid</p></div>
+<div class="card"><h3>Meetings</h3><p style="margin:0">{{ r.meetings_held }} held{% if r.attendance_pct is not none %} · {{ r.attendance_pct }}% average attendance{% endif %}</p></div>
+<div class="card"><h3>Cash movement</h3><p style="margin:0">In KES {{ r.money_in|kes }} · Out KES {{ r.money_out|kes }}</p></div>
+</div>
+<div class="card tight"><h3 style="padding:18px 20px 0">Attendance by member</h3><ul class="list">
+{% for a in r.attendance %}<li><span class="av">{{ a.name[:1] }}</span><span class="grow">{{ a.name }}</span><small>{{ a.present }} present · {{ a.apologies }} apologies · {{ a.marked }} marked</small></li>{% else %}<li class="empty grow">No attendance recorded yet.</li>{% endfor %}</ul></div>
+<div class="card"><h3>Download (CSV for Excel)</h3><div style="display:flex;gap:8px;flex-wrap:wrap">
+{% for k in kinds %}<a class="btn sm" href="{{ url_for('export_csv', chama_id=chama.id, kind=k) }}">{{ k|title }}</a>{% endfor %}<a class="btn sm" href="{{ url_for('ledger_csv', chama_id=chama.id) }}">Ledger</a></div></div>
+{% endblock %}

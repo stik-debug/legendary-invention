@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% block title %}Two-factor login - ChamaPay{% endblock %}
+{% block content %}<div class="auth card"><h1>Enter your code</h1><p class="mute">Open your authenticator app and type the 6-digit code for ChamaPay. Lost your phone? Use one of your recovery codes instead.</p>
+<form method="POST">{{ csrf_input() }}<div class="field"><label for="c">Code</label><input id="c" name="code" autocomplete="one-time-code" inputmode="text" maxlength="20" required autofocus></div>
+<button class="btn pri block">Log in</button></form>
+<p class="mute" style="text-align:center;margin-bottom:0"><a href="{{ url_for('login') }}">Start again</a></p></div>{% endblock %}

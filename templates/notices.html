@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% from "_macros.html" import pager %}{% block title %}Notices - {{ chama.name }}{% endblock %}
+{% block content %}
+<div class="head"><div><h2>Notices</h2><p>{{ chama.name }} · announcements from your officials</p></div>{% if can %}<button class="btn pri" data-open="add">Post a notice</button>{% endif %}</div>
+{% include '_chama_nav.html' %}
+{% for n in rows %}<div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><h3 style="margin:0">{% if n.pinned %}<span class="pill warn">Pinned</span> {% endif %}{{ n.title }}</h3>
+{% if can %}<span style="display:flex;gap:6px"><form method="POST" action="{{ url_for('notice_action', chama_id=chama.id, nid=n.id, action='pin') }}" style="margin:0">{{ csrf_input() }}<button class="btn sm">{{ 'Unpin' if n.pinned else 'Pin' }}</button></form>
+<form method="POST" action="{{ url_for('notice_action', chama_id=chama.id, nid=n.id, action='delete') }}" data-confirm="Remove this notice?" style="margin:0">{{ csrf_input() }}<button class="btn sm bad">Remove</button></form></span>{% endif %}</div>
+<p style="white-space:pre-wrap;margin:10px 0 6px">{{ n.body }}</p><small class="mute">{{ n.author or 'An official' }} · {{ n.created_at|datetime }}</small></div>
+{% else %}<div class="card empty"><h3>No notices yet</h3><p>Officials can post announcements here. Every member gets an alert.</p></div>{% endfor %}
+{{ pager(page, pages) }}
+{% if can %}<dialog id="add"><form method="POST" action="{{ url_for('notice_add', chama_id=chama.id) }}">{{ csrf_input() }}<h3>Post a notice</h3>
+<div class="field"><label for="nt">Title</label><input id="nt" name="title" maxlength="100" required></div>
+<div class="field"><label for="nb">Message</label><textarea id="nb" name="body" rows="5" maxlength="3000" required></textarea></div>
+<label class="radio"><input type="checkbox" name="pinned" value="1"><span>Pin to the top</span></label>
+<div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn pri">Post</button></div></form></dialog>{% endif %}
+{% endblock %}

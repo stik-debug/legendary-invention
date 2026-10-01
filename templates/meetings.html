@@ -1,0 +1,17 @@
+{% extends "base.html" %}{% block title %}Meetings - {{ chama.name }}{% endblock %}
+{% block content %}
+<div class="head"><div><h2>Meetings</h2><p>{{ chama.name }}</p></div>{% if can %}<button class="btn pri" data-open="add">Schedule a meeting</button>{% endif %}</div>
+{% include '_chama_nav.html' %}
+<div class="card tight"><ul class="list">
+{% for m in rows %}<li><span class="grow"><a href="{{ url_for('meeting_view', chama_id=chama.id, mid=m.id) }}"><b>{{ m.title }}</b></a><br><small>{{ m.held_at|datetime }}{% if m.venue %} · {{ m.venue }}{% endif %}{% if m.absent_fine_cents %} · absence fine KES {{ m.absent_fine_cents|kes }}{% endif %}</small></span>
+{% if mine.get(m.id) %}<span class="pill {{ {'PRESENT':'ok','ABSENT':'bad','APOLOGY':'warn'}[mine[m.id]] }}">You: {{ mine[m.id]|title }}</span>{% endif %}
+<span class="pill {{ {'SCHEDULED':'info','HELD':'ok','CANCELLED':'bad'}[m.status] }}">{{ m.status|title }}</span></li>
+{% else %}<li class="empty grow">No meetings yet.</li>{% endfor %}</ul></div>
+{% if can %}<dialog id="add"><form method="POST" action="{{ url_for('meeting_add', chama_id=chama.id) }}">{{ csrf_input() }}<h3>Schedule a meeting</h3>
+<div class="field"><label for="mt">Title</label><input id="mt" name="title" maxlength="100" required placeholder="Monthly meeting"></div>
+<div class="field"><label for="mw">Date and time</label><input id="mw" type="datetime-local" name="when" required></div>
+<div class="field"><label for="mv">Venue</label><input id="mv" name="venue" maxlength="100"></div>
+<div class="field"><label for="ma">Agenda</label><textarea id="ma" name="agenda" rows="3" maxlength="2000"></textarea></div>
+<div class="field"><label for="mf">Fine for absence without apology (KES, leave empty for none)</label><input id="mf" name="fine" inputmode="decimal"><small>Created automatically for members you mark absent.</small></div>
+<div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn pri">Schedule</button></div></form></dialog>{% endif %}
+{% endblock %}

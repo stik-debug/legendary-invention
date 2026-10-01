@@ -1,0 +1,23 @@
+{% extends "base.html" %}{% block title %}{{ m.title }} - {{ chama.name }}{% endblock %}
+{% block content %}
+<div class="head"><div><h2>{{ m.title }}</h2><p>{{ m.held_at|datetime }}{% if m.venue %} · {{ m.venue }}{% endif %} · <span class="pill {{ {'SCHEDULED':'info','HELD':'ok','CANCELLED':'bad'}[m.status] }}">{{ m.status|title }}</span></p></div>
+<a class="btn" href="{{ url_for('meetings', chama_id=chama.id) }}">All meetings</a></div>
+{% include '_chama_nav.html' %}
+{% if m.agenda %}<div class="card"><h3>Agenda</h3><p style="white-space:pre-wrap;margin:0">{{ m.agenda }}</p></div>{% endif %}
+{% if m.absent_fine_cents %}<div class="card"><p class="mute" style="margin:0">Members marked absent get a fine of <b>KES {{ m.absent_fine_cents|kes }}</b>. Members who send an apology are not fined.</p></div>{% endif %}
+{% if mine %}<div class="card"><p style="margin:0">Your attendance: <span class="pill {{ {'PRESENT':'ok','ABSENT':'bad','APOLOGY':'warn'}[mine] }}">{{ mine|title }}</span></p></div>{% endif %}
+{% if can and m.status!='CANCELLED' %}
+<form method="POST" action="{{ url_for('meeting_attendance', chama_id=chama.id, mid=m.id) }}" class="card tight">{{ csrf_input() }}<h3 style="padding:18px 20px 0">Attendance</h3><ul class="list">
+{% for r in sheet %}<li><span class="av">{{ r.name[:1] }}</span><span class="grow">{{ r.name }}</span>
+<select name="st_{{ r.id }}" aria-label="Attendance for {{ r.name }}" style="width:auto">{% for v,l in (('PRESENT','Present'),('ABSENT','Absent'),('APOLOGY','Apology')) %}<option value="{{ v }}" {% if (r.status or 'PRESENT')==v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></li>{% endfor %}</ul>
+<div style="padding:16px 20px"><button class="btn pri">Save attendance</button></div></form>
+{% else %}
+<div class="card tight"><h3 style="padding:18px 20px 0">Attendance</h3><ul class="list">
+{% for r in sheet %}<li><span class="av">{{ r.name[:1] }}</span><span class="grow">{{ r.name }}</span>{% if r.status %}<span class="pill {{ {'PRESENT':'ok','ABSENT':'bad','APOLOGY':'warn'}[r.status] }}">{{ r.status|title }}</span>{% else %}<span class="pill">Not marked</span>{% endif %}</li>{% endfor %}</ul></div>
+{% endif %}
+{% if can and m.status!='CANCELLED' %}
+<form method="POST" action="{{ url_for('meeting_minutes', chama_id=chama.id, mid=m.id) }}" class="card">{{ csrf_input() }}<h3>Minutes</h3>
+<div class="field"><textarea name="minutes" rows="6" maxlength="8000" aria-label="Minutes">{{ m.minutes or '' }}</textarea></div><button class="btn">Save minutes</button></form>
+{% if m.status=='SCHEDULED' %}<form method="POST" action="{{ url_for('meeting_cancel', chama_id=chama.id, mid=m.id) }}" data-confirm="Cancel this meeting? Members will be alerted." class="card">{{ csrf_input() }}<button class="btn bad">Cancel this meeting</button></form>{% endif %}
+{% elif m.minutes %}<div class="card"><h3>Minutes</h3><p style="white-space:pre-wrap;margin:0">{{ m.minutes }}</p></div>{% endif %}
+{% endblock %}

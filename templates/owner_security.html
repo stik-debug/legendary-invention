@@ -1,0 +1,27 @@
+{% extends "base.html" %}{% block title %}Security - Control Center{% endblock %}
+{% block content %}
+<div class="head"><div><h2>Security</h2><p>Two-factor login protects the owner account even if the password leaks.</p></div></div>
+{% include '_owner_nav.html' %}
+{% if codes %}<div class="banner"><h3>Save your recovery codes now</h3><p>Each code works once if you lose your phone. They are shown only this one time. Store them somewhere safe, not on the same phone.</p>
+<pre style="font:700 18px/1.8 ui-monospace,monospace;margin:0">{% for c in codes %}{{ c }}
+{% endfor %}</pre></div>{% endif %}
+{% if setup %}
+<div class="card"><h3>Step 1: add ChamaPay to your authenticator app</h3>
+<p class="mute">In Google Authenticator, Microsoft Authenticator or Authy choose "Enter a setup key" and type this key (spaces do not matter):</p>
+<p style="font:700 22px ui-monospace,monospace;word-break:break-all;margin:0 0 10px">{{ setup.secret }}</p>
+<p class="mute" style="margin:0"><small>Account: {{ user.email }} · Type: time-based · 6 digits · 30 seconds</small></p></div>
+<form method="POST" action="{{ url_for('owner_2fa_confirm') }}" class="card">{{ csrf_input() }}<h3>Step 2: prove it works</h3>
+<div class="field"><label for="cc">Current 6-digit code</label><input id="cc" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required></div><button class="btn pri">Turn on two-factor login</button></form>
+{% elif u.totp_enabled %}
+<div class="card"><h3>Two-factor login is <span class="pill ok">ON</span></h3><p class="mute" style="margin:0">{{ left }} recovery code(s) left.{% if required %} This server requires it, so it cannot be switched off from here.{% endif %}</p></div>
+<form method="POST" action="{{ url_for('owner_2fa_codes') }}" class="card">{{ csrf_input() }}<h3>Get new recovery codes</h3><p class="mute">The old codes stop working.</p>
+<div class="field"><label for="rc">Current code from your app</label><input id="rc" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required></div><button class="btn">Make new codes</button></form>
+{% if not required %}<form method="POST" action="{{ url_for('owner_2fa_disable') }}" class="card" data-confirm="Switch two-factor login off?">{{ csrf_input() }}<h3>Switch it off</h3>
+<div class="field"><label for="dp">Password</label><input id="dp" type="password" name="password" autocomplete="current-password" required></div>
+<div class="field"><label for="dc">Current code (or a recovery code)</label><input id="dc" name="code" maxlength="20" required></div><button class="btn bad">Switch off</button></form>{% endif %}
+{% else %}
+<div class="card"><h3>Two-factor login is <span class="pill bad">OFF</span></h3><p class="mute">{% if required %}This server requires it. Set it up to continue.{% else %}Strongly recommended: the owner account can suspend every chama and see all billing.{% endif %}</p>
+<form method="POST" action="{{ url_for('owner_2fa_start') }}" style="margin:0">{{ csrf_input() }}<button class="btn pri">Set up two-factor login</button></form></div>
+{% endif %}
+<div class="card"><h3>Lost your phone and your codes?</h3><p class="mute" style="margin:0">On the server, set <code>OWNER_RESET_2FA=1</code> and restart once. It switches two-factor off for <code>OWNER_EMAIL</code>. Remove the variable straight after, then set it up again.</p></div>
+{% endblock %}
