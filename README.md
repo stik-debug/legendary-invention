@@ -120,3 +120,15 @@ The app refuses to start in production without a 32+ character `AUTH_SECRET`. On
 - `mgr.py` merry-go-round rules, `recovery.py` password reset, `routes_mgr.py` and `routes_recovery.py` their screens, `finance.py` money rules, `community.py` meetings, attendance and announcements, `reports.py` officials' reports and CSV, `notify.py` in-app alerts, `twofactor.py` owner 2FA, `devtools.py` seed/reset/validate commands, `routes_finance.py`, `routes_community.py` and `routes_security.py` their screens.
 - `services.py` all rules (limits, states, payments). `app.py` routes and authorization. `providers.py` Test and M-Pesa providers. The Test provider is disabled in production.
 - Payments are only applied by `process_webhook`, guarded by unique constraints on webhook event and receipt, and an `applied` flag.
+
+
+## PWA / Phone Installation
+
+This build includes PWA support for ChamaPay:
+- Web App Manifest: `/static/manifest.webmanifest`
+- Service Worker: `/static/sw.js`
+- App icons: `/static/icons/`
+- Install prompt on supported Android/Chrome browsers
+- iPhone/iPad guidance for Safari → Share → Add to Home Screen
+
+The service worker intentionally caches only static assets. Authenticated pages, sessions, forms, financial records, and other dynamic data remain network-only.

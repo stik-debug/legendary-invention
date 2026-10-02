@@ -95,3 +95,21 @@ footer{padding:30px 0 50px;color:var(--mute);font-size:14px;text-align:center}
 .bar{height:12px;border-radius:99px;background:var(--line);overflow:hidden;display:block}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--em),var(--gold));border-radius:99px}
 textarea{min-height:90px;resize:vertical}
 @media (max-width:520px){.barrow{grid-template-columns:62px 1fr;}.barrow span:last-child{grid-column:1/-1;color:var(--mute)}}
+
+
+/* PWA install card */
+.pwa-install-card{
+  position:fixed; left:16px; right:16px; bottom:16px; z-index:9999;
+  display:flex; align-items:center; gap:12px; max-width:680px; margin:auto;
+  padding:14px 16px; border-radius:18px; background:#06382A; color:#fff;
+  box-shadow:0 18px 50px rgba(0,0,0,.28); border:1px solid rgba(255,255,255,.12);
+}
+.pwa-install-card[hidden]{display:none}
+.pwa-install-copy{display:flex; flex:1; min-width:0; flex-direction:column; gap:3px}
+.pwa-install-copy strong{font-weight:800}
+.pwa-install-copy span{font-size:.88rem; opacity:.82}
+.pwa-install-close{border:0; background:transparent; color:#fff; font-size:24px; line-height:1; cursor:pointer}
+@media (max-width:520px){
+  .pwa-install-card{bottom:10px; padding:12px}
+  .pwa-install-copy span{font-size:.78rem}
+}

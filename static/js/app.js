@@ -23,3 +23,53 @@ if(!still&&window.matchMedia('(hover:hover)').matches){
   document.addEventListener('mouseout',function(e){var t=e.target.closest&&e.target.closest('.tilt');if(t&&!t.contains(e.relatedTarget))t.style.transform='';});
 }
 })();
+
+
+// ChamaPay PWA installation helper.
+(function(){
+  var card = document.getElementById('pwa-install-card');
+  var button = document.getElementById('pwa-install-btn');
+  var help = document.getElementById('pwa-install-help');
+  var close = document.getElementById('pwa-install-close');
+  if (!card || !button) return;
+
+  var standalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+  var ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  var safari = ios && /safari/i.test(navigator.userAgent) && !/crios|fxios|edgios/i.test(navigator.userAgent);
+  var deferredPrompt = null;
+
+  if (standalone || sessionStorage.getItem('pwa-install-dismissed') === '1') return;
+
+  if (ios) {
+    card.hidden = false;
+    button.textContent = 'How to install';
+    help.textContent = safari
+      ? 'Safari: tap Share, then Add to Home Screen.'
+      : 'Open this site in Safari, tap Share, then Add to Home Screen.';
+    button.addEventListener('click', function(){
+      alert('On iPhone: open ChamaPay in Safari, tap the Share button, choose “Add to Home Screen”, then tap Add.');
+    });
+  } else {
+    window.addEventListener('beforeinstallprompt', function(e){
+      e.preventDefault();
+      deferredPrompt = e;
+      card.hidden = false;
+    });
+    button.addEventListener('click', async function(){
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      try { await deferredPrompt.userChoice; } catch (_) {}
+      deferredPrompt = null;
+      card.hidden = true;
+    });
+    window.addEventListener('appinstalled', function(){
+      card.hidden = true;
+      deferredPrompt = null;
+    });
+  }
+
+  close.addEventListener('click', function(){
+    card.hidden = true;
+    try { sessionStorage.setItem('pwa-install-dismissed','1'); } catch (_) {}
+  });
+})();
