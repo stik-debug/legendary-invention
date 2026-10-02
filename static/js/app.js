@@ -30,6 +30,7 @@ if(!still&&window.matchMedia('(hover:hover)').matches){
   var card = document.getElementById('pwa-install-card');
   var button = document.getElementById('pwa-install-btn');
   var help = document.getElementById('pwa-install-help');
+  var steps = document.getElementById('pwa-install-steps');
   var close = document.getElementById('pwa-install-close');
   if (!card || !button) return;
 
@@ -44,11 +45,15 @@ if(!still&&window.matchMedia('(hover:hover)').matches){
   if (standalone) return;
   try { if (sessionStorage.getItem('pwa-install-dismissed') === '1') return; } catch (_) {}
 
-  function showCard(title, message, actionText){
+  function showCard(title, message, actionText, instructionHtml){
     var strong = card.querySelector('strong');
     if (strong && title) strong.textContent = title;
     if (help && message) help.textContent = message;
     if (actionText) button.textContent = actionText;
+    if (steps) {
+      steps.innerHTML = instructionHtml || '';
+      steps.hidden = !instructionHtml;
+    }
     card.hidden = false;
   }
 
@@ -57,27 +62,39 @@ if(!still&&window.matchMedia('(hover:hover)').matches){
     try { sessionStorage.setItem('pwa-install-dismissed','1'); } catch (_) {}
   }
 
-  // iPhone/iPad: iOS Safari does not expose beforeinstallprompt.
+  function toggleInstructions(html){
+    if (!steps) return;
+    steps.innerHTML = html;
+    steps.hidden = false;
+    button.textContent = 'Got it';
+  }
+
+  // iPhone/iPad: Safari uses Add to Home Screen rather than beforeinstallprompt.
   if (ios) {
-    showCard('Install ChamaPay', safari
-      ? 'Tap Share, then Add to Home Screen.'
-      : 'Open this site in Safari, then tap Share → Add to Home Screen.', 'How to install');
+    showCard('Install ChamaPay',
+      safari ? 'Add ChamaPay to your Home Screen for quick access.' : 'For the best install experience, open ChamaPay in Safari.',
+      'How to install',
+      '<ol><li>Tap <b>Share</b> in Safari.</li><li>Tap <b>Add to Home Screen</b>.</li><li>Turn on <b>Open as Web App</b> if shown, then tap <b>Add</b>.</li></ol>');
     button.addEventListener('click', function(){
-      alert('On iPhone/iPad: open ChamaPay in Safari, tap the Share button, choose “Add to Home Screen”, turn on “Open as Web App” if shown, then tap Add.');
+      if (steps && !steps.hidden) {
+        button.textContent = 'Done';
+        return;
+      }
+      toggleInstructions('<ol><li>Open ChamaPay in <b>Safari</b>.</li><li>Tap the <b>Share</b> button.</li><li>Select <b>Add to Home Screen</b>.</li><li>Turn on <b>Open as Web App</b> if shown, then tap <b>Add</b>.</li></ol>');
     });
   }
-  // Android: use the native install prompt when available. If the browser does not
-  // expose it, still show a mobile fallback so the user knows where to install it.
+  // Android: use the native prompt when available; otherwise provide browser instructions.
   else if (android || mobile) {
     window.addEventListener('beforeinstallprompt', function(e){
       e.preventDefault();
       deferredPrompt = e;
-      showCard('Install ChamaPay', 'Add ChamaPay to your phone for quick access.', 'Install');
+      showCard('Install ChamaPay', 'Get the ChamaPay app on your phone for faster access.', 'Install');
     });
 
     setTimeout(function(){
       if (!deferredPrompt) {
-        showCard('Install ChamaPay', 'Chrome: tap ⋮ → Add to Home screen or Install app.', 'How to install');
+        showCard('Install ChamaPay', 'Add ChamaPay to your phone from your browser menu.', 'How to install',
+          '<ol><li>Tap the browser <b>⋮</b> menu.</li><li>Choose <b>Install app</b> or <b>Add to Home screen</b>.</li><li>Confirm the installation.</li></ol>');
       }
     }, 1800);
 
@@ -89,7 +106,11 @@ if(!still&&window.matchMedia('(hover:hover)').matches){
         card.hidden = true;
         return;
       }
-      alert('On Android: open ChamaPay in Chrome, tap the ⋮ menu, then choose “Install app” or “Add to Home screen”.');
+      if (steps && !steps.hidden) {
+        button.textContent = 'Done';
+        return;
+      }
+      toggleInstructions('<ol><li>Tap the browser <b>⋮</b> menu.</li><li>Choose <b>Install app</b> or <b>Add to Home screen</b>.</li><li>Confirm the installation.</li></ol>');
     });
 
     window.addEventListener('appinstalled', function(){
