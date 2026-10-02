@@ -1,0 +1,38 @@
+{% extends "base.html" %}{% block title %}{{ r.name }} - {{ chama.name }}{% endblock %}
+{% block content %}
+<div class="head"><div><h2>{{ r.name }}</h2><p>KES {{ r.amount_cents|kes }} each · {{ 'weekly' if r.frequency=='WEEKLY' else 'monthly' }} · <span class="pill {{ {'ACTIVE':'info','COMPLETED':'ok','CANCELLED':'bad'}[r.status] }}">{{ r.status|title }}</span></p></div>
+<a class="btn" href="{{ url_for('mgr_list', chama_id=chama.id) }}">All rounds</a></div>
+{% include '_chama_nav.html' %}
+{% if turn %}
+{% if i_owe %}<div class="banner"><h3>Your turn to pay</h3><p>Pay <b>KES {{ r.amount_cents|kes }}</b> to <b>{{ turn.slot.name }}</b> by {{ turn.slot.due_date|date }}. Send the money as your chama agreed, then give the M-Pesa code to the treasurer.</p></div>{% endif %}
+<div class="card"><h3>This turn: {{ turn.slot.name }} receives</h3>
+<p style="margin:0 0 6px">Due {{ turn.slot.due_date|date }} · collected <b>KES {{ turn.collected|kes }}</b> of KES {{ turn.expected|kes }} · {{ turn.paid|length }} of {{ turn.payers }} paid</p>
+{% if turn.unpaid %}<p class="mute" style="margin:0">Still to pay: {% for u in turn.unpaid %}{{ u.name }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% else %}<p style="margin:0"><span class="pill ok">Everyone has paid</span> The pot is ready to pay out.</p>{% endif %}</div>
+{% if can %}<div class="card" style="display:flex;gap:8px;flex-wrap:wrap">
+{% if turn.unpaid %}<button class="btn pri" data-open="pay">Record a payment</button>{% endif %}
+{% if not turn.unpaid %}<button class="btn pri" data-open="payout">Pay out to {{ turn.slot.name }}</button>{% endif %}</div>{% endif %}
+{% if can_remind and turn.unpaid %}<form method="POST" action="{{ url_for('mgr_remind', chama_id=chama.id, rid=r.id) }}" style="margin:0 0 14px">{{ csrf_input() }}<button class="btn">Remind those who have not paid</button></form>{% endif %}
+{% if turn.paid %}<div class="card tight"><h3 style="padding:18px 20px 0">Paid in for this turn</h3><ul class="list">
+{% for p in turn.paid %}<li><span class="av">{{ p.name[:1] }}</span><span class="grow">{{ p.name }}<br><small>{{ p.method }}{% if p.reference %} · {{ p.reference }}{% endif %} · {{ p.paid_on|date }}</small></span><span class="pill ok">KES {{ p.amount_cents|kes }}</span>
+{% if can %}<form method="POST" action="{{ url_for('mgr_void', chama_id=chama.id, rid=r.id, pid=p.payment_id) }}" data-confirm="Cancel this payment?" style="margin:0;display:flex;gap:6px">{{ csrf_input() }}<input name="reason" placeholder="Reason" required minlength="3" maxlength="200" style="width:130px" aria-label="Reason"><button class="btn sm bad">Cancel</button></form>{% endif %}</li>{% endfor %}</ul></div>{% endif %}
+{% endif %}
+<div class="card tight"><h3 style="padding:18px 20px 0">Order of turns</h3><ul class="list">
+{% for s in slots %}<li><span class="av">{{ s.position }}</span><span class="grow">{{ s.name }}{% if s.user_id==user.id %} <small>(you)</small>{% endif %}<br><small>{{ s.due_date|date }}{% if s.status=='PAID_OUT' %} · paid out {{ s.paid_out_at|datetime }}{% endif %}</small></span>
+{% if s.status=='PAID_OUT' %}<span class="pill ok">Received KES {{ s.payout_cents|kes }}</span>{% elif turn and turn.slot.id==s.id %}<span class="pill info">This turn</span>{% else %}<span class="pill">Waiting</span>{% endif %}</li>{% endfor %}</ul></div>
+{% if is_admin and r.status=='ACTIVE' %}<form method="POST" action="{{ url_for('mgr_cancel', chama_id=chama.id, rid=r.id) }}" data-confirm="Cancel this whole merry-go-round?" class="card">{{ csrf_input() }}<h3>Cancel this round</h3><p class="mute">Possible only when no money for the current turn is sitting in the pot.</p>
+<div class="field"><label for="cr">Reason</label><input id="cr" name="reason" required minlength="3" maxlength="200"></div><button class="btn bad">Cancel merry-go-round</button></form>{% endif %}
+{% if can and turn %}
+{% if turn.unpaid %}<dialog id="pay"><form method="POST" action="{{ url_for('mgr_pay', chama_id=chama.id, rid=r.id) }}">{{ csrf_input() }}<h3>Record a payment</h3>
+<div class="field"><label for="pu">Who paid</label><select id="pu" name="user_id">{% for u in turn.unpaid %}<option value="{{ u.user_id }}">{{ u.name }}</option>{% endfor %}</select></div>
+<p class="mute" style="margin:0 0 10px">Amount: KES {{ r.amount_cents|kes }}</p>
+<div class="field"><label for="pm">Method</label><select id="pm" name="method"><option>M-Pesa</option><option>Cash</option><option>Bank</option></select></div>
+<div class="field"><label for="pr">M-Pesa code or reference</label><input id="pr" name="reference" maxlength="40"></div>
+<div class="field"><label for="pd">Date paid</label><input id="pd" type="date" name="paid_on" value="{{ today }}" required></div>
+<div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn pri">Record</button></div></form></dialog>{% else %}
+<dialog id="payout"><form method="POST" action="{{ url_for('mgr_payout', chama_id=chama.id, rid=r.id) }}">{{ csrf_input() }}<h3>Pay out to {{ turn.slot.name }}</h3>
+<p>KES <b>{{ turn.collected|kes }}</b> leaves the merry-go-round pot. Send it to {{ turn.slot.name }} first, then record it here. You cannot pay out your own turn.</p>
+<div class="field"><label for="om">Method</label><select id="om" name="method"><option>M-Pesa</option><option>Cash</option><option>Bank</option></select></div>
+<div class="field"><label for="or">M-Pesa code or reference</label><input id="or" name="reference" maxlength="40"></div>
+<div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn pri">Record payout</button></div></form></dialog>{% endif %}
+{% endif %}
+{% endblock %}

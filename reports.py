@@ -1,6 +1,7 @@
 """Officials' reports and CSV exports. Everything is read from the same tables the screens use; nothing is stored twice."""
-import finance as F
 import community as C
+import finance as F
+import mgr as M
 
 
 def _n(db, sql, params=()):
@@ -24,7 +25,8 @@ def chama_report(db, chama_id, period):
     marks = sum(r['marked'] for r in rates)
     present = sum(r['present'] for r in rates)
     return {
-        'period': period, 'cash': F.cash_balance(db, chama_id), 'money_in': money_in, 'money_out': money_out,
+        'period': period, 'cash': F.cash_balance(db, chama_id), 'pot': M.pot_balance(db, chama_id),
+        'mgr_active': _n(db, "SELECT COUNT(*) FROM mgr_rounds WHERE chama_id=? AND status='ACTIVE'", (chama_id,)), 'money_in': money_in, 'money_out': money_out,
         'savings_total': _n(db, "SELECT SUM(amount_cents) FROM contributions WHERE chama_id=? AND status='PAID'", (chama_id,)),
         'members': len(status), 'expected_each': c['contribution_cents'],
         'collected': sum(s['paid'] for s in status), 'expected': sum(s['expected'] for s in status),
@@ -44,7 +46,7 @@ def _kes(c):
     return f'{(c or 0) / 100:.2f}'
 
 
-EXPORTS = ('members', 'contributions', 'loans', 'fines', 'attendance')
+EXPORTS = ('members', 'contributions', 'loans', 'fines', 'attendance', 'merrygoround')
 
 
 def export(db, chama_id, kind):
@@ -76,4 +78,13 @@ def export(db, chama_id, kind):
         rows = db.all("SELECT m.held_at, m.title, u.name, a.status FROM attendance a JOIN meetings m ON m.id=a.meeting_id JOIN users u ON u.id=a.user_id "
                       "WHERE a.chama_id=? ORDER BY m.held_at, u.name LIMIT 20000", (chama_id,))
         return ['Meeting date', 'Meeting', 'Member', 'Attendance'], [[r['held_at'], r['title'], r['name'], r['status']] for r in rows]
+    if kind == 'merrygoround':
+        rows = db.all("""SELECT 'Paid in' what, p.paid_on d, r.name rname, u.name who, rec.name recipient, p.amount_cents, p.method, p.reference, p.status
+            FROM mgr_payments p JOIN mgr_rounds r ON r.id=p.round_id JOIN users u ON u.id=p.user_id JOIN mgr_slots s ON s.id=p.slot_id JOIN users rec ON rec.id=s.user_id
+            WHERE p.chama_id=? UNION ALL
+            SELECT 'Payout', substr(s.paid_out_at,1,10), r.name, u.name, u.name, s.payout_cents, s.method, s.reference, 'PAID'
+            FROM mgr_slots s JOIN mgr_rounds r ON r.id=s.round_id JOIN users u ON u.id=s.user_id WHERE s.chama_id=? AND s.status='PAID_OUT'
+            ORDER BY 2 LIMIT 20000""", (chama_id, chama_id))
+        return (['Type', 'Date', 'Round', 'Member', 'Turn of', 'Amount KES', 'Method', 'Reference', 'Status'],
+                [[x['what'], x['d'], x['rname'], x['who'], x['recipient'], _kes(x['amount_cents']), x['method'], x['reference'], x['status']] for x in rows])
     raise KeyError(kind)

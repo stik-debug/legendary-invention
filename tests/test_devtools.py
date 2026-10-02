@@ -112,7 +112,7 @@ class DevTools(unittest.TestCase):
 
     def test_validate_cli_exit_code_on_errors(self):
         D.seed(self.db)
-        self.db.execute("UPDATE loans SET paid_cents=paid_cents+1 WHERE status='ACTIVE'")
+        self.db.execute("UPDATE loans SET paid_cents=paid_cents+1 WHERE status='ACTIVE'"); self.db.commit()
         r = self.app.test_cli_runner().invoke(args=['validate'])
         self.assertEqual(r.exit_code, 1)
         self.assertIn('ERROR:', r.output)

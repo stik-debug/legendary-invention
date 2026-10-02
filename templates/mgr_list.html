@@ -1,0 +1,25 @@
+{% extends "base.html" %}{% block title %}Merry-go-round - {{ chama.name }}{% endblock %}
+{% block content %}
+<div class="head"><div><h2>Merry-go-round</h2><p>{{ chama.name }} · members take turns receiving the pot</p></div>{% if can %}<button class="btn pri" data-open="new">Start a merry-go-round</button>{% endif %}</div>
+{% include '_chama_nav.html' %}
+<div class="stats"><div class="stat gold"><small>Merry-go-round pot</small><b>KES {{ pot|kes }}</b></div></div>
+<div class="card"><p class="mute" style="margin:0">The pot is kept in its own account, apart from savings. It is <b>never lent out or spent</b>: it can only be paid to the member whose turn it is, once everyone has paid in.</p></div>
+{% for r in rounds %}<a class="card" href="{{ url_for('mgr_view', chama_id=chama.id, rid=r.id) }}" style="display:block;text-decoration:none;color:inherit">
+<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3 style="margin:0">{{ r.name }}</h3>
+<small class="mute">KES {{ r.amount_cents|kes }} each · {{ 'weekly' if r.frequency=='WEEKLY' else 'monthly' }} · {{ r.people }} members · {{ r.done }} of {{ r.people }} turns paid out</small></div>
+<span class="pill {{ {'ACTIVE':'info','COMPLETED':'ok','CANCELLED':'bad'}[r.status] }}">{{ r.status|title }}</span></div>
+{% if r.turn %}<p style="margin:10px 0 0">Now: <b>{{ r.turn.name }}</b> receives on {{ r.turn.due_date|date }}.{% if owes.get(r.id) %} <span class="pill warn">You still need to pay</span>{% endif %}</p>{% endif %}</a>
+{% else %}<div class="card empty"><h3>No merry-go-round yet</h3><p>{% if can %}Start one: choose the members, the amount and how often.{% else %}Your officials can start one.{% endif %}</p></div>{% endfor %}
+{% if can %}<dialog id="new"><form method="POST" action="{{ url_for('mgr_new', chama_id=chama.id) }}">{{ csrf_input() }}<h3>Start a merry-go-round</h3>
+<div class="field"><label for="rn">Name</label><input id="rn" name="name" maxlength="60" required placeholder="2026 Merry-go-round"></div>
+<div class="field"><label for="ra">Amount each member pays per turn (KES)</label><input id="ra" name="amount" inputmode="decimal" required placeholder="1000"></div>
+<div class="field"><label for="rf">How often</label><select id="rf" name="frequency"><option value="MONTHLY">Monthly</option><option value="WEEKLY">Weekly</option></select></div>
+<div class="field"><label for="rs">Date of the first turn</label><input id="rs" type="date" name="start" value="{{ today }}" required></div>
+<div class="field"><label>Who takes part</label>
+{% for m in members %}<label class="radio" style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="member" value="{{ m.id }}" checked><span class="grow">{{ m.name }}</span><input type="number" name="pos_{{ m.id }}" min="1" max="60" placeholder="turn #" style="width:84px" aria-label="Turn number for {{ m.name }}"></label>{% endfor %}</div>
+<div class="field"><label>Order of turns</label>
+<label class="radio"><input type="radio" name="order" value="random" checked><span>Draw at random (fair, done by the system)</span></label>
+<label class="radio"><input type="radio" name="order" value="listed"><span>Use the turn numbers typed above</span></label></div>
+<p class="mute"><small>Everyone except that turn's recipient pays the amount; the recipient gets all of it.</small></p>
+<div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn pri">Start</button></div></form></dialog>{% endif %}
+{% endblock %}

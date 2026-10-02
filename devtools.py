@@ -10,6 +10,7 @@ from werkzeug.security import generate_password_hash
 
 import community as C
 import finance as F
+import mgr as M
 import services as S
 from db import DB
 
@@ -76,6 +77,9 @@ def seed(db, today=None):
         F.apply_loan(db, cid, ids[4], 150000, 'Stock for my shop', now)  # waiting for a decision
         late = F.create_fine(db, cid, ids[len(ids) - 1], 20000, 'Late contribution', None, treas, now)
         F.pay_fine(db, cid, late, 5000, today.isoformat(), 'Cash', None, treas, now)
+        rid = M.create_round(db, cid, 'Demo merry-go-round', 50000, 'MONTHLY', today.isoformat(), ids[:6], admin, order=ids[:6], now=now)
+        for uid in ids[1:4]:
+            M.record_payment(db, cid, rid, uid, 'Cash', None, today.isoformat(), treas, now)
         past = C.create_meeting(db, cid, 'Monthly meeting', (today - timedelta(days=14)).isoformat() + 'T15:00', 'Chief\'s camp', 'Contributions, loans, AOB', 20000, ids[2], now)
         C.mark_attendance(db, cid, past, {uid: ('PRESENT' if k % 4 else 'ABSENT') for k, uid in enumerate(ids)}, ids[2], now)
         C.save_minutes(db, cid, past, 'Contributions reviewed. Two loans discussed. Next meeting date agreed.', ids[2], now)
@@ -110,6 +114,7 @@ def reset_test_data(db, dry_run=True):
         ('notifications', f'chama_id IN {cs} OR user_id IN {us}'), ('message_reads', f'chama_id IN {cs} OR user_id IN {us}'),
         ('messages', f'chama_id IN {cs}'), ('fine_payments', f'chama_id IN {cs}'), ('fines', f'chama_id IN {cs}'),
         ('loan_repayments', f'chama_id IN {cs}'), ('loans', f'chama_id IN {cs}'), ('contributions', f'chama_id IN {cs}'),
+        ('mgr_payments', f'chama_id IN {cs}'), ('mgr_slots', f'chama_id IN {cs}'), ('mgr_rounds', f'chama_id IN {cs}'),
         ('ledger_transactions', f'chama_id IN {cs}'),
         ('payment_webhooks', f'payment_id IN (SELECT id FROM payments WHERE chama_id IN {cs})'),
         ('payments', f'chama_id IN {cs}'), ('subscriptions', f'chama_id IN {cs}'), ('chama_members', f'chama_id IN {cs} OR user_id IN {us}'),
@@ -158,6 +163,23 @@ def validate(db, production=False):
         lent = int(db.val("SELECT SUM(principal_cents) FROM loans WHERE chama_id=? AND disbursed_at IS NOT NULL", (cid,), 0) or 0)
         if out != lent:
             err(f'{n}: loans paid out total KES {lent / 100:,.2f} but the ledger shows KES {out / 100:,.2f}.')
+    for c in db.all('SELECT id, name FROM chamas'):
+        cid, n = c['id'], f"Chama {c['id']} ({c['name']})"
+        pot = M.pot_balance(db, cid)
+        held = int(db.val("SELECT SUM(p.amount_cents) FROM mgr_payments p JOIN mgr_slots s ON s.id=p.slot_id WHERE p.chama_id=? AND p.status='PAID' AND s.status='PENDING'", (cid,), 0) or 0)
+        if pot < 0:
+            err(f'{n}: the merry-go-round pot is negative (KES {pot / 100:,.2f}).')
+        if pot != held:
+            err(f'{n}: the merry-go-round pot holds KES {pot / 100:,.2f} but the payments waiting for payout total KES {held / 100:,.2f}.')
+        if db.val("SELECT COUNT(*) FROM ledger_transactions WHERE chama_id=? AND account='MGR' AND kind NOT IN ('MGR_CONTRIBUTION','MGR_PAYOUT','MGR_REVERSAL')", (cid,), 0):
+            err(f'{n}: something other than merry-go-round money is in the pot account.')
+        if db.val("SELECT COUNT(*) FROM ledger_transactions WHERE chama_id=? AND account='MAIN' AND kind LIKE 'MGR%'", (cid,), 0):
+            err(f'{n}: merry-go-round money was recorded in the main account.')
+    for r in db.all("SELECT s.id, s.payout_cents, (SELECT COALESCE(SUM(p.amount_cents),0) FROM mgr_payments p WHERE p.slot_id=s.id AND p.status='PAID') c FROM mgr_slots s WHERE s.status='PAID_OUT'"):
+        if r['payout_cents'] != r['c']:
+            err(f"Merry-go-round turn {r['id']} paid out KES {r['payout_cents'] / 100:,.2f} but KES {r['c'] / 100:,.2f} was collected.")
+    for r in db.all("SELECT r.id FROM mgr_rounds r WHERE r.status='COMPLETED' AND EXISTS (SELECT 1 FROM mgr_slots s WHERE s.round_id=r.id AND s.status='PENDING')"):
+        err(f"Merry-go-round {r['id']} is marked complete but has turns left.")
     for r in db.all("""SELECT l.id, l.chama_id, l.paid_cents, l.total_due_cents, l.status,
         (SELECT COALESCE(SUM(r.amount_cents),0) FROM loan_repayments r WHERE r.loan_id=l.id AND r.status='PAID') s FROM loans l"""):
         if r['paid_cents'] != r['s']:

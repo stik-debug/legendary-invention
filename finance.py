@@ -65,14 +65,16 @@ def _ref(r):
 
 
 # ---------- ledger ----------
+# Two separate money accounts per chama: 'MAIN' (savings, loans, fines, expenses) and 'MGR' (the merry-go-round pot).
+# Loans and expenses only ever look at MAIN, so the pot cannot be lent or spent: the separation is in the accounting, not a promise.
 def cash_balance(db, chama_id):
     return _n(db, "SELECT SUM(CASE WHEN direction='IN' THEN amount_cents WHEN direction='OUT' THEN -amount_cents ELSE 0 END) "
-                  "FROM ledger_transactions WHERE chama_id=?", (chama_id,))
+                  "FROM ledger_transactions WHERE chama_id=? AND account='MAIN'", (chama_id,))
 
 
 def cash_totals(db, chama_id):
-    return (_n(db, "SELECT SUM(amount_cents) FROM ledger_transactions WHERE chama_id=? AND direction='IN'", (chama_id,)),
-            _n(db, "SELECT SUM(amount_cents) FROM ledger_transactions WHERE chama_id=? AND direction='OUT'", (chama_id,)))
+    return (_n(db, "SELECT SUM(amount_cents) FROM ledger_transactions WHERE chama_id=? AND account='MAIN' AND direction='IN'", (chama_id,)),
+            _n(db, "SELECT SUM(amount_cents) FROM ledger_transactions WHERE chama_id=? AND account='MAIN' AND direction='OUT'", (chama_id,)))
 
 
 def _ledger(db, chama_id, kind, direction, cents, user_id, ref_type, ref_id, desc, on, actor, now):

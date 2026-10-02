@@ -133,7 +133,7 @@ class CommWeb(unittest.TestCase):
 
     def test_suspended_chama_is_locked_out_of_new_pages_too(self):
         self.team()
-        self.db.execute("UPDATE subscriptions SET status='SUSPENDED' WHERE chama_id=?", (self.cid,))
+        self.db.execute("UPDATE subscriptions SET status='SUSPENDED' WHERE chama_id=?", (self.cid,)); self.db.commit()
         for p in ('/meetings', '/notices', '/reports'):
             r = self.admin.get(self.base() + p)
             self.assertEqual(r.status_code, 302, p)
@@ -209,7 +209,7 @@ class CommWeb(unittest.TestCase):
 
     def test_notification_links_cannot_redirect_off_site(self):
         self.team()
-        N.notify(self.db, self.uid['m1'], self.cid, 'Evil', 'https://evil.example/x')
+        N.notify(self.db, self.uid['m1'], self.cid, 'Evil', 'https://evil.example/x'); self.db.commit()
         nid = self.db.val("SELECT id FROM notifications WHERE text='Evil'")
         r = self.post(self.m1, f'/notifications/{nid}/open')
         self.assertTrue(r.headers['Location'].endswith('/notifications'))

@@ -30,7 +30,8 @@ class DB:
             self.conn.execute('PRAGMA foreign_keys=ON')
 
     def _sql(self, sql):
-        return sql.replace('?', '%s') if self.pg else sql
+        # psycopg treats every % as a placeholder, so a literal % (for example LIKE 'abc%') must be doubled
+        return sql.replace('%', '%%').replace('?', '%s') if self.pg else sql
 
     def execute(self, sql, params=()):
         try:
@@ -185,6 +186,19 @@ CREATE TABLE IF NOT EXISTS announcements(
 CREATE INDEX IF NOT EXISTS ix_notif_user ON notifications(user_id, read_at, id);
 CREATE INDEX IF NOT EXISTS ix_meetings_chama ON meetings(chama_id, held_at);
 CREATE INDEX IF NOT EXISTS ix_announce_chama ON announcements(chama_id, id);
+CREATE TABLE IF NOT EXISTS mgr_rounds(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), name TEXT NOT NULL, amount_cents BIGINT NOT NULL CHECK(amount_cents>0),
+  frequency TEXT NOT NULL, start_date TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'ACTIVE', created_by INTEGER, created_at TEXT NOT NULL, closed_at TEXT);
+CREATE TABLE IF NOT EXISTS mgr_slots(
+  id {PK}, round_id INTEGER NOT NULL REFERENCES mgr_rounds(id), chama_id INTEGER NOT NULL REFERENCES chamas(id), position INTEGER NOT NULL,
+  user_id INTEGER NOT NULL REFERENCES users(id), due_date TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'PENDING', payout_cents BIGINT NOT NULL DEFAULT 0,
+  paid_out_at TEXT, paid_out_by INTEGER, method TEXT, reference TEXT, reminded_at TEXT, UNIQUE(round_id, position), UNIQUE(round_id, user_id));
+CREATE TABLE IF NOT EXISTS mgr_payments(
+  id {PK}, round_id INTEGER NOT NULL REFERENCES mgr_rounds(id), slot_id INTEGER NOT NULL REFERENCES mgr_slots(id), chama_id INTEGER NOT NULL REFERENCES chamas(id),
+  user_id INTEGER NOT NULL REFERENCES users(id), amount_cents BIGINT NOT NULL CHECK(amount_cents>0), method TEXT NOT NULL, reference TEXT, paid_on TEXT NOT NULL,
+  recorded_by INTEGER, created_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'PAID', voided_by INTEGER, voided_at TEXT, void_reason TEXT);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_mgr_payment ON mgr_payments(slot_id, user_id) WHERE status='PAID';
+CREATE INDEX IF NOT EXISTS ix_mgr_rounds ON mgr_rounds(chama_id, status);
 CREATE INDEX IF NOT EXISTS ix_ledger_chama ON ledger_transactions(chama_id, id);
 CREATE INDEX IF NOT EXISTS ix_contrib_chama ON contributions(chama_id, period, user_id);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_contrib_ref ON contributions(chama_id, reference) WHERE reference IS NOT NULL AND status='PAID';
@@ -211,15 +225,61 @@ def ensure_column(db, table, col, ddl):
         db.execute('ALTER TABLE ' + table + ' ADD COLUMN ' + col + ' ' + ddl)
 
 
+def _actual_columns(db, table):
+    if db.pg:
+        return {r['column_name'] for r in db.all('SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name=?', (table,))}
+    return {r['name'] for r in db.all('PRAGMA table_info(' + table + ')')}
+
+
+def repair_columns(db, pk):
+    """Upgrading an old database: CREATE TABLE IF NOT EXISTS never adds columns to a table that already exists, so a database created by an
+    older build can lack columns the new code reads (and crash with 'column does not exist'). This compares every table with the current
+    definition and adds whatever is missing, keeping the defaults. Only additive and safe: it never drops, renames or rewrites anything."""
+    ref = sqlite3.connect(':memory:')
+    try:
+        for stmt in SCHEMA.replace('{PK}', 'INTEGER PRIMARY KEY AUTOINCREMENT').split(';'):
+            if stmt.strip().upper().startswith('CREATE TABLE'):
+                ref.execute(stmt)
+        added = []
+        for (table,) in ref.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").fetchall():
+            have = _actual_columns(db, table)
+            if not have:
+                continue
+            for _cid, name, typ, notnull, dflt, is_pk in ref.execute('PRAGMA table_info(' + table + ')').fetchall():
+                if name in have or is_pk:
+                    continue
+                ddl = typ or 'TEXT'
+                if dflt is not None:
+                    ddl += ' DEFAULT ' + str(dflt) + (' NOT NULL' if notnull else '')
+                db.execute('ALTER TABLE ' + table + ' ADD COLUMN ' + name + ' ' + ddl)
+                added.append(table + '.' + name)
+        return added
+    finally:
+        ref.close()
+
+
 def init_db(db):
     pk = 'INTEGER PRIMARY KEY AUTOINCREMENT' if not db.pg else 'BIGSERIAL PRIMARY KEY'
     with db.tx():
-        for stmt in SCHEMA.replace('{PK}', pk).split(';'):
-            if stmt.strip():
+        if db.pg:
+            # Several server workers start at once on Render. Without this lock they all run CREATE TABLE together and most crash on the first deploy.
+            db.execute('SELECT pg_advisory_xact_lock(7283640)')
+        stmts = [x for x in SCHEMA.replace('{PK}', pk).split(';') if x.strip()]
+        for stmt in stmts:  # tables first, then repair old tables, then indexes (an index may mention a column an old table lacks)
+            if stmt.strip().upper().startswith('CREATE TABLE'):
+                db.execute(stmt)
+        repair_columns(db, pk)
+        for stmt in stmts:
+            if not stmt.strip().upper().startswith('CREATE TABLE'):
                 db.execute(stmt)
         ensure_column(db, 'users', 'claimed', 'INTEGER NOT NULL DEFAULT 1')
         ensure_column(db, 'users', 'claim_code_hash', 'TEXT')
         ensure_column(db, 'users', 'claim_fails', 'INTEGER NOT NULL DEFAULT 0')
+        ensure_column(db, 'ledger_transactions', 'account', "TEXT NOT NULL DEFAULT 'MAIN'")
+        ensure_column(db, 'users', 'reset_hash', 'TEXT')
+        ensure_column(db, 'users', 'reset_expires', 'TEXT')
+        ensure_column(db, 'users', 'reset_fails', 'INTEGER NOT NULL DEFAULT 0')
+        ensure_column(db, 'users', 'session_epoch', 'INTEGER NOT NULL DEFAULT 0')
         ensure_column(db, 'users', 'totp_secret', 'TEXT')
         ensure_column(db, 'users', 'totp_enabled', 'INTEGER NOT NULL DEFAULT 0')
         ensure_column(db, 'users', 'totp_last_step', 'BIGINT NOT NULL DEFAULT 0')

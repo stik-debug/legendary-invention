@@ -19,6 +19,7 @@
 <span style="display:flex;gap:8px">{% if is_admin %}<button class="btn sm" data-open="set">Chama settings</button><button class="btn sm pri" data-open="add">Add member</button>{% endif %}</span></div>
 <ul class="list">
 {% for m in members %}<li><span class="av">{{ m.name[:1] }}</span><span class="grow">{{ m.name }}<br><small>{{ m.phone }}</small></span><span class="pill {{ 'ok' if m.role!='MEMBER' else '' }}">{{ m.role.replace('_',' ')|title }}</span>{% if not m.claimed %}<span class="pill warn">Not registered yet</span>{% if is_admin %}<form method="POST" action="{{ url_for('member_code', chama_id=chama.id, user_id=m.id) }}" style="margin:0">{{ csrf_input() }}<button class="btn sm">New join code</button></form>{% endif %}{% endif %}
+{% if is_admin and m.claimed and m.role!='CHAMA_ADMIN' and m.id!=user.id %}<form method="POST" action="{{ url_for('member_reset_code', chama_id=chama.id, user_id=m.id) }}" data-confirm="Make a password reset code for {{ m.name }}? Give it only to {{ m.name }}." style="margin:0">{{ csrf_input() }}<button class="btn sm">Reset password</button></form>{% endif %}
 {% if can_view_statements %}<a class="btn sm" href="{{ url_for('statement', chama_id=chama.id, user_id=m.id) }}">Statement</a>{% endif %}
 {% if is_admin and m.id!=user.id %}<form method="POST" action="{{ url_for('member_remove', chama_id=chama.id, user_id=m.id) }}" data-confirm="Remove {{ m.name }}? Their history is kept." style="margin:0">{{ csrf_input() }}<button class="btn sm bad">Remove</button></form>{% endif %}</li>{% endfor %}
 </ul></div>

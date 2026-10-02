@@ -12,6 +12,14 @@ class Web(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.url = 'sqlite:///' + self.tmp + '/w.db'
+        self.schema = None
+        base = os.environ.get('TEST_DATABASE_URL')  # e.g. postgresql://postgres@localhost:5433/chama : runs the same tests on PostgreSQL
+        if base:
+            import psycopg, uuid
+            self.schema = 't' + uuid.uuid4().hex[:12]
+            with psycopg.connect(base, autocommit=True) as c:
+                c.execute(f'CREATE SCHEMA {self.schema}')
+            self.url = base + ('&' if '?' in base else '?') + 'options=-csearch_path%3D' + self.schema
         self.app = create_app({'DATABASE_URL': self.url, 'SECRET_KEY': 'k' * 48, 'TESTING': True})
         self.db = DB(self.url)
         S.create_user(self.db, 'Owner Person', 'owner@example.test', '0700000001', generate_password_hash('OwnerPass123'), super_admin=True)
@@ -19,6 +27,10 @@ class Web(unittest.TestCase):
 
     def tearDown(self):
         self.db.close()
+        if self.schema:
+            import psycopg
+            with psycopg.connect(os.environ['TEST_DATABASE_URL'], autocommit=True) as c:
+                c.execute(f'DROP SCHEMA {self.schema} CASCADE')
 
     def client(self):
         return self.app.test_client()

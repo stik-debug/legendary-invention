@@ -30,7 +30,7 @@ def register(app, db, owner_required, safe_next):
             u = db().one('SELECT * FROM users WHERE id=? AND is_active=1 AND is_super_admin=1', (uid,))
             if u and T.check_login(db(), u, request.form.get('code')):
                 nxt = session.get('pre2fa_next')
-                session.clear(); session['uid'] = u['id']; session.permanent = True
+                session.clear(); session['uid'] = u['id']; session['ep'] = u['session_epoch']; session.permanent = True
                 audit(db(), u['id'], 'LOGIN', 'user', u['id'], None, {'two_factor': True}); db().commit()
                 return redirect(nxt or url_for('owner_home'))
             db().execute('INSERT INTO login_attempts(key,at) VALUES(?,?)', (key, S.iso(S.now_utc()))); db().commit()

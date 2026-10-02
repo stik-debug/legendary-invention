@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block title %}Forgot password - ChamaPay{% endblock %}
+{% block content %}<div class="auth card"><h1>Forgot your password?</h1>
+<p class="mute">ChamaPay cannot send SMS or email yet, so a person you trust gives you a one-time code: your chairperson (if you are in one chama only) or ChamaPay support. Ask them, then enter it here. The code works once and expires after an hour.</p>
+<form method="POST">{{ csrf_input() }}
+<div class="field"><label for="ph">Your phone number</label><input id="ph" type="tel" name="phone" placeholder="0712345678" autocomplete="tel" required autofocus></div>
+<div class="field"><label for="cd">Reset code (8 digits)</label><input id="cd" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="12" required></div>
+<div class="field"><label for="pw">New password</label><input id="pw" type="password" name="password" autocomplete="new-password" minlength="8" required></div>
+<div class="field"><label for="cf">Repeat new password</label><input id="cf" type="password" name="confirm" autocomplete="new-password" minlength="8" required></div>
+<button class="btn pri block">Change password</button></form>
+<p class="mute" style="text-align:center;margin-bottom:0"><a href="{{ url_for('login') }}">Back to log in</a></p></div>{% endblock %}

@@ -1,4 +1,4 @@
-# ChamaPay Kenya (stage 3)
+# ChamaPay Kenya (stage 4)
 
 A multi-tenant SaaS for Kenyan chamas. **Stage 1 (billing, security, Control Center, 3D interface), stage 2 (contributions, ledger, loans, fines, statements, chat) and stage 3 (meetings, attendance, announcements, notifications, reports, owner two-factor login, test-data commands) are built.** See "What is and is not built" below. Please read it.
 
@@ -7,11 +7,12 @@ A multi-tenant SaaS for Kenyan chamas. **Stage 1 (billing, security, Control Cen
 | Feature | Status | Notes |
 |---|---|---|
 | Registration, login, logout | Built, tested | Hashed passwords, CSRF, rate limiting, secure cookies |
-| Password reset | NOT built | Needs email/SMS. Owner can be recovered by changing env vars |
+| Password reset (no SMS or email) | Built, tested | A trusted person issues a one-time 8-digit code (like the join code); the member enters it on **Forgot password**. Chairperson can do it for ordinary members who belong to one chama only; the ChamaPay owner can do it for anyone (Control Center > Users). Code works once, expires in 60 minutes, locks after 5 wrong tries, is stored hashed, and logs the account out everywhere else. The owner account itself is recovered with env vars |
+| Merry-go-round (rotating savings) | Built, tested | Each round has an order (random draw or typed), an amount and weekly/monthly turns. Everyone except that turn's recipient pays in; when all have paid, an official pays the pot to the recipient (never to themselves). **The pot is a separate money account** (`MGR` in the ledger): loans, expenses and "cash in hand" only look at the main account, so the pot can never be lent or spent. "Your turn to pay" alerts, reminders (max one per 12 hours), cancel, reports and CSV. See the section below |
 | Roles (SUPER_ADMIN, CHAMA_ADMIN, TREASURER, SECRETARY, MEMBER) | Built, tested | Enforced on the server for every route |
 | Multi-tenant isolation | Built, tested | Chama A user gets 403 on Chama B pages and actions |
 | Chama create, members add/remove | Built, tested | Add by name + phone number. New people get an 8-digit join code to claim their account. Removal keeps history |
-| Invitations by link | NOT built | Stage 2 |
+| Invitations by link | NOT built | Join codes work today (admin adds a phone number, gives the person an 8-digit code) |
 | Plans Starter 500/15, Growth 1,500/70, Business 2,000/100 | Built, tested | In the database, editable by the owner. Per chama, never per member |
 | Member limit (16th, 71st, 101st rejected) | Built, tested | Enforced in the backend, race-safe on PostgreSQL |
 | Upgrade / downgrade | Built, tested | Upgrade = pay. Downgrade blocked if members do not fit. Nobody is auto-removed |
@@ -37,12 +38,28 @@ A multi-tenant SaaS for Kenyan chamas. **Stage 1 (billing, security, Control Cen
 | Test-data commands (seed/reset/validate) | Built, tested | `flask --app app seed`, `reset-test-data`, `validate`. See "Test-data commands" below |
 | Two-factor login for owner | Built, tested | Authenticator app (TOTP) plus 8 one-time recovery codes. Optional `REQUIRE_OWNER_2FA=1`. See "Owner two-factor login" below |
 
-## Tests (144 automated, all passing when this was packaged)
+## Tests (186 automated, all passing on SQLite; the 128 web-level ones also pass on PostgreSQL)
 
     python -m unittest discover -s tests -v
 
 `test_services.py` covers plan limits, the subscription timeline, payments and idempotency. `test_finance.py` covers the money rules, including a KES 10,000 loan with KES 1,000 interest repaid in two parts. `test_web_finance.py` covers roles, privacy, tenant isolation and the full loan, fine and chat journeys over HTTP. `test_web.py` covers login, CSRF, authorization, tenant isolation, suspension and the owner screens over real HTTP. `test_community.py` covers meetings, attendance fines, notices, reports, CSV safety, notifications and tenant isolation of every new page. `test_security.py` covers TOTP (including the RFC 6238 test vector), replay, recovery codes, rate limiting and the require-2FA switch. `test_devtools.py` covers seed, reset and validate, including a deliberately corrupted database.
-Not covered here: a real PostgreSQL run, a real M-Pesa payment, real phones. You must test those.
+`test_recovery.py` covers password reset (who may issue codes, expiry, lockout, single use, other sessions logged out). `test_mgr.py` covers the merry-go-round: a full rotation to completion, the pot never being lent or spent, payout rules, reminders, cancellation, isolation between chamas, and `validate` catching a tampered pot. `test_upgrade.py` covers healing an old database.
+
+Run the same web tests on PostgreSQL (each test gets its own schema, nothing is left behind):
+
+    TEST_DATABASE_URL=postgresql://user:pass@localhost:5432/testdb python -m unittest tests.test_web tests.test_web_finance tests.test_community tests.test_security tests.test_devtools tests.test_recovery tests.test_mgr tests.test_upgrade
+
+Not covered here: a real M-Pesa payment and real phones. You must test those.
+
+## Merry-go-round
+
+1. Chairperson or treasurer: **Merry-go-round > Start**. Choose the members (at least 3), the amount each pays per turn, weekly or monthly, the date of the first turn, and the order (fair random draw by the system, or typed turn numbers).
+2. Each turn: everyone except that turn's recipient pays the amount. The treasurer records each payment with its M-Pesa code. Members see who has paid and "Your turn to pay" alerts. Officials can send a reminder (one per 12 hours).
+3. When everyone has paid, an official pays the whole pot to the recipient and records it. A recipient cannot pay out their own turn: another official must. The next turn then starts and the next payers are alerted.
+4. After the last turn the round is complete. Mistakes are cancelled with a reason, never deleted, and only before that turn is paid out.
+- The pot is its own account. It does not appear in the Ledger page, cannot be lent, and cannot be spent. `validate` checks that the pot always equals the payments waiting for payout.
+- Honest limit: ChamaPay records the money, it does not move it. Members still send the money by M-Pesa or cash as your chama agreed.
+- If someone has not paid, the payout waits. The officials decide what to do (remind, fine, or cancel the round).
 
 ## Test-data commands
 
@@ -79,9 +96,17 @@ Run these on your own computer or a staging database, never on real customers' d
 
 The app refuses to start in production without a 32+ character `AUTH_SECRET`. On the free PostgreSQL plan, Render may expire the database; use a paid plan and backups before real customers.
 
+## If the site shows an error after a deploy
+
+- Open **Render > your service > Logs** and look at the first red line. That line is the real cause; send it to whoever is helping you.
+- A fresh deploy used to be able to crash when both server workers created the tables at the same moment (PostgreSQL then reports `pg_type_typname_nsp_index`). That is fixed: setup now takes a lock.
+- Upgrading is automatic: on every start the app adds any column an older database lacks. It never deletes or rewrites data.
+- Render's free web service sleeps when idle; the first visit after a pause can take up to a minute. That is a wait, not an error.
+- Check the environment variables in step 3 above. A missing or short `AUTH_SECRET` stops the app on purpose.
+
 ## Before taking real customers
 
-- PostgreSQL on a paid plan with backups. I could not run PostgreSQL where this was built; the SQL is written to work on both, but do a full click-through on your real database first.
+- PostgreSQL on a paid plan with backups. The web-level tests pass on PostgreSQL 16 and two gunicorn workers start cleanly on an empty database, but still do a full click-through on your real database first.
 - Your Daraja credentials and callback URL, tested in sandbox first.
 - Register with the Office of the Data Protection Commissioner if required, and publish a privacy policy.
 - Have a few real chamas try it with small amounts.
@@ -92,6 +117,6 @@ The app refuses to start in production without a 32+ character `AUTH_SECRET`. On
 ## How it works (for developers)
 
 - `db.py` schema + tiny database layer (SQLite locally, PostgreSQL in production). Money is stored as integer cents.
-- `finance.py` money rules, `community.py` meetings, attendance and announcements, `reports.py` officials' reports and CSV, `notify.py` in-app alerts, `twofactor.py` owner 2FA, `devtools.py` seed/reset/validate commands, `routes_finance.py`, `routes_community.py` and `routes_security.py` their screens.
+- `mgr.py` merry-go-round rules, `recovery.py` password reset, `routes_mgr.py` and `routes_recovery.py` their screens, `finance.py` money rules, `community.py` meetings, attendance and announcements, `reports.py` officials' reports and CSV, `notify.py` in-app alerts, `twofactor.py` owner 2FA, `devtools.py` seed/reset/validate commands, `routes_finance.py`, `routes_community.py` and `routes_security.py` their screens.
 - `services.py` all rules (limits, states, payments). `app.py` routes and authorization. `providers.py` Test and M-Pesa providers. The Test provider is disabled in production.
 - Payments are only applied by `process_webhook`, guarded by unique constraints on webhook event and receipt, and an `applied` flag.

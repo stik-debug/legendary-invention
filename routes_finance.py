@@ -160,9 +160,9 @@ def register(app, db, ctx, login_required):
     @login_required
     def ledger(chama_id):
         chama, me, sub = ctx(chama_id)
-        rows = db().all("""SELECT l.*, u.name FROM ledger_transactions l LEFT JOIN users u ON u.id=l.user_id WHERE l.chama_id=?
+        rows = db().all("""SELECT l.*, u.name FROM ledger_transactions l LEFT JOIN users u ON u.id=l.user_id WHERE l.chama_id=? AND l.account='MAIN'
             ORDER BY l.id DESC LIMIT ? OFFSET ?""", (chama_id, PAGE, (page_no() - 1) * PAGE))
-        total = db().val('SELECT COUNT(*) FROM ledger_transactions WHERE chama_id=?', (chama_id,), 0)
+        total = db().val("SELECT COUNT(*) FROM ledger_transactions WHERE chama_id=? AND account='MAIN'", (chama_id,), 0)
         money_in, money_out = F.cash_totals(db(), chama_id)
         return render_template('ledger.html', chama=chama, me=me, rows=rows, page=page_no(), pages=max(1, -(-total // PAGE)), balance=F.cash_balance(db(), chama_id),
                                money_in=money_in, money_out=money_out, can=me['role'] in FIN, can_export=me['role'] in VIEW, today=date.today().isoformat())
@@ -179,7 +179,7 @@ def register(app, db, ctx, login_required):
     def ledger_csv(chama_id):
         chama, me, sub = ctx(chama_id, roles=VIEW)
         rows = db().all("SELECT l.id, l.occurred_on, l.kind, l.direction, l.amount_cents, u.name, l.description FROM ledger_transactions l "
-                        "LEFT JOIN users u ON u.id=l.user_id WHERE l.chama_id=? ORDER BY l.id LIMIT 20000", (chama_id,))
+                        "LEFT JOIN users u ON u.id=l.user_id WHERE l.chama_id=? AND l.account='MAIN' ORDER BY l.id LIMIT 20000", (chama_id,))
         body = F.to_csv(['Entry', 'Date', 'Type', 'Direction', 'Amount KES', 'Member', 'Description'],
                         [[r['id'], r['occurred_on'], r['kind'], r['direction'], f"{r['amount_cents'] / 100:.2f}", r['name'], r['description']] for r in rows])
         return Response(body, mimetype='text/csv', headers={'Content-Disposition': f'attachment; filename=ledger-{chama_id}.csv'})
