@@ -33,27 +33,76 @@ if(!still&&window.matchMedia('(hover:hover)').matches){
   var close = document.getElementById('pwa-install-close');
   if (!card || !button) return;
 
-  var standalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
-  var ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  var safari = ios && /safari/i.test(navigator.userAgent) && !/crios|fxios|edgios/i.test(navigator.userAgent);
+  var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  var ua = navigator.userAgent || '';
+  var ios = /iphone|ipad|ipod/i.test(ua);
+  var android = /android/i.test(ua);
+  var mobile = ios || android || (navigator.userAgentData && navigator.userAgentData.mobile === true);
+  var safari = ios && /safari/i.test(ua) && !/crios|fxios|edgios/i.test(ua);
   var deferredPrompt = null;
 
-  if (standalone || sessionStorage.getItem('pwa-install-dismissed') === '1') return;
+  if (standalone) return;
+  try { if (sessionStorage.getItem('pwa-install-dismissed') === '1') return; } catch (_) {}
 
-  if (ios) {
+  function showCard(title, message, actionText){
+    var strong = card.querySelector('strong');
+    if (strong && title) strong.textContent = title;
+    if (help && message) help.textContent = message;
+    if (actionText) button.textContent = actionText;
     card.hidden = false;
-    button.textContent = 'How to install';
-    help.textContent = safari
-      ? 'Safari: tap Share, then Add to Home Screen.'
-      : 'Open this site in Safari, tap Share, then Add to Home Screen.';
+  }
+
+  function closeCard(){
+    card.hidden = true;
+    try { sessionStorage.setItem('pwa-install-dismissed','1'); } catch (_) {}
+  }
+
+  // iPhone/iPad: iOS Safari does not expose beforeinstallprompt.
+  if (ios) {
+    showCard('Install ChamaPay', safari
+      ? 'Tap Share, then Add to Home Screen.'
+      : 'Open this site in Safari, then tap Share → Add to Home Screen.', 'How to install');
     button.addEventListener('click', function(){
-      alert('On iPhone: open ChamaPay in Safari, tap the Share button, choose “Add to Home Screen”, then tap Add.');
+      alert('On iPhone/iPad: open ChamaPay in Safari, tap the Share button, choose “Add to Home Screen”, turn on “Open as Web App” if shown, then tap Add.');
     });
-  } else {
+  }
+  // Android: use the native install prompt when available. If the browser does not
+  // expose it, still show a mobile fallback so the user knows where to install it.
+  else if (android || mobile) {
     window.addEventListener('beforeinstallprompt', function(e){
       e.preventDefault();
       deferredPrompt = e;
-      card.hidden = false;
+      showCard('Install ChamaPay', 'Add ChamaPay to your phone for quick access.', 'Install');
+    });
+
+    setTimeout(function(){
+      if (!deferredPrompt) {
+        showCard('Install ChamaPay', 'Chrome: tap ⋮ → Add to Home screen or Install app.', 'How to install');
+      }
+    }, 1800);
+
+    button.addEventListener('click', async function(){
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        try { await deferredPrompt.userChoice; } catch (_) {}
+        deferredPrompt = null;
+        card.hidden = true;
+        return;
+      }
+      alert('On Android: open ChamaPay in Chrome, tap the ⋮ menu, then choose “Install app” or “Add to Home screen”.');
+    });
+
+    window.addEventListener('appinstalled', function(){
+      card.hidden = true;
+      deferredPrompt = null;
+    });
+  }
+  // Desktop: only show the banner when the browser says the app can be installed.
+  else {
+    window.addEventListener('beforeinstallprompt', function(e){
+      e.preventDefault();
+      deferredPrompt = e;
+      showCard('Install ChamaPay', 'Add ChamaPay to your computer for quick access.', 'Install');
     });
     button.addEventListener('click', async function(){
       if (!deferredPrompt) return;
@@ -68,8 +117,5 @@ if(!still&&window.matchMedia('(hover:hover)').matches){
     });
   }
 
-  close.addEventListener('click', function(){
-    card.hidden = true;
-    try { sessionStorage.setItem('pwa-install-dismissed','1'); } catch (_) {}
-  });
+  close.addEventListener('click', closeCard);
 })();

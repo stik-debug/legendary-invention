@@ -110,6 +110,7 @@ textarea{min-height:90px;resize:vertical}
 .pwa-install-copy span{font-size:.88rem; opacity:.82}
 .pwa-install-close{border:0; background:transparent; color:#fff; font-size:24px; line-height:1; cursor:pointer}
 @media (max-width:520px){
-  .pwa-install-card{bottom:10px; padding:12px}
-  .pwa-install-copy span{font-size:.78rem}
+  .pwa-install-card{bottom:10px; padding:12px; gap:8px; border-radius:16px}
+  .pwa-install-copy span{font-size:.78rem; line-height:1.25}
+  .pwa-install-card .btn{min-height:40px; padding:8px 13px; white-space:nowrap}
 }
