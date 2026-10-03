@@ -8,7 +8,7 @@
 {% for l in loans %}
 <li style="align-items:flex-start"><span class="av">{{ l.name[:1] }}</span>
 <span class="grow"><b>{{ l.name }}</b> · KES {{ l.principal_cents|kes }}<br>
-<small>Interest KES {{ l.interest_cents|kes }} · Total due KES {{ l.total_due_cents|kes }} · Paid KES {{ l.paid_cents|kes }} · <b>Balance KES {{ (l.total_due_cents - l.paid_cents)|kes }}</b>{% if l.purpose %}<br>For: {{ l.purpose }}{% endif %}</small>
+<small>Interest KES {{ l.interest_cents|kes }} · Total due KES {{ l.total_due_cents|kes }} · Paid KES {{ l.paid_cents|kes }} · <b>Balance KES {{ (l.total_due_cents - l.paid_cents)|kes }}</b>{% if l.due_date %} · Due {{ l.due_date|date }}{% endif %}{% if l.purpose %}<br>For: {{ l.purpose }}{% endif %}<br><a href="{{ url_for('loan_details',chama_id=chama.id,loan_id=l.id) }}">View schedule & guarantors</a></small>
 {% for r in reps.get(l.id, []) %}<br><small>Paid KES {{ r.amount_cents|kes }} on {{ r.paid_on|date }} ({{ r.method }}){% if staff %} <button class="btn sm bad" data-form-open="void" data-action="{{ url_for('repayment_void', chama_id=chama.id, rid=r.id) }}" data-text="Repayment of KES {{ r.amount_cents|kes }}">Cancel</button>{% endif %}</small>{% endfor %}</span>
 {{ pill(l.status) }}
 {% if staff and l.user_id != user.id %}

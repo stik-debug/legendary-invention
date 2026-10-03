@@ -19,6 +19,7 @@ import routes_mgr
 import routes_recovery
 import routes_security
 import routes_upgrade
+import routes_plus
 import services as S
 import twofactor as TF
 from db import DB, audit, init_db
@@ -37,7 +38,7 @@ def create_app(overrides=None):
         DATABASE_URL=os.environ.get('DATABASE_URL') or 'sqlite:///' + os.path.join(app.instance_path, 'chamapay.db'),
         PAY_INSTRUCTIONS=os.environ.get('PAY_INSTRUCTIONS', 'Contact ChamaPay support to pay. Your chama is reactivated as soon as we record your payment.'),
         SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax', SESSION_COOKIE_SECURE=production,
-        PERMANENT_SESSION_LIFETIME=timedelta(days=14), MAX_CONTENT_LENGTH=256 * 1024,
+        PERMANENT_SESSION_LIFETIME=timedelta(days=14), MAX_CONTENT_LENGTH=10 * 1024 * 1024,
         REQUIRE_OWNER_2FA=os.environ.get('REQUIRE_OWNER_2FA') == '1')
     app.config.update(overrides or {})
     if len(app.config['SECRET_KEY']) < 32:
@@ -487,6 +488,7 @@ def create_app(overrides=None):
 
     # ---------- ChamaPay 2.0 upgrade routes ----------
     routes_upgrade.register_upgrade_routes(app, db, login_required, ctx)
+    routes_plus.register_plus_routes(app, db, login_required, ctx, owner_required)
 
     @app.cli.command('sweep')
     def sweep_cmd():

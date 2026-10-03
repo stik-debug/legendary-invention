@@ -2,7 +2,7 @@
 Nothing is ever deleted: mistakes are voided, which writes a REVERSAL row."""
 import csv
 import io
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from db import IntegrityError, audit
@@ -231,6 +231,16 @@ def disburse_loan(db, chama_id, loan_id, actor, now=None):
         if bal < loan['principal_cents']:
             raise BusinessError(f'The chama only has KES {bal / 100:,.0f} in cash, less than this loan.')
         db.execute("UPDATE loans SET status='ACTIVE', disbursed_by=?, disbursed_at=? WHERE id=?", (actor, iso(now), loan_id))
+        months = max(1, int(round((datetime.fromisoformat(loan['due_date']) - now).days / 30))) if loan.get('due_date') else 1
+        months = min(months, 120)
+        if not db.val('SELECT COUNT(*) FROM loan_installments WHERE loan_id=?', (loan_id,), 0):
+            total = int(loan['total_due_cents'])
+            base = total // months
+            rem = total - base * months
+            for n in range(1, months + 1):
+                due = (now.date() + timedelta(days=30 * n)).isoformat()
+                amt = base + (rem if n == months else 0)
+                db.insert('loan_installments', loan_id=loan_id, installment_no=n, due_date=due, amount_cents=amt, paid_cents=0, status='DUE')
         _ledger(db, chama_id, 'LOAN_DISBURSEMENT', 'OUT', loan['principal_cents'], loan['user_id'], 'loan', loan_id, 'Loan paid out', now.date().isoformat(), actor, now)
         audit(db, actor, 'LOAN_DISBURSED', 'loan', loan_id, chama_id, {'principal_cents': loan['principal_cents']})
         notify(db, loan['user_id'], chama_id, f"Your loan of KES {loan['principal_cents'] / 100:,.0f} was paid out. You owe KES {loan['total_due_cents'] / 100:,.0f}.", f'/chamas/{chama_id}/loans', actor, now)
@@ -251,6 +261,14 @@ def repay_loan(db, chama_id, loan_id, cents, paid_on, method, reference, actor, 
                         method=method, reference=ref, created_by=actor, created_at=iso(now))
         paid = loan['paid_cents'] + cents
         db.execute('UPDATE loans SET paid_cents=?, status=? WHERE id=?', (paid, 'PAID' if paid >= loan['total_due_cents'] else 'ACTIVE', loan_id))
+        remaining_payment = cents
+        for inst in db.all("SELECT * FROM loan_installments WHERE loan_id=? AND paid_cents<amount_cents ORDER BY installment_no", (loan_id,)):
+            take = min(remaining_payment, inst['amount_cents'] - inst['paid_cents'])
+            new_paid = inst['paid_cents'] + take
+            db.execute("UPDATE loan_installments SET paid_cents=?, status=?, paid_at=? WHERE id=?", (new_paid, 'PAID' if new_paid >= inst['amount_cents'] else 'PARTIAL', paid_on if new_paid >= inst['amount_cents'] else None, inst['id']))
+            remaining_payment -= take
+            if remaining_payment <= 0:
+                break
         _ledger(db, chama_id, 'LOAN_REPAYMENT', 'IN', cents, loan['user_id'], 'loan_repayment', rid, 'Loan repayment', paid_on, actor, now)
         audit(db, actor, 'LOAN_REPAYMENT', 'loan', loan_id, chama_id, {'amount_cents': cents, 'repayment_id': rid})
         notify(db, loan['user_id'], chama_id, f'Loan repayment of KES {cents / 100:,.0f} recorded. Balance KES {(remaining - cents) / 100:,.0f}.', f'/chamas/{chama_id}/loans', actor, now)

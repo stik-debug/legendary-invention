@@ -1,5 +1,6 @@
 {% set ep = request.endpoint %}
 <nav class="subnav" aria-label="Chama sections">
+<a href="{{ url_for('my_chama_dashboard', chama_id=chama.id) }}" {% if ep=='my_chama_dashboard' %}aria-current="page"{% endif %}>My Dashboard</a>
 <a href="{{ url_for('chama_home', chama_id=chama.id) }}" {% if ep=='chama_home' %}aria-current="page"{% endif %}>Home</a>
 <a href="{{ url_for('savings', chama_id=chama.id) }}" {% if ep=='savings' %}aria-current="page"{% endif %}>Savings</a>
 <a href="{{ url_for('pay', chama_id=chama.id) }}" {% if ep in ('pay','pay_status','pay_settings','pay_records') %}aria-current="page"{% endif %}>Pay</a>
@@ -14,6 +15,8 @@
 <a href="{{ url_for('constitution', chama_id=chama.id) }}" {% if ep=='constitution' %}aria-current="page"{% endif %}>Constitution</a>
 <a href="{{ url_for('chama_ai', chama_id=chama.id) }}" {% if ep=='chama_ai' %}aria-current="page"{% endif %}>AI</a>
 <a href="{{ url_for('activity', chama_id=chama.id) }}" {% if ep=='activity' %}aria-current="page"{% endif %}>Activity</a>
+<a href="{{ url_for('documents', chama_id=chama.id) }}" {% if ep=='documents' %}aria-current="page"{% endif %}>Documents</a>
+{% if me is defined and me and me.role in ('CHAMA_ADMIN','TREASURER','SECRETARY','AUDITOR') %}<a href="{{ url_for('financial_check', chama_id=chama.id) }}" {% if ep=='financial_check' %}aria-current="page"{% endif %}>Financial Check</a>{% endif %}
 <a href="{{ url_for('meetings', chama_id=chama.id) }}" {% if ep in ('meetings','meeting_view') %}aria-current="page"{% endif %}>Meetings</a>
 <a href="{{ url_for('notices', chama_id=chama.id) }}" {% if ep=='notices' %}aria-current="page"{% endif %}>Notices</a>
 {% if me is defined and me and me.role in ('CHAMA_ADMIN','TREASURER','SECRETARY') %}<a href="{{ url_for('reports', chama_id=chama.id) }}" {% if ep=='reports' %}aria-current="page"{% endif %}>Reports</a>{% endif %}

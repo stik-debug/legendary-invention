@@ -267,6 +267,37 @@ CREATE TABLE IF NOT EXISTS support_tickets(
   subject TEXT NOT NULL, body TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'OPEN',
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL, admin_note TEXT);
 CREATE INDEX IF NOT EXISTS ix_support_user ON support_tickets(user_id, status, id);
+CREATE TABLE IF NOT EXISTS loan_guarantors(
+  id {PK}, loan_id INTEGER NOT NULL REFERENCES loans(id), chama_id INTEGER NOT NULL REFERENCES chamas(id),
+  guarantor_user_id INTEGER NOT NULL REFERENCES users(id), status TEXT NOT NULL DEFAULT 'PENDING',
+  requested_at TEXT NOT NULL, responded_at TEXT, note TEXT, UNIQUE(loan_id, guarantor_user_id));
+CREATE TABLE IF NOT EXISTS loan_installments(
+  id {PK}, loan_id INTEGER NOT NULL REFERENCES loans(id), installment_no INTEGER NOT NULL, due_date TEXT NOT NULL,
+  amount_cents BIGINT NOT NULL CHECK(amount_cents>0), paid_cents BIGINT NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'DUE',
+  paid_at TEXT, UNIQUE(loan_id, installment_no));
+CREATE TABLE IF NOT EXISTS member_documents(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), user_id INTEGER, uploaded_by INTEGER NOT NULL REFERENCES users(id),
+  entity_type TEXT NOT NULL, entity_id INTEGER, original_name TEXT NOT NULL, stored_name TEXT NOT NULL, mime_type TEXT, size_bytes INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL, deleted_at TEXT);
+CREATE TABLE IF NOT EXISTS meeting_actions(
+  id {PK}, meeting_id INTEGER NOT NULL REFERENCES meetings(id), chama_id INTEGER NOT NULL REFERENCES chamas(id),
+  title TEXT NOT NULL, owner_user_id INTEGER, due_date TEXT, status TEXT NOT NULL DEFAULT 'OPEN', created_by INTEGER, created_at TEXT NOT NULL, completed_at TEXT);
+CREATE TABLE IF NOT EXISTS notification_preferences(
+  user_id INTEGER NOT NULL REFERENCES users(id), in_app INTEGER NOT NULL DEFAULT 1, email INTEGER NOT NULL DEFAULT 0, sms INTEGER NOT NULL DEFAULT 0,
+  push INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL, PRIMARY KEY(user_id));
+CREATE TABLE IF NOT EXISTS organizations(
+  id {PK}, name TEXT NOT NULL, created_by INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'ACTIVE');
+CREATE TABLE IF NOT EXISTS organization_members(
+  id {PK}, organization_id INTEGER NOT NULL REFERENCES organizations(id), user_id INTEGER NOT NULL REFERENCES users(id), role TEXT NOT NULL DEFAULT 'ADMIN',
+  status TEXT NOT NULL DEFAULT 'ACTIVE', created_at TEXT NOT NULL, UNIQUE(organization_id,user_id));
+CREATE TABLE IF NOT EXISTS organization_chamas(
+  id {PK}, organization_id INTEGER NOT NULL REFERENCES organizations(id), chama_id INTEGER NOT NULL REFERENCES chamas(id), linked_by INTEGER NOT NULL REFERENCES users(id), linked_at TEXT NOT NULL, UNIQUE(organization_id,chama_id));
+CREATE INDEX IF NOT EXISTS ix_guarantors_loan ON loan_guarantors(loan_id,status);
+CREATE INDEX IF NOT EXISTS ix_installments_loan ON loan_installments(loan_id,due_date,status);
+CREATE INDEX IF NOT EXISTS ix_documents_chama ON member_documents(chama_id,entity_type,entity_id,deleted_at);
+CREATE INDEX IF NOT EXISTS ix_meeting_actions ON meeting_actions(chama_id,status,due_date);
+CREATE INDEX IF NOT EXISTS ix_org_members ON organization_members(organization_id,status);
+CREATE INDEX IF NOT EXISTS ix_org_chamas ON organization_chamas(organization_id);
 
 
 """
