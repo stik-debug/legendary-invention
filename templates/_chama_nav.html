@@ -1,6 +1,5 @@
 {% set ep = request.endpoint %}
 <nav class="subnav" aria-label="Chama sections">
-{% if me is defined and me and chama.created_by|int == me.user_id|int %}<a href="{{ url_for('command_center', chama_id=chama.id) }}" {% if ep=='command_center' %}aria-current="page"{% endif %}>Command Center</a>{% endif %}
 <a href="{{ url_for('chama_home', chama_id=chama.id) }}" {% if ep=='chama_home' %}aria-current="page"{% endif %}>Home</a>
 <a href="{{ url_for('savings', chama_id=chama.id) }}" {% if ep=='savings' %}aria-current="page"{% endif %}>Savings</a>
 <a href="{{ url_for('pay', chama_id=chama.id) }}" {% if ep in ('pay','pay_status','pay_settings','pay_records') %}aria-current="page"{% endif %}>Pay</a>
