@@ -14,6 +14,7 @@ import finance as F
 import notify as N
 import routes_community
 import routes_finance
+import routes_pay
 import routes_mgr
 import routes_recovery
 import routes_security
@@ -93,7 +94,7 @@ def create_app(overrides=None):
 
     @app.before_request
     def csrf():
-        if request.method == 'POST' and request.endpoint not in ('mpesa_webhook',):
+        if request.method == 'POST' and request.endpoint not in ('mpesa_webhook', 'chama_mpesa_webhook'):
             sent, want = request.form.get('_csrf', ''), session.get('_csrf', '')
             if not want or not hmac.compare_digest(sent, want):
                 flash('Your session expired. Please try again.', 'danger')
@@ -390,6 +391,7 @@ def create_app(overrides=None):
     routes_finance.register(app, db, ctx, login_required)
     routes_community.register(app, db, ctx, login_required)
     routes_mgr.register(app, db, ctx, login_required)
+    routes_pay.register(app, db, ctx, login_required)
     routes_security.register(app, db, owner_required, safe_next)
     routes_recovery.register(app, db, ctx, login_required, owner_required)
     devtools.register(app)

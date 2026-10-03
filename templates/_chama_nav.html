@@ -2,6 +2,7 @@
 <nav class="subnav" aria-label="Chama sections">
 <a href="{{ url_for('chama_home', chama_id=chama.id) }}" {% if ep=='chama_home' %}aria-current="page"{% endif %}>Home</a>
 <a href="{{ url_for('savings', chama_id=chama.id) }}" {% if ep=='savings' %}aria-current="page"{% endif %}>Savings</a>
+<a href="{{ url_for('pay', chama_id=chama.id) }}" {% if ep in ('pay','pay_status','pay_settings') %}aria-current="page"{% endif %}>Pay</a>
 <a href="{{ url_for('loans', chama_id=chama.id) }}" {% if ep=='loans' %}aria-current="page"{% endif %}>Loans</a>
 <a href="{{ url_for('fines', chama_id=chama.id) }}" {% if ep=='fines' %}aria-current="page"{% endif %}>Fines</a>
 <a href="{{ url_for('ledger', chama_id=chama.id) }}" {% if ep=='ledger' %}aria-current="page"{% endif %}>Ledger</a>

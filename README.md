@@ -1,4 +1,4 @@
-# ChamaPay Kenya (stage 4)
+# ChamaPay Kenya (stage 5: online meetings + in-app chama payments)
 
 A multi-tenant SaaS for Kenyan chamas. **Stage 1 (billing, security, Control Center, 3D interface), stage 2 (contributions, ledger, loans, fines, statements, chat) and stage 3 (meetings, attendance, announcements, notifications, reports, owner two-factor login, test-data commands) are built.** See "What is and is not built" below. Please read it.
 
@@ -9,6 +9,9 @@ A multi-tenant SaaS for Kenyan chamas. **Stage 1 (billing, security, Control Cen
 | Registration, login, logout | Built, tested | Hashed passwords, CSRF, rate limiting, secure cookies |
 | Password reset (no SMS or email) | Built, tested | A trusted person issues a one-time 8-digit code (like the join code); the member enters it on **Forgot password**. Chairperson can do it for ordinary members who belong to one chama only; the ChamaPay owner can do it for anyone (Control Center > Users). Code works once, expires in 60 minutes, locks after 5 wrong tries, is stored hashed, and logs the account out everywhere else. The owner account itself is recovered with env vars |
 | Merry-go-round (rotating savings) | Built, tested | Each round has an order (random draw or typed), an amount and weekly/monthly turns. Everyone except that turn's recipient pays in; when all have paid, an official pays the pot to the recipient (never to themselves). **The pot is a separate money account** (`MGR` in the ledger): loans, expenses and "cash in hand" only look at the main account, so the pot can never be lent or spent. "Your turn to pay" alerts, reminders (max one per 12 hours), cancel, reports and CSV. See the section below |
+| Online meetings | Built, tested | When scheduling, choose *In person*, *Online with a free video room* (Jitsi, an unguessable room name is made for you) or *Online with my own link* (Zoom, Google Meet, Teams: https only). Members of that chama only see a **Join** button from 30 minutes before the start until 4 hours after. Opening it marks the member **Joined online** on the attendance sheet as a hint: nobody is marked present automatically, an official still confirms (so absence fines stay fair) |
+| Paying the chama inside the app | Built, tested (simulated payments) | **Automatic:** the chama brings its **own** Daraja paybill; a member taps Pay, gets the M-Pesa PIN prompt, and the contribution / fine / loan repayment is recorded when Safaricom confirms (verified, once only, wrong amounts rejected). **Manual:** the member pays the chama's paybill/till/phone, enters the M-Pesa code, and another official approves it. Same finance rules and ledger as a treasurer entry. ChamaPay never holds chama money |
+| Real M-Pesa for chama payments | Built, NOT tested live | Needs the chama's own Daraja credentials and `CHAMA_SECRETS_KEY` on the server. Until then it runs in simulation (dev) or shows as not set up |
 | Roles (SUPER_ADMIN, CHAMA_ADMIN, TREASURER, SECRETARY, MEMBER) | Built, tested | Enforced on the server for every route |
 | Multi-tenant isolation | Built, tested | Chama A user gets 403 on Chama B pages and actions |
 | Chama create, members add/remove | Built, tested | Add by name + phone number. New people get an 8-digit join code to claim their account. Removal keeps history |
@@ -38,7 +41,20 @@ A multi-tenant SaaS for Kenyan chamas. **Stage 1 (billing, security, Control Cen
 | Test-data commands (seed/reset/validate) | Built, tested | `flask --app app seed`, `reset-test-data`, `validate`. See "Test-data commands" below |
 | Two-factor login for owner | Built, tested | Authenticator app (TOTP) plus 8 one-time recovery codes. Optional `REQUIRE_OWNER_2FA=1`. See "Owner two-factor login" below |
 
-## Tests (186 automated, all passing on SQLite; the 128 web-level ones also pass on PostgreSQL)
+## Online meetings
+
+Officials schedule a meeting and pick how it is held. Jitsi needs no keys: the app creates `https://meet.jit.si/ChamaPay-<random>` (set `JITSI_BASE` to use your own Jitsi server). The room opens in a new tab, because public Jitsi limits embedding it inside other sites. On meet.jit.si the first person to start the room may need to sign in as moderator, so an official should open it first. For chamas that already use Zoom or Google Meet, paste that link instead. The link is only shown to active members of that chama, and only near the meeting time.
+
+## Paying inside the app
+
+1. **Chairperson: Pay > Payment settings.** Choose *Members pay the chama, then send me the M-Pesa code* (works for everyone, no Safaricom account) or *Automatic* (needs the chama's own Daraja paybill: consumer key, secret, passkey). Keys are stored encrypted and never shown again.
+2. **Member: Pay.** Sees this month's contribution, own fines and own loans. Automatic: enter the amount, get the PIN prompt, the page updates itself. Manual: enter the M-Pesa code from the SMS.
+3. **Officials: Pay > Waiting for you.** Approve (after checking the M-Pesa statement) or reject with a reason. You cannot approve your own payment. If money arrives by M-Pesa but cannot be recorded automatically (for example the fine was already settled), it lands here as *Review*.
+- A payment is only recorded after M-Pesa confirms it, with the amount checked. Repeated callbacks do nothing. "Ask M-Pesa now" covers a lost callback and never invents a result.
+- Server settings: `CHAMA_SECRETS_KEY` (32+ random characters; protects the stored keys and the per-chama callback URL), optional `PUBLIC_URL` (the https address Safaricom calls back; defaults to the request's address). Callback URL per chama: `/webhooks/chama-mpesa/<chama id>/<secret>` (built automatically).
+- Limits: paybill only for automatic payments (tills work in manual mode); M-Pesa's KES 250,000 per transaction.
+
+## Tests (201 automated, all passing on SQLite; the web-level ones (including the new payment and online-meeting tests) also pass on PostgreSQL)
 
     python -m unittest discover -s tests -v
 

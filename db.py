@@ -186,6 +186,18 @@ CREATE TABLE IF NOT EXISTS announcements(
 CREATE INDEX IF NOT EXISTS ix_notif_user ON notifications(user_id, read_at, id);
 CREATE INDEX IF NOT EXISTS ix_meetings_chama ON meetings(chama_id, held_at);
 CREATE INDEX IF NOT EXISTS ix_announce_chama ON announcements(chama_id, id);
+CREATE TABLE IF NOT EXISTS chama_pay_config(
+  id {PK}, chama_id INTEGER NOT NULL UNIQUE REFERENCES chamas(id), mode TEXT NOT NULL DEFAULT 'MANUAL', shortcode TEXT, instructions TEXT,
+  env TEXT NOT NULL DEFAULT 'sandbox', key_enc TEXT, secret_enc TEXT, passkey_enc TEXT, updated_by INTEGER, updated_at TEXT);
+CREATE TABLE IF NOT EXISTS chama_payments(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), user_id INTEGER NOT NULL REFERENCES users(id), purpose TEXT NOT NULL, target_id INTEGER,
+  amount_cents BIGINT NOT NULL CHECK(amount_cents>0), phone TEXT, channel TEXT NOT NULL, status TEXT NOT NULL, checkout_id TEXT, receipt TEXT,
+  result_desc TEXT, applied INTEGER NOT NULL DEFAULT 0, applied_ref_id INTEGER, decided_by INTEGER, created_at TEXT NOT NULL, completed_at TEXT,
+  UNIQUE(checkout_id), UNIQUE(chama_id, receipt));
+CREATE TABLE IF NOT EXISTS meeting_joins(
+  id {PK}, meeting_id INTEGER NOT NULL REFERENCES meetings(id), chama_id INTEGER NOT NULL REFERENCES chamas(id),
+  user_id INTEGER NOT NULL REFERENCES users(id), joined_at TEXT NOT NULL, UNIQUE(meeting_id, user_id));
+CREATE INDEX IF NOT EXISTS ix_chama_pay_user ON chama_payments(chama_id, user_id, id);
 CREATE TABLE IF NOT EXISTS mgr_rounds(
   id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), name TEXT NOT NULL, amount_cents BIGINT NOT NULL CHECK(amount_cents>0),
   frequency TEXT NOT NULL, start_date TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'ACTIVE', created_by INTEGER, created_at TEXT NOT NULL, closed_at TEXT);
@@ -284,6 +296,9 @@ def init_db(db):
         ensure_column(db, 'users', 'totp_enabled', 'INTEGER NOT NULL DEFAULT 0')
         ensure_column(db, 'users', 'totp_last_step', 'BIGINT NOT NULL DEFAULT 0')
         ensure_column(db, 'users', 'totp_recovery', 'TEXT')
+        ensure_column(db, 'meetings', 'online_provider', 'TEXT')
+        ensure_column(db, 'meetings', 'online_room', 'TEXT')
+        ensure_column(db, 'meetings', 'online_url', 'TEXT')
         ensure_column(db, 'chamas', 'contribution_cents', 'BIGINT NOT NULL DEFAULT 100000')
         ensure_column(db, 'chamas', 'loan_rate_bps', 'INTEGER NOT NULL DEFAULT 1000')
         ensure_column(db, 'chamas', 'loan_multiplier', 'INTEGER NOT NULL DEFAULT 3')

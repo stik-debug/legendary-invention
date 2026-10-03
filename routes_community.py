@@ -65,7 +65,7 @@ def register(app, db, ctx, login_required):
         try:
             cents = F.parse_kes(fine, 100) if fine and fine != '0' else 0
             mid = C.create_meeting(db(), chama_id, request.form.get('title'), request.form.get('when'), request.form.get('venue'),
-                                   request.form.get('agenda'), cents, g.user['id'])
+                                   request.form.get('agenda'), cents, g.user['id'], online=request.form.get('online'), link=request.form.get('link'))
         except S.BusinessError as e:
             flash(str(e), 'warning')
             return redirect(url_for('meetings', chama_id=chama_id))
@@ -81,8 +81,18 @@ def register(app, db, ctx, login_required):
         except S.BusinessError:
             abort(404)
         sheet = C.attendance_sheet(db(), chama_id, mid)
-        return render_template('meeting.html', chama=chama, me=me, m=m, sheet=sheet, can=me['role'] in COMMS,
+        return render_template('meeting.html', chama=chama, me=me, m=m, sheet=sheet, join_open=C.join_open(m), joined=C.joined_ids(db(), mid), can=me['role'] in COMMS,
                                mine=next((r['status'] for r in sheet if r['id'] == g.user['id']), None))
+
+    @app.route('/chamas/<int:chama_id>/meetings/<int:mid>/join')
+    @login_required
+    def meeting_join(chama_id, mid):
+        ctx(chama_id)  # members of THIS chama only; the room link is never shown to anyone else
+        try:
+            return redirect(C.join_target(db(), chama_id, mid, g.user))
+        except S.BusinessError as e:
+            flash(str(e), 'warning')
+            return redirect(url_for('meeting_view', chama_id=chama_id, mid=mid))
 
     @app.route('/chamas/<int:chama_id>/meetings/<int:mid>/attendance', methods=['POST'])
     @login_required

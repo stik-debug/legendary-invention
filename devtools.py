@@ -110,6 +110,7 @@ def reset_test_data(db, dry_run=True):
     cs = _in(chamas or [0])
     us = _in(users or [0])
     steps = [
+        ('chama_payments', f'chama_id IN {cs}'), ('chama_pay_config', f'chama_id IN {cs}'), ('meeting_joins', f'chama_id IN {cs}'),
         ('attendance', f'chama_id IN {cs}'), ('meetings', f'chama_id IN {cs}'), ('announcements', f'chama_id IN {cs}'),
         ('notifications', f'chama_id IN {cs} OR user_id IN {us}'), ('message_reads', f'chama_id IN {cs} OR user_id IN {us}'),
         ('messages', f'chama_id IN {cs}'), ('fine_payments', f'chama_id IN {cs}'), ('fines', f'chama_id IN {cs}'),

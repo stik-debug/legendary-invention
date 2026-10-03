@@ -1,5 +1,8 @@
 """Meetings, attendance and announcements. Officials run them, every member can read them."""
+import os
+import secrets
 from datetime import datetime, timedelta
+from urllib.parse import quote, urlparse
 
 import finance as F
 from db import audit
@@ -29,15 +32,67 @@ def parse_when(raw):
 
 
 # ---------- meetings ----------
-def create_meeting(db, chama_id, title, when, venue, agenda, absent_fine_cents, actor, now=None):
+def _online(mode, link):
+    """('none' | 'jitsi' | 'link') -> (provider, room, url). Jitsi rooms get an unguessable name; links must be plain https."""
+    mode = (mode or 'none').strip().lower()
+    if mode == 'none':
+        return None, None, None
+    if mode == 'jitsi':
+        return 'JITSI', 'ChamaPay-' + secrets.token_hex(8), None
+    if mode == 'link':
+        u = (link or '').strip()
+        p = urlparse(u)
+        if len(u) > 300 or p.scheme != 'https' or '.' not in (p.hostname or '') or p.username or p.password or any(c.isspace() for c in u):
+            raise BusinessError('Paste the full meeting link, starting with https:// (Zoom, Google Meet, Teams...).')
+        return 'LINK', None, u
+    raise BusinessError('Choose how the meeting will be held.')
+
+
+def online_url(m):
+    if m.get('online_provider') == 'JITSI' and m.get('online_room'):
+        return os.environ.get('JITSI_BASE', 'https://meet.jit.si').rstrip('/') + '/' + m['online_room']
+    return m.get('online_url') if m.get('online_provider') == 'LINK' else None
+
+
+def join_open(m, now=None):
+    """Join button shows 30 minutes before the start until 4 hours after (meeting times are East Africa time, UTC+3)."""
+    if not m.get('online_provider') or m['status'] == 'CANCELLED':
+        return False
+    eat = (now or now_utc()) + timedelta(hours=3)
+    start = datetime.strptime(m['held_at'], '%Y-%m-%d %H:%M')
+    return start - timedelta(minutes=30) <= eat <= start + timedelta(hours=4)
+
+
+def join_target(db, chama_id, meeting_id, user, now=None):
+    """Records that this member opened the online room (a hint for the attendance sheet) and returns where to send them."""
     now = now or now_utc()
+    m = get_meeting(db, chama_id, meeting_id)
+    if not join_open(m, now):
+        raise BusinessError('The online room is not open yet. It opens 30 minutes before the start.')
+    url = online_url(m)
+    with db.tx():
+        if not db.val('SELECT COUNT(*) FROM meeting_joins WHERE meeting_id=? AND user_id=?', (meeting_id, user['id']), 0):
+            db.insert('meeting_joins', meeting_id=meeting_id, chama_id=chama_id, user_id=user['id'], joined_at=iso(now))
+    if m['online_provider'] == 'JITSI':
+        url += '#userInfo.displayName=%22' + quote(user['name'] or 'Member') + '%22'
+    return url
+
+
+def joined_ids(db, meeting_id):
+    return {r['user_id'] for r in db.all('SELECT user_id FROM meeting_joins WHERE meeting_id=?', (meeting_id,))}
+
+
+def create_meeting(db, chama_id, title, when, venue, agenda, absent_fine_cents, actor, now=None, online='none', link=None):
+    now = now or now_utc()
+    provider, room, url = _online(online, link)
     title, venue, agenda = _text(title, 'The title', 3, 100), _text(venue, 'The venue', 0, 100), _text(agenda, 'The agenda', 0, 2000)
     when = parse_when(when)
     with db.tx():
         mid = db.insert('meetings', chama_id=chama_id, title=title, venue=venue or None, held_at=when, agenda=agenda or None,
-                        absent_fine_cents=int(absent_fine_cents or 0), created_by=actor, created_at=iso(now))
+                        absent_fine_cents=int(absent_fine_cents or 0), created_by=actor, created_at=iso(now),
+                        online_provider=provider, online_room=room, online_url=url)
         audit(db, actor, 'MEETING_CREATED', 'meeting', mid, chama_id, {'title': title, 'when': when})
-        notify_chama(db, chama_id, f'New meeting: {title}, {when}.', f'/chamas/{chama_id}/meetings/{mid}', actor, now)
+        notify_chama(db, chama_id, f'New {"online " if provider else ""}meeting: {title}, {when}.', f'/chamas/{chama_id}/meetings/{mid}', actor, now)
     return mid
 
 

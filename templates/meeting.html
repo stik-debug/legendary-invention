@@ -3,17 +3,21 @@
 <div class="head"><div><h2>{{ m.title }}</h2><p>{{ m.held_at|datetime }}{% if m.venue %} · {{ m.venue }}{% endif %} · <span class="pill {{ {'SCHEDULED':'info','HELD':'ok','CANCELLED':'bad'}[m.status] }}">{{ m.status|title }}</span></p></div>
 <a class="btn" href="{{ url_for('meetings', chama_id=chama.id) }}">All meetings</a></div>
 {% include '_chama_nav.html' %}
+{% if m.online_provider and m.status!='CANCELLED' %}<div class="card"><h3>Online meeting</h3>
+{% if join_open %}<p>The room is open. Every member of this chama can join.</p><a class="btn pri" href="{{ url_for('meeting_join', chama_id=chama.id, mid=m.id) }}" target="_blank" rel="noopener noreferrer">Join the online meeting</a>
+{% else %}<p class="mute" style="margin:0">The join button appears 30 minutes before the start ({{ m.held_at|datetime }}) and stays for 4 hours.</p>{% endif %}
+<p class="mute" style="margin-bottom:0"><small>{% if m.online_provider=='JITSI' %}Free video room (Jitsi Meet). On a phone it may ask you to open the free Jitsi Meet app. If it says "waiting for the moderator", an official should sign in and open the room first.{% else %}This opens your chama's own meeting link.{% endif %} Members who join are marked "Joined online" on the attendance sheet, and an official still confirms attendance.</small></p></div>{% endif %}
 {% if m.agenda %}<div class="card"><h3>Agenda</h3><p style="white-space:pre-wrap;margin:0">{{ m.agenda }}</p></div>{% endif %}
 {% if m.absent_fine_cents %}<div class="card"><p class="mute" style="margin:0">Members marked absent get a fine of <b>KES {{ m.absent_fine_cents|kes }}</b>. Members who send an apology are not fined.</p></div>{% endif %}
 {% if mine %}<div class="card"><p style="margin:0">Your attendance: <span class="pill {{ {'PRESENT':'ok','ABSENT':'bad','APOLOGY':'warn'}[mine] }}">{{ mine|title }}</span></p></div>{% endif %}
 {% if can and m.status!='CANCELLED' %}
 <form method="POST" action="{{ url_for('meeting_attendance', chama_id=chama.id, mid=m.id) }}" class="card tight">{{ csrf_input() }}<h3 style="padding:18px 20px 0">Attendance</h3><ul class="list">
-{% for r in sheet %}<li><span class="av">{{ r.name[:1] }}</span><span class="grow">{{ r.name }}</span>
+{% for r in sheet %}<li><span class="av">{{ r.name[:1] }}</span><span class="grow">{{ r.name }}{% if r.id in joined %} <span class="pill info">Joined online</span>{% endif %}</span>
 <select name="st_{{ r.id }}" aria-label="Attendance for {{ r.name }}" style="width:auto">{% for v,l in (('PRESENT','Present'),('ABSENT','Absent'),('APOLOGY','Apology')) %}<option value="{{ v }}" {% if (r.status or 'PRESENT')==v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></li>{% endfor %}</ul>
 <div style="padding:16px 20px"><button class="btn pri">Save attendance</button></div></form>
 {% else %}
 <div class="card tight"><h3 style="padding:18px 20px 0">Attendance</h3><ul class="list">
-{% for r in sheet %}<li><span class="av">{{ r.name[:1] }}</span><span class="grow">{{ r.name }}</span>{% if r.status %}<span class="pill {{ {'PRESENT':'ok','ABSENT':'bad','APOLOGY':'warn'}[r.status] }}">{{ r.status|title }}</span>{% else %}<span class="pill">Not marked</span>{% endif %}</li>{% endfor %}</ul></div>
+{% for r in sheet %}<li><span class="av">{{ r.name[:1] }}</span><span class="grow">{{ r.name }}{% if r.id in joined %} <span class="pill info">Joined online</span>{% endif %}</span>{% if r.status %}<span class="pill {{ {'PRESENT':'ok','ABSENT':'bad','APOLOGY':'warn'}[r.status] }}">{{ r.status|title }}</span>{% else %}<span class="pill">Not marked</span>{% endif %}</li>{% endfor %}</ul></div>
 {% endif %}
 {% if can and m.status!='CANCELLED' %}
 <form method="POST" action="{{ url_for('meeting_minutes', chama_id=chama.id, mid=m.id) }}" class="card">{{ csrf_input() }}<h3>Minutes</h3>

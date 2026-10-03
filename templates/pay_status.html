@@ -1,0 +1,14 @@
+{% extends "base.html" %}{% block title %}Payment - {{ chama.name }}{% endblock %}
+{% block head %}{% if p.status=='PENDING' and mine %}<meta http-equiv="refresh" content="8">{% endif %}{% endblock %}
+{% block content %}
+<div class="head"><div><h2>Payment</h2><p>{{ chama.name }}</p></div><a class="btn" href="{{ url_for('pay', chama_id=chama.id) }}">Back to Pay</a></div>
+{% include '_chama_nav.html' %}
+<div class="card"><h3>KES {{ p.amount_cents|kes }} · {{ names[p.purpose] }}</h3>
+<p><span class="pill {{ {'SUCCESS':'ok','PENDING':'info','CLAIMED':'warn','REVIEW':'warn'}.get(p.status,'bad') }}">{{ p.status|title }}</span></p>
+{% if p.status=='PENDING' %}<p>We sent an M-Pesa request to {{ p.phone }}. Enter your PIN on your phone. This page refreshes by itself. We only mark it paid when M-Pesa confirms.</p>
+{% if mine %}<form method="POST" action="{{ url_for('pay_check', chama_id=chama.id, pid=p.id) }}">{{ csrf_input() }}<button class="btn">Ask M-Pesa now</button></form>
+{% if sim %}<p class="mute"><small>Development only:</small></p><div style="display:flex;gap:6px">{% for o in ('success','failed','cancelled') %}<form method="POST" action="{{ url_for('dev_chama_pay', chama_id=chama.id, pid=p.id, outcome=o) }}" style="margin:0">{{ csrf_input() }}<button class="btn sm">{{ o|title }}</button></form>{% endfor %}</div>{% endif %}{% endif %}
+{% elif p.status=='SUCCESS' %}<p>Paid and recorded{% if p.receipt %} (M-Pesa {{ p.receipt }}){% endif %}. It is in your statement.</p>
+{% elif p.status in ('CLAIMED','REVIEW') %}<p>Waiting for an official to confirm it against the M-Pesa statement.</p>
+{% else %}<p>This payment was not completed{% if p.result_desc %}: {{ p.result_desc }}{% endif %}. You were not recorded as paid. If money left your M-Pesa, send the code from the "Already paid" form on the Pay page.</p>{% endif %}</div>
+{% endblock %}

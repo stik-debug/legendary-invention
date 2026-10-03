@@ -1,0 +1,20 @@
+{% extends "base.html" %}{% block title %}Payment settings - {{ chama.name }}{% endblock %}
+{% block content %}
+<div class="head"><div><h2>Payment settings</h2><p>{{ chama.name }}</p></div><a class="btn" href="{{ url_for('pay', chama_id=chama.id) }}">Back</a></div>
+{% include '_chama_nav.html' %}
+<div class="card"><h3>Your money stays yours</h3><p class="mute" style="margin:0">Members pay straight into <b>your chama's own</b> paybill, till or phone. ChamaPay never holds chama money.</p></div>
+<form method="POST" class="card">{{ csrf_input() }}
+<div class="field"><label for="m">How members pay</label><select id="m" name="mode">
+<option value="MANUAL" {% if not cfg or cfg.mode=='MANUAL' %}selected{% endif %}>Members pay the chama, then send me the M-Pesa code (works for everyone)</option>
+<option value="DARAJA" {% if cfg and cfg.mode=='DARAJA' %}selected{% endif %}>Automatic: members get an M-Pesa PIN prompt in the app (needs your own Daraja paybill)</option></select></div>
+<div class="field"><label for="i">Payment instructions members will see</label><textarea id="i" name="instructions" rows="3" maxlength="500" placeholder="Paybill 123456, account: your name">{{ cfg.instructions if cfg and cfg.instructions else '' }}</textarea></div>
+<h3>Automatic payments (Daraja)</h3>
+{% if not ready %}<div class="flash warning">Not available on this server yet: the ChamaPay owner must set CHAMA_SECRETS_KEY (32+ random characters) so your keys can be stored encrypted.</div>{% endif %}
+<p class="mute"><small>Create a Daraja app at developer.safaricom.co.ke with "Lipa na M-Pesa Online", then paste its details. Keys are stored encrypted and never shown again. Leave a box empty to keep the saved value.</small></p>
+<div class="field"><label for="s">Paybill number</label><input id="s" name="shortcode" inputmode="numeric" value="{{ cfg.shortcode if cfg and cfg.shortcode else '' }}"></div>
+<div class="field"><label for="e">Environment</label><select id="e" name="env">{% if not prod %}<option value="sandbox" {% if cfg and cfg.env=='sandbox' %}selected{% endif %}>Sandbox (testing)</option>{% endif %}<option value="production" {% if prod or (cfg and cfg.env=='production') %}selected{% endif %}>Production (real money)</option></select></div>
+<div class="field"><label for="k">Consumer key</label><input id="k" name="key" autocomplete="off" placeholder="{{ 'saved' if cfg and cfg.key_enc else '' }}"></div>
+<div class="field"><label for="x">Consumer secret</label><input id="x" name="secret" type="password" autocomplete="off" placeholder="{{ 'saved' if cfg and cfg.secret_enc else '' }}"></div>
+<div class="field"><label for="p">Passkey</label><input id="p" name="passkey" type="password" autocomplete="off" placeholder="{{ 'saved' if cfg and cfg.passkey_enc else '' }}"></div>
+<button class="btn pri">Save</button></form>
+{% endblock %}
