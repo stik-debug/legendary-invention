@@ -193,7 +193,11 @@ CREATE TABLE IF NOT EXISTS chama_payments(
   id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), user_id INTEGER NOT NULL REFERENCES users(id), purpose TEXT NOT NULL, target_id INTEGER,
   amount_cents BIGINT NOT NULL CHECK(amount_cents>0), phone TEXT, channel TEXT NOT NULL, status TEXT NOT NULL, checkout_id TEXT, receipt TEXT,
   result_desc TEXT, applied INTEGER NOT NULL DEFAULT 0, applied_ref_id INTEGER, decided_by INTEGER, created_at TEXT NOT NULL, completed_at TEXT,
+  sms_text TEXT, verified TEXT,
   UNIQUE(checkout_id), UNIQUE(chama_id, receipt));
+CREATE TABLE IF NOT EXISTS mpesa_records(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), receipt TEXT NOT NULL, amount_cents BIGINT, paid_date TEXT, paid_time TEXT, party TEXT,
+  added_by INTEGER REFERENCES users(id), added_at TEXT NOT NULL, matched_payment_id INTEGER, UNIQUE(chama_id, receipt));
 CREATE TABLE IF NOT EXISTS meeting_joins(
   id {PK}, meeting_id INTEGER NOT NULL REFERENCES meetings(id), chama_id INTEGER NOT NULL REFERENCES chamas(id),
   user_id INTEGER NOT NULL REFERENCES users(id), joined_at TEXT NOT NULL, UNIQUE(meeting_id, user_id));

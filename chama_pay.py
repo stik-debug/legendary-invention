@@ -20,6 +20,7 @@ from datetime import timedelta
 from cryptography.fernet import Fernet, InvalidToken
 
 import finance as F
+import mpesa_sms as SMS
 from db import IntegrityError, audit
 from notify import notify, notify_roles
 from services import BusinessError, iso, now_utc
@@ -296,25 +297,129 @@ def check_pending(db, chama_id, pid, user_id, simulate, now=None):
 
 
 # ---------- manual claims ----------
-def claim(db, chama_id, user_id, purpose, target_id, cents, code, now=None):
+def claim(db, chama_id, user_id, purpose, target_id, cents, code, now=None, message=None):
+    """The member says they paid the chama's paybill/till/phone and gives the proof: the pasted M-Pesa SMS (or just the code and amount).
+    If the chama has already added its own record of that M-Pesa code with the same amount, the payment is recorded straight away.
+    Otherwise it waits for an official. Returns the new payment's id."""
     now = now or now_utc()
     if not channel(db, chama_id):
         raise BusinessError('Payment details are not set up for this chama yet.')
     code = (code or '').strip().upper()
+    msg = (message or '').strip()[:2000]
+    note = None
+    if msg:
+        sms = SMS.parse_one(msg)
+        if not sms or not sms['amount_cents']:
+            raise BusinessError('We could not read that message. Paste the whole M-Pesa SMS, or type the code and the amount instead.')
+        if code and code != sms['code']:
+            raise BusinessError('The code you typed is not the code in the message.')
+        if cents is not None and cents != sms['amount_cents']:
+            raise BusinessError(f"The amount you typed (KES {cents / 100:,.0f}) is not the amount in the message (KES {sms['amount_cents'] / 100:,.0f}).")
+        if sms['date'] and sms['date'] > (now + timedelta(hours=3)).date().isoformat():
+            raise BusinessError('That message is dated in the future. Check that you pasted it correctly.')
+        code, cents, note = sms['code'], sms['amount_cents'], SMS.summary(sms)
     if not re.fullmatch(r'[A-Z0-9]{8,12}', code):
         raise BusinessError('Enter the M-Pesa confirmation code from your SMS, for example QRT1234ABC.')
+    if cents is None:
+        raise BusinessError('Enter the amount you paid.')
     tid, cap = _target(db, chama_id, user_id, purpose, target_id)
     _check_amount(cents, cap)
     try:
         with db.tx():
             pid = db.insert('chama_payments', chama_id=chama_id, user_id=user_id, purpose=purpose, target_id=tid, amount_cents=cents, channel='CLAIM',
-                            status='CLAIMED', receipt=code, created_at=iso(now))
-            who = db.val('SELECT name FROM users WHERE id=?', (user_id,))
-            notify_roles(db, chama_id, F.FINANCE_ROLES, f'{who} says they paid {_label({"amount_cents": cents, "purpose": purpose})} ({code}). Check your M-Pesa statement, then approve.',
-                         f'/chamas/{chama_id}/pay', user_id, now)
+                            status='CLAIMED', receipt=code, sms_text=note, created_at=iso(now))
     except IntegrityError:
         raise BusinessError('That M-Pesa code has already been submitted.')
+    if verify(db, chama_id, pid, now) != 'verified':
+        who = db.val('SELECT name FROM users WHERE id=?', (user_id,))
+        with db.tx():
+            notify_roles(db, chama_id, F.FINANCE_ROLES, f'{who} says they paid {_label({"amount_cents": cents, "purpose": purpose})} ({code}). Check it, then approve.',
+                         f'/chamas/{chama_id}/pay', user_id, now)
     return pid
+
+
+# ---------- the chama's own M-Pesa records (what makes a pasted message trustworthy) ----------
+def verify(db, chama_id, pid, now=None):
+    """Match one waiting claim against the chama's own records of money received. Returns:
+      verified    the code and amount are in the records: the payment is recorded (once only)
+      mismatch    the code is in the records but with a DIFFERENT amount: not recorded, officials are warned (the message may have been edited)
+      needs_other the match was made from a record the payer added themselves: another official must approve
+      review      matched, but the finance rules refuse it (for example the fine is already settled): an official decides
+      waiting     no record of that code yet"""
+    now = now or now_utc()
+    try:
+        with db.tx():
+            db.lock('chamas', chama_id)
+            p = db.one("SELECT * FROM chama_payments WHERE id=? AND chama_id=? AND status='CLAIMED'", (pid, chama_id))
+            if not p or not p['receipt']:
+                return 'waiting'
+            rec = db.one('SELECT * FROM mpesa_records WHERE chama_id=? AND receipt=?', (chama_id, p['receipt']))
+            if not rec or rec['matched_payment_id']:
+                return 'waiting'
+            if rec['amount_cents'] != p['amount_cents']:
+                db.execute('UPDATE chama_payments SET result_desc=? WHERE id=?',
+                           (f"WARNING: the chama's M-Pesa record for this code says KES {(rec['amount_cents'] or 0) / 100:,.0f}, the member says KES {p['amount_cents'] / 100:,.0f}. The message may have been edited."[:200], pid))
+                audit(db, None, 'PAY_RECORD_MISMATCH', 'chama_payment', pid, chama_id, {'record_cents': rec['amount_cents'], 'claimed_cents': p['amount_cents']})
+                notify_roles(db, chama_id, F.FINANCE_ROLES, f"A payment claim ({p['receipt']}) does not match the M-Pesa record. Please look at it.", f'/chamas/{chama_id}/pay', p['user_id'], now)
+                return 'mismatch'
+            if rec['added_by'] == p['user_id']:  # nobody may confirm their own payment with a record they typed in themselves
+                db.execute('UPDATE chama_payments SET result_desc=? WHERE id=?', ('Matches an M-Pesa record, but the payer added that record. Another official must approve.', pid))
+                return 'needs_other'
+            rid = _apply(db, p, p['receipt'], p['user_id'], now)
+            db.execute("UPDATE chama_payments SET status='SUCCESS', applied=1, applied_ref_id=?, verified='RECORD', result_desc=NULL, completed_at=? WHERE id=?", (rid, iso(now), pid))
+            db.execute('UPDATE mpesa_records SET matched_payment_id=? WHERE id=?', (pid, rec['id']))
+            audit(db, p['user_id'], 'PAY_VERIFIED_BY_RECORD', 'chama_payment', pid, chama_id, {'purpose': p['purpose'], 'amount_cents': p['amount_cents'], 'record_by': rec['added_by']})
+            notify(db, p['user_id'], chama_id, f'Your payment of {_label(p)} was checked against the chama\'s M-Pesa records and recorded.', f'/chamas/{chama_id}/statement', None, now)
+            notify_roles(db, chama_id, F.FINANCE_ROLES, f'{_label(p)} ({p["receipt"]}) was verified against the M-Pesa records and recorded.', f'/chamas/{chama_id}/pay', p['user_id'], now)
+            return 'verified'
+    except (BusinessError, IntegrityError) as e:
+        with db.tx():
+            db.execute("UPDATE chama_payments SET status='REVIEW', result_desc=? WHERE id=? AND status='CLAIMED'", (str(e)[:200], pid))
+            notify_roles(db, chama_id, F.FINANCE_ROLES, 'A payment matched the M-Pesa records but could not be recorded automatically. Please review it.', f'/chamas/{chama_id}/pay', None, now)
+        return 'review'
+
+
+def add_records(db, chama_id, actor, text, now=None):
+    """An official pastes the M-Pesa messages the CHAMA received (or lines like 'QGH7XY12AB 1000'). Each code is saved once.
+    Any waiting claim for those codes is then checked straight away."""
+    now = now or now_utc()
+    items = SMS.parse_many(text)
+    if not items:
+        raise BusinessError("No M-Pesa messages found. Paste the messages the chama received, one after another, or lines like 'QGH7XY12AB 1000'.")
+    added, dup, skipped, codes = 0, 0, 0, []
+    for it in items:
+        if not it['amount_cents']:
+            skipped += 1
+            continue
+        if db.one('SELECT id FROM mpesa_records WHERE chama_id=? AND receipt=?', (chama_id, it['code'])):
+            dup += 1
+            continue
+        try:
+            with db.tx():
+                db.insert('mpesa_records', chama_id=chama_id, receipt=it['code'], amount_cents=it['amount_cents'], paid_date=it['date'], paid_time=it['time'],
+                          party=SMS.mask(it['party']), added_by=actor, added_at=iso(now))
+            added += 1
+            codes.append(it['code'])
+        except IntegrityError:
+            dup += 1
+    with db.tx():
+        audit(db, actor, 'MPESA_RECORDS_ADDED', 'chama', chama_id, chama_id, {'added': added, 'duplicates': dup, 'unreadable': skipped})
+    out = {'added': added, 'duplicates': dup, 'skipped': skipped, 'verified': 0, 'attention': 0}
+    for code in codes:
+        row = db.one("SELECT id FROM chama_payments WHERE chama_id=? AND receipt=? AND status='CLAIMED'", (chama_id, code))
+        if row:
+            res = verify(db, chama_id, row['id'], now)
+            if res == 'verified':
+                out['verified'] += 1
+            elif res != 'waiting':
+                out['attention'] += 1
+    return out
+
+
+def records(db, chama_id, limit=60):
+    return db.all("""SELECT r.*, u.name matched_name, p.purpose matched_purpose FROM mpesa_records r
+        LEFT JOIN chama_payments p ON p.id=r.matched_payment_id LEFT JOIN users u ON u.id=p.user_id
+        WHERE r.chama_id=? ORDER BY r.id DESC LIMIT ?""", (chama_id, limit))
 
 
 def decide(db, chama_id, pid, approve, actor, reason=None, now=None):

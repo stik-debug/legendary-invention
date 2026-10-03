@@ -52,12 +52,39 @@ def register(app, db, ctx, login_required):
     def pay_claim(chama_id):
         ctx(chama_id)
         purpose, tid = what(request.form.get('what'))
+        message = request.form.get('message')
+        raw_amount = (request.form.get('amount') or '').strip()
         try:
-            P.claim(db(), chama_id, g.user['id'], purpose, tid, F.parse_kes(request.form.get('amount'), 100), request.form.get('code'))
-            flash('Sent. An official will check it against the M-Pesa statement and confirm.', 'success')
+            cents = F.parse_kes(raw_amount, 100) if raw_amount else None
+            pid = P.claim(db(), chama_id, g.user['id'], purpose, tid, cents, request.form.get('code'), message=message)
+            if db().val('SELECT status FROM chama_payments WHERE id=?', (pid,)) == 'SUCCESS':
+                flash('Verified against the chama\'s M-Pesa records and recorded. Thank you.', 'success')
+            else:
+                flash('Sent. It will be recorded as soon as the chama\'s M-Pesa records show it, or when an official confirms it.', 'success')
         except S.BusinessError as e:
             flash(str(e), 'warning')
         return back(chama_id)
+
+    @app.route('/chamas/<int:chama_id>/pay/records', methods=['GET', 'POST'])
+    @login_required
+    def pay_records(chama_id):
+        chama, me, sub = ctx(chama_id, roles=STAFF)
+        if request.method == 'POST':
+            try:
+                r = P.add_records(db(), chama_id, g.user['id'], request.form.get('text'))
+                msg = f"{r['added']} added"
+                if r['duplicates']:
+                    msg += f", {r['duplicates']} already there"
+                if r['skipped']:
+                    msg += f", {r['skipped']} without an amount (ignored)"
+                msg += f". {r['verified']} waiting payment(s) verified and recorded."
+                if r['attention']:
+                    msg += f" {r['attention']} need your attention under Pay."
+                flash(msg, 'success')
+            except S.BusinessError as e:
+                flash(str(e), 'warning')
+            return back(chama_id, 'pay_records')
+        return render_template('pay_records.html', chama=chama, me=me, rows=P.records(db(), chama_id), names=P.PURPOSES)
 
     @app.route('/chamas/<int:chama_id>/pay/<int:pid>')
     @login_required

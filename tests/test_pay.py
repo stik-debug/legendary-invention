@@ -172,11 +172,108 @@ class PayWeb(_tf.FinWeb):
         self.post(self.admin, self.base() + f"/pay/{q['id']}/reject", {'reason': ''}); self.assertEqual(self.last()['status'], 'CLAIMED')
         self.post(self.admin, self.base() + f"/pay/{q['id']}/reject", {'reason': 'Not on the statement'}); self.assertEqual(self.last()['status'], 'REJECTED')
 
+    # ---------- paste the M-Pesa message; verified against the chama's own records ----------
+    def sms(self, code='QGH7XY12AB', kes='1,000.00', to='UMOJA CHAMA'):
+        return f'{code} Confirmed. Ksh{kes} sent to {to} for account CHAMA1 on 12/6/26 at 3:45 PM New M-PESA balance is Ksh5,230.00. Transaction cost, Ksh0.00.'
+
+    def received(self, code='QGH7XY12AB', kes='1,000.00'):
+        return f'{code} Confirmed.You have received Ksh{kes} from JOHN DOE 0712345678 on 12/6/26 at 3:45 PM  New Account balance is Ksh9,000.00.'
+
+    def manual(self):
+        self.team(); self.post(self.admin, self.base() + '/pay/settings', {'mode': 'MANUAL', 'instructions': 'Paybill 123456 account Umoja'})
+
+    def paste(self, c, msg, what='CONTRIBUTION:', **extra):
+        return self.post(c, self.base() + '/pay/claim', dict({'what': what, 'message': msg}, **extra))
+
+    def records(self, c, text):
+        return self.post(c, self.base() + '/pay/records', {'text': text})
+
+    def test_parser_reads_common_message_layouts(self):
+        import mpesa_sms as M
+        a = M.parse_one(self.sms()); self.assertEqual((a['code'], a['amount_cents'], a['date'], a['time']), ('QGH7XY12AB', 100000, '2026-06-12', '15:45'))
+        self.assertEqual(M.parse_one(self.received('QGH7XY12AD', '2,500.00'))['amount_cents'], 250000)  # the balance is never mistaken for the amount
+        self.assertIsNone(M.parse_one('hello there')); self.assertIsNone(M.parse_one(''))
+        self.assertEqual(len(M.parse_many(self.received() + '\n\n' + self.received('QGH7XY12AC', '500') + '\nQGH7XY12AE 750\nKENYAKENYA 100')), 3)
+
+    def test_message_waits_then_is_recorded_when_the_chama_adds_its_record(self):
+        self.manual()
+        self.paste(self.m1, self.sms()); p = self.last()
+        self.assertEqual((p['status'], p['amount_cents'], p['receipt']), ('CLAIMED', 100000, 'QGH7XY12AB'))
+        self.assertNotIn('5,230', p['sms_text'] or '')  # the member's balance is not kept
+        self.assertEqual(self.db.val('SELECT COUNT(*) FROM contributions'), 0)
+        self.records(self.treas, self.received())
+        p = self.last(); self.assertEqual((p['status'], p['verified']), ('SUCCESS', 'RECORD'))
+        self.assertEqual(self.db.val('SELECT SUM(amount_cents) FROM contributions'), 100000); self.assertEqual(self.bal(), 100000)
+        self.records(self.treas, self.received())  # pasting again changes nothing
+        self.assertEqual(self.db.val('SELECT COUNT(*) FROM contributions'), 1); self.assertEqual(self.db.val('SELECT COUNT(*) FROM mpesa_records'), 1)
+
+    def test_message_is_recorded_instantly_when_the_record_already_exists(self):
+        self.manual(); self.records(self.treas, self.received())
+        self.paste(self.m1, self.sms()); self.assertEqual(self.last()['status'], 'SUCCESS'); self.assertEqual(self.bal(), 100000)
+        self.assertEqual(self.db.val("SELECT COUNT(*) FROM audit_logs WHERE action='PAY_VERIFIED_BY_RECORD'"), 1)
+        self.paste(self.m2, self.sms()); self.assertEqual(self.db.val('SELECT COUNT(*) FROM chama_payments'), 1)  # the same code cannot be used by someone else
+
+    def test_edited_amount_never_gets_recorded(self):
+        self.manual(); self.records(self.treas, self.received(kes='1,000.00'))
+        self.paste(self.m1, self.sms(kes='5,000.00')); p = self.last()  # the member raised the amount in the message
+        self.assertEqual(p['status'], 'CLAIMED'); self.assertIn('may have been edited', p['result_desc'])
+        self.assertEqual(self.db.val('SELECT COUNT(*) FROM contributions'), 0); self.assertEqual(self.bal(), 0)
+        self.assertIn('WARNING', self.treas.get(self.base() + '/pay').get_data(as_text=True))
+
+    def test_invented_code_is_not_recorded_by_itself(self):
+        self.manual(); self.records(self.treas, self.received())
+        self.paste(self.m1, self.sms(code='ZZZ9ZZZ9ZZ')); self.assertEqual(self.last()['status'], 'CLAIMED'); self.assertEqual(self.bal(), 0)
+
+    def test_nobody_confirms_their_own_payment_with_their_own_record(self):
+        self.manual()
+        self.paste(self.treas, self.sms()); self.assertEqual(self.last()['status'], 'CLAIMED')
+        self.records(self.treas, self.received()); p = self.last()
+        self.assertEqual(p['status'], 'CLAIMED'); self.assertIn('Another official', p['result_desc']); self.assertEqual(self.bal(), 0)
+        self.post(self.admin, self.base() + f"/pay/{p['id']}/approve"); self.assertEqual(self.last()['status'], 'SUCCESS')
+
+    def test_loan_repayment_and_fine_by_message(self):
+        self.manual(); self.add_contrib('m1', 5000); self.add_contrib('m2', 5000)
+        F.update_chama_settings(self.db, self.cid, 100000, '10', 3, 1)
+        self.post(self.m1, self.base() + '/loans/apply', {'amount': '10000', 'purpose': 'stock'}); lid = self.db.val('SELECT id FROM loans')
+        self.post(self.treas, self.base() + f'/loans/{lid}/approve'); self.post(self.admin, self.base() + f'/loans/{lid}/disburse')
+        self.records(self.treas, self.received('LON1234ABC', '4,000.00'))
+        self.paste(self.m1, self.sms('LON1234ABC', '4,000.00'), what=f'LOAN:{lid}'); self.assertEqual(self.last()['status'], 'SUCCESS')
+        self.assertEqual(self.db.val('SELECT paid_cents FROM loans WHERE id=?', (lid,)), 400000)
+        self.paste(self.m2, self.sms('LON1234ABD', '1,000.00'), what=f'LOAN:{lid}'); self.assertEqual(self.db.val('SELECT COUNT(*) FROM chama_payments'), 1)  # m2 cannot repay m1's loan
+
+    def test_unreadable_future_and_mismatching_input_is_refused(self):
+        self.manual()
+        for kw in ({'message': 'I paid, trust me'}, {'message': self.sms().replace('12/6/26', '12/6/36')},
+                   {'message': self.sms(), 'code': 'OTHER12345'}, {'message': self.sms(), 'amount': '999'}):
+            self.post(self.m1, self.base() + '/pay/claim', dict({'what': 'CONTRIBUTION:'}, **kw))
+        self.assertEqual(self.db.val('SELECT COUNT(*) FROM chama_payments'), 0)
+        self.post(self.m1, self.base() + '/pay/claim', {'what': 'CONTRIBUTION:', 'code': 'TYPD123456', 'amount': '700'})  # typing code + amount still works
+        self.assertEqual(self.last()['status'], 'CLAIMED')
+
+    def test_records_page_is_for_finance_officials_and_each_chama_is_separate(self):
+        self.manual()
+        for c in (self.m1, self.sec):
+            self.assertEqual(c.get(self.base() + '/pay/records').status_code, 403)
+            self.assertEqual(self.records(c, self.received()).status_code, 403)
+        self.assertEqual(self.db.val('SELECT COUNT(*) FROM mpesa_records'), 0)
+        self.assertEqual(self.treas.get(self.base() + '/pay/records').status_code, 200)
+        self.records(self.treas, 'no messages in here'); self.assertEqual(self.db.val('SELECT COUNT(*) FROM mpesa_records'), 0)
+        other = self.admin; first = self.cid
+        self.records(self.treas, self.received('UNQ9ABC1XY'))
+        self.assertIn('UNQ9ABC1XY', self.treas.get(self.base() + '/pay/records').get_data(as_text=True))
+        o, _ = self.signup('Other Admin'); ocid = self.make_chama(o, name='Other Group')
+        self.post(o, f'/chamas/{ocid}/pay/settings', {'mode': 'MANUAL', 'instructions': 'Till 55555 Other'})
+        self.assertEqual(o.get(f'/chamas/{ocid}/pay/records').status_code, 200)
+        self.assertNotIn('UNQ9ABC1XY', o.get(f'/chamas/{ocid}/pay/records').get_data(as_text=True))  # another chama's records are invisible
+        self.post(o, f'/chamas/{ocid}/pay/claim', {'what': 'CONTRIBUTION:', 'message': self.sms('UNQ9ABC1XY')})  # ...and unusable
+        self.assertEqual(self.last()['status'], 'CLAIMED'); self.assertEqual(F.cash_balance(self.db, ocid), 0)
+
     def test_all_new_pages_render(self):
         self.team(); self.daraja(); self.go(self.m1)
         for c in (self.admin, self.treas, self.sec, self.m1):
             self.assertEqual(c.get(self.base() + '/pay').status_code, 200)
         self.assertEqual(self.admin.get(self.base() + '/pay/settings').status_code, 200)
+        self.assertEqual(self.treas.get(self.base() + '/pay/records').status_code, 200)
         self.assertEqual(self.m1.get(self.base() + f"/pay/{self.last()['id']}").status_code, 200)
 
 

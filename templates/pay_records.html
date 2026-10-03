@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% block title %}M-Pesa records - {{ chama.name }}{% endblock %}
+{% block content %}
+<div class="head"><div><h2>M-Pesa records</h2><p>{{ chama.name }}</p></div><a class="btn" href="{{ url_for('pay', chama_id=chama.id) }}">Back to Pay</a></div>
+{% include '_chama_nav.html' %}
+<form method="POST" class="card">{{ csrf_input() }}<h3>Add the money the chama received</h3>
+<p class="mute">Paste the M-Pesa messages the <b>chama</b> received (from the phone or till that gets the money, or lines copied from the M-Pesa statement). When a member pastes their payment message, ChamaPay compares its code and amount with these records. A match is recorded automatically. A message that was edited will not match.</p>
+<p class="mute">You can paste many at once. Lines such as <code>QGH7XY12AB 1000</code> also work. Phone numbers are shortened when saved, and balances are not kept.</p>
+<div class="field"><label for="t">Messages</label><textarea id="t" name="text" rows="7" maxlength="100000" required placeholder="QGH7XY12AB Confirmed. You have received Ksh1,000.00 from ..."></textarea></div>
+<button class="btn pri">Save records</button></form>
+<div class="card"><h3>How the check works</h3>
+<p class="mute" style="margin:0">A payment is only recorded automatically when its M-Pesa code and amount are both found in these records. You cannot confirm your own payment with a record you added yourself: another official must approve it. ChamaPay cannot see inside M-Pesa, so these records are only as honest as the people who add them. Every addition is written to the audit log.</p></div>
+<div class="card tight"><h3 style="padding:18px 20px 0">Recent records</h3><ul class="list">
+{% for r in rows %}<li><span class="grow"><b>{{ r.receipt }}</b> · KES {{ r.amount_cents|kes }}<br><small>{% if r.party %}{{ r.party }} · {% endif %}{% if r.paid_date %}{{ r.paid_date }} {{ r.paid_time or '' }} · {% endif %}added {{ r.added_at|datetime }}</small></span>
+{% if r.matched_payment_id %}<span class="pill ok">Used by {{ r.matched_name }}</span>{% else %}<span class="pill info">Not used yet</span>{% endif %}</li>{% else %}<li class="empty grow">No records yet.</li>{% endfor %}</ul></div>
+{% endblock %}
