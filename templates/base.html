@@ -50,7 +50,7 @@
 </main>
 {% if user and request.view_args and request.view_args.get('chama_id') %}
 <nav class="mobile-bottom" aria-label="Mobile Chama navigation">
-<a href="{{ url_for('command_center',chama_id=request.view_args.get('chama_id')) }}">⌂<span>Home</span></a>
+<a href="{{ url_for('chama_home',chama_id=request.view_args.get('chama_id')) }}">⌂<span>Home</span></a>
 <a href="{{ url_for('savings',chama_id=request.view_args.get('chama_id')) }}">KES<span>Money</span></a>
 <a href="{{ url_for('loans',chama_id=request.view_args.get('chama_id')) }}">↗<span>Loans</span></a>
 <a href="{{ url_for('activity',chama_id=request.view_args.get('chama_id')) }}">☷<span>Activity</span></a>

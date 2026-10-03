@@ -16,7 +16,11 @@ def register_upgrade_routes(app, db, login_required, ctx):
     @app.route('/chamas/<int:chama_id>/command')
     @login_required
     def command_center(chama_id):
+        # The Command Center is the private owner console. A user must be
+        # the original creator of this Chama, not merely an administrator.
         chama, me, sub = ctx(chama_id)
+        if int(chama['created_by']) != int(me['user_id']):
+            abort(403)
         members = db().all("""SELECT u.id,u.name,u.phone,m.role,m.joined_at FROM chama_members m JOIN users u ON u.id=m.user_id
                               WHERE m.chama_id=? AND m.status='ACTIVE' ORDER BY m.name""",(chama_id,))
         total_members=len(members)
