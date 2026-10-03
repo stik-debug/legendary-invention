@@ -1,25 +1,17 @@
 {% extends "base.html" %}{% block title %}Pay - {{ chama.name }}{% endblock %}
-{% macro payform(purpose, tid, cents) %}
-<form method="POST" action="{{ url_for('pay_start', chama_id=chama.id) }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px">{{ csrf_input() }}
-<input type="hidden" name="purpose" value="{{ purpose }}"><input type="hidden" name="target_id" value="{{ tid or '' }}">
-<div class="field" style="margin:0"><label>Amount (KES)</label><input name="amount" inputmode="decimal" value="{{ '%g'|format(cents/100) if cents else '' }}" required style="width:120px"></div>
-<div class="field" style="margin:0"><label>M-Pesa number</label><input name="phone" inputmode="tel" value="{{ user.phone }}" required style="width:150px"></div>
-<button class="btn pri">Pay with M-Pesa</button></form>
-{% endmacro %}
 {% block content %}
 <div class="head"><div><h2>Pay</h2><p>{{ chama.name }}</p></div><div style="display:flex;gap:8px;flex-wrap:wrap">{% if staff %}<a class="btn" href="{{ url_for('pay_records', chama_id=chama.id) }}">M-Pesa records</a>{% endif %}{% if is_admin %}<a class="btn" href="{{ url_for('pay_settings', chama_id=chama.id) }}">Payment settings</a>{% endif %}</div></div>
 {% include '_chama_nav.html' %}
-{% if not channel %}<div class="card"><h3>Online payment is not set up yet</h3><p class="mute" style="margin:0">{% if is_admin %}Open <b>Payment settings</b> to add your paybill, till or phone number so members can pay inside the app.{% else %}Ask your chairperson to set it up. Until then, pay as you normally do and the treasurer records it.{% endif %}</p></div>
+{% if not channel %}<div class="card"><h3>Online payment is not set up yet</h3><p class="mute" style="margin:0">{% if is_admin %}Open <b>Payment settings</b> and tell members where to pay: your paybill, till or phone number and the account name.{% else %}Ask your chairperson to set it up. Until then, pay as you normally do and the treasurer records it.{% endif %}</p></div>
 {% else %}
-{% if sim and channel=='DARAJA' %}<div class="flash warning">Development mode: no real money moves. You will get buttons to simulate the result.</div>{% endif %}
-{% if cfg.instructions %}<div class="card"><h3>How this chama is paid</h3><p style="white-space:pre-wrap;margin:0">{{ cfg.instructions }}</p></div>{% endif %}
+{% if cfg.instructions %}<div class="card"><h3>Step 1: pay the chama</h3><p style="white-space:pre-wrap;margin:0">{{ cfg.instructions }}</p></div>{% endif %}
 <div class="card"><h3>This month's contribution ({{ d.period }})</h3>
 <p>Expected KES {{ d.expected|kes }} · paid KES {{ d.paid|kes }}{% if d.left %} · <b>still to pay KES {{ d.left|kes }}</b>{% else %} · <span class="pill ok">Fully paid</span>{% endif %}</p>
-{% if channel=='DARAJA' %}{{ payform('CONTRIBUTION', None, d.left or d.expected) }}{% endif %}</div>
-{% for f in d.fines %}<div class="card"><h3>Fine: {{ f.reason }}</h3><p style="margin:0">Balance KES {{ (f.amount_cents - f.paid_cents)|kes }}</p>{% if channel=='DARAJA' %}{{ payform('FINE', f.id, f.amount_cents - f.paid_cents) }}{% endif %}</div>{% endfor %}
-{% for l in d.loans %}<div class="card"><h3>Loan repayment</h3><p style="margin:0">Balance KES {{ (l.total_due_cents - l.paid_cents)|kes }}</p>{% if channel=='DARAJA' %}{{ payform('LOAN', l.id, l.total_due_cents - l.paid_cents) }}{% endif %}</div>{% endfor %}
-<form method="POST" action="{{ url_for('pay_claim', chama_id=chama.id) }}" class="card">{{ csrf_input() }}<h3>Already paid? Paste your M-Pesa message</h3>
-<p class="mute">Use this if you paid the chama's paybill, till or phone yourself. Paste the whole SMS from M-Pesa. If the chama's own M-Pesa records show the same code and amount, it is recorded straight away. If not yet, it waits for an official. Do not edit the message: an edited one will not match and will be flagged.</p>
+</div>
+{% for f in d.fines %}<div class="card"><h3>Fine: {{ f.reason }}</h3><p style="margin:0">Balance KES {{ (f.amount_cents - f.paid_cents)|kes }}</p></div>{% endfor %}
+{% for l in d.loans %}<div class="card"><h3>Loan repayment</h3><p style="margin:0">Balance KES {{ (l.total_due_cents - l.paid_cents)|kes }}</p></div>{% endfor %}
+<form method="POST" action="{{ url_for('pay_claim', chama_id=chama.id) }}" class="card">{{ csrf_input() }}<h3>Step 2: paste your M-Pesa message</h3>
+<p class="mute">After you pay, M-Pesa sends you an SMS. Copy the whole message and paste it here.{% if mode=='TRUST' %} It is recorded straight away.{% else %} It is recorded as soon as it matches the chama's own M-Pesa records, or when an official confirms it.{% endif %} Do not edit the message: an edited one is flagged for the officials.</p>
 <div class="field"><label for="w">What did you pay for?</label><select id="w" name="what"><option value="CONTRIBUTION:">Contribution</option>
 {% for f in d.fines %}<option value="FINE:{{ f.id }}">Fine: {{ f.reason }}</option>{% endfor %}{% for l in d.loans %}<option value="LOAN:{{ l.id }}">Loan repayment</option>{% endfor %}</select></div>
 <div class="field"><label for="m">The M-Pesa message</label><textarea id="m" name="message" rows="4" maxlength="2000" placeholder="QGH7XY12AB Confirmed. Ksh1,000.00 sent to ..."></textarea></div>
@@ -32,6 +24,8 @@
 {% for q in queue %}<li><span class="grow"><b>{{ q.name }}</b> · KES {{ q.amount_cents|kes }} {{ names[q.purpose]|lower }}<br><small>{% if q.receipt %}Code {{ q.receipt }} · {% endif %}{{ q.created_at|datetime }}{% if q.sms_text %} · {{ q.sms_text }}{% endif %}{% if q.status=='REVIEW' %} · needs your review{% endif %}{% if q.result_desc %} · <b>{{ q.result_desc }}</b>{% endif %}</small></span>
 <form method="POST" action="{{ url_for('pay_decide', chama_id=chama.id, pid=q.id, action='approve') }}" style="margin:0">{{ csrf_input() }}<button class="btn sm pri">Approve</button></form>
 <form method="POST" action="{{ url_for('pay_decide', chama_id=chama.id, pid=q.id, action='reject') }}" style="margin:0;display:flex;gap:4px">{{ csrf_input() }}<input name="reason" placeholder="Reason" required style="width:130px"><button class="btn sm">Reject</button></form></li>{% endfor %}</ul></div>{% endif %}
+{% if staff and trusted %}<div class="card tight"><h3 style="padding:18px 20px 0">Recorded from messages, not yet confirmed</h3><p class="mute" style="padding:0 20px">Add the matching messages under <a href="{{ url_for('pay_records', chama_id=chama.id) }}">M-Pesa records</a> to confirm them. A mistake can be cancelled on the Savings, Loans or Fines page.</p><ul class="list">
+{% for q in trusted %}<li><span class="grow"><b>{{ q.name }}</b> · KES {{ q.amount_cents|kes }} {{ names[q.purpose]|lower }}<br><small>Code {{ q.receipt }} · {{ q.created_at|datetime }}{% if q.sms_text %} · {{ q.sms_text }}{% endif %}{% if q.result_desc %} · <b>{{ q.result_desc }}</b>{% endif %}</small></span></li>{% endfor %}</ul></div>{% endif %}
 <div class="card tight"><h3 style="padding:18px 20px 0">My recent payments</h3><ul class="list">
 {% for p in d.recent %}<li><span class="grow"><a href="{{ url_for('pay_status', chama_id=chama.id, pid=p.id) }}">KES {{ p.amount_cents|kes }} {{ names[p.purpose]|lower }}</a><br><small>{{ p.created_at|datetime }}{% if p.receipt %} · {{ p.receipt }}{% endif %}{% if p.verified=='RECORD' %} · checked against the chama's M-Pesa records{% endif %}</small></span>
 <span class="pill {{ {'SUCCESS':'ok','PENDING':'info','CLAIMED':'warn','REVIEW':'warn'}.get(p.status,'bad') }}">{{ p.status|title }}</span></li>{% else %}<li class="empty grow">No payments yet.</li>{% endfor %}</ul></div>

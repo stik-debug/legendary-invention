@@ -10,9 +10,7 @@ A multi-tenant SaaS for Kenyan chamas. **Stage 1 (billing, security, Control Cen
 | Password reset (no SMS or email) | Built, tested | A trusted person issues a one-time 8-digit code (like the join code); the member enters it on **Forgot password**. Chairperson can do it for ordinary members who belong to one chama only; the ChamaPay owner can do it for anyone (Control Center > Users). Code works once, expires in 60 minutes, locks after 5 wrong tries, is stored hashed, and logs the account out everywhere else. The owner account itself is recovered with env vars |
 | Merry-go-round (rotating savings) | Built, tested | Each round has an order (random draw or typed), an amount and weekly/monthly turns. Everyone except that turn's recipient pays in; when all have paid, an official pays the pot to the recipient (never to themselves). **The pot is a separate money account** (`MGR` in the ledger): loans, expenses and "cash in hand" only look at the main account, so the pot can never be lent or spent. "Your turn to pay" alerts, reminders (max one per 12 hours), cancel, reports and CSV. See the section below |
 | Online meetings | Built, tested | When scheduling, choose *In person*, *Online with a free video room* (Jitsi, an unguessable room name is made for you) or *Online with my own link* (Zoom, Google Meet, Teams: https only). Members of that chama only see a **Join** button from 30 minutes before the start until 4 hours after. Opening it marks the member **Joined online** on the attendance sheet as a hint: nobody is marked present automatically, an official still confirms (so absence fines stay fair) |
-| Paying the chama inside the app | Built, tested (simulated payments) | **Automatic:** the chama brings its **own** Daraja paybill; a member taps Pay, gets the M-Pesa PIN prompt, and the contribution / fine / loan repayment is recorded when Safaricom confirms (verified, once only, wrong amounts rejected). **Manual:** the member pays the chama's paybill/till/phone, enters the M-Pesa code, and another official approves it. Same finance rules and ledger as a treasurer entry. ChamaPay never holds chama money |
-| Paste the M-Pesa message (contributions, fines, loan repayments) | Built, tested | Member pastes the whole M-Pesa SMS; code and amount are read from it. Officials add the messages the **chama received** under Pay > M-Pesa records. When code and amount match, the payment is recorded automatically. See "Paste the M-Pesa message" below for what this can and cannot prove |
-| Real M-Pesa for chama payments | Built, NOT tested live | Needs the chama's own Daraja credentials and `CHAMA_SECRETS_KEY` on the server. Until then it runs in simulation (dev) or shows as not set up |
+| Paying the chama (contributions, fines, loan repayments) | Built, tested | Members pay the chama's **own** paybill, till or phone as they always do, then paste the M-Pesa message in the app. The code and amount are read from it and the payment is recorded with the same finance rules and ledger as a treasurer entry. ChamaPay never holds chama money and sends no payment prompts. See "Paying the chama" below |
 | Roles (SUPER_ADMIN, CHAMA_ADMIN, TREASURER, SECRETARY, MEMBER) | Built, tested | Enforced on the server for every route |
 | Multi-tenant isolation | Built, tested | Chama A user gets 403 on Chama B pages and actions |
 | Chama create, members add/remove | Built, tested | Add by name + phone number. New people get an 8-digit join code to claim their account. Removal keeps history |
@@ -25,7 +23,7 @@ A multi-tenant SaaS for Kenyan chamas. **Stage 1 (billing, security, Control Cen
 | Payments: pending/success/failed/cancelled/timeout | Built, tested | Verified server-side only |
 | Duplicate webhook protection | Built, tested | Payment, subscription extension and audit each happen once |
 | Forged / wrong-amount callbacks | Built, tested | Ignored or rejected |
-| M-Pesa STK push | Built, NOT tested live | Needs your Daraja credentials. Shows CONFIGURATION REQUIRED until set |
+| M-Pesa STK push for ChamaPay subscription fees | Built, NOT tested live | Only for the chama paying ChamaPay its monthly plan, not for member payments to the chama. Needs the ChamaPay owner's Daraja credentials. Shows CONFIGURATION REQUIRED until set |
 | Control Center (stats, search, suspend, reactivate, extend, manual payment, plans, audit) | Built, tested | All numbers come from the database |
 | Audit log | Built, tested | Append-only, no edit/delete screens |
 | Contributions | Built, tested | Treasurer/chairperson records them. Duplicate M-Pesa codes refused. Mistakes are cancelled, never deleted |
@@ -46,29 +44,28 @@ A multi-tenant SaaS for Kenyan chamas. **Stage 1 (billing, security, Control Cen
 
 Officials schedule a meeting and pick how it is held. Jitsi needs no keys: the app creates `https://meet.jit.si/ChamaPay-<random>` (set `JITSI_BASE` to use your own Jitsi server). The room opens in a new tab, because public Jitsi limits embedding it inside other sites. On meet.jit.si the first person to start the room may need to sign in as moderator, so an official should open it first. For chamas that already use Zoom or Google Meet, paste that link instead. The link is only shown to active members of that chama, and only near the meeting time.
 
-## Paying inside the app
+## Paying the chama
 
-1. **Chairperson: Pay > Payment settings.** Choose *Members pay the chama, then send me the M-Pesa code* (works for everyone, no Safaricom account) or *Automatic* (needs the chama's own Daraja paybill: consumer key, secret, passkey). Keys are stored encrypted and never shown again.
-2. **Member: Pay.** Sees this month's contribution, own fines and own loans. Automatic: enter the amount, get the PIN prompt, the page updates itself. Manual: enter the M-Pesa code from the SMS.
-3. **Officials: Pay > Waiting for you.** Approve (after checking the M-Pesa statement) or reject with a reason. You cannot approve your own payment. If money arrives by M-Pesa but cannot be recorded automatically (for example the fine was already settled), it lands here as *Review*.
-- A payment is only recorded after M-Pesa confirms it, with the amount checked. Repeated callbacks do nothing. "Ask M-Pesa now" covers a lost callback and never invents a result.
-- Server settings: `CHAMA_SECRETS_KEY` (32+ random characters; protects the stored keys and the per-chama callback URL), optional `PUBLIC_URL` (the https address Safaricom calls back; defaults to the request's address). Callback URL per chama: `/webhooks/chama-mpesa/<chama id>/<secret>` (built automatically).
-- Limits: paybill only for automatic payments (tills work in manual mode); M-Pesa's KES 250,000 per transaction.
+1. **Chairperson: Pay > Payment settings.** Write where members pay (for example `Paybill 123456, account: your name`) and choose how a pasted message is checked (below).
+2. **Member: Pay.** Step 1: pay the chama's paybill, till or phone. Step 2: paste the whole M-Pesa SMS and choose what it was for: this month's contribution, one of your fines, or a loan repayment. The code and amount are read from the message. If you type a code or amount too, they must match it. If the message cannot be read you can type the code and amount instead, and an official approves it.
+3. **Officials: Pay > Waiting for you.** Approve or reject (with a reason) anything that was not recorded automatically. You cannot approve your own payment. Also shows payments recorded from a message that the chama's records have not confirmed yet.
 
-## Paste the M-Pesa message
+**Two ways to check a pasted message (the chairperson chooses):**
 
-For chamas that pay the paybill, till or phone themselves (no Daraja). Works for contributions, fines and loan repayments.
+| Setting | What happens | Best for |
+|---|---|---|
+| After it matches the chama's M-Pesa records (default) | Officials paste the messages the *chama received* under **Pay > M-Pesa records** (or lines like `QGH7XY12AB 1000`). When a member's code **and** amount match, it is recorded automatically, whichever was added first. A made-up or edited message never matches, so it is never recorded. | Chamas with real money at stake |
+| Straight away | A readable message from the last 7 days is recorded at once. Officials are told and can cancel a mistake (Savings, Loans or Fines page). When the chama's records are added later, each such payment is compared and any difference is flagged. | Small, close-knit groups that trust each other |
 
-1. **Officials (chairperson or treasurer): Pay > M-Pesa records.** Paste the M-Pesa messages the *chama* received, or lines copied from the M-Pesa statement (`QGH7XY12AB 1000` also works). Do this whenever money arrives, or once a day. Each code is stored once. Phone numbers are shortened and balances are not kept.
-2. **Member: Pay > Already paid?** Choose what it was for (contribution, a fine, or the loan) and paste the whole M-Pesa SMS. The code and amount are read from the message. If you type a code or amount too, they must match the message.
-3. **Matching.** If the chama's records already hold the same code **and** amount, the payment is recorded straight away, with the same rules and ledger rows as a treasurer entry. If not yet, it waits and is recorded the moment an official adds the matching record. If the code is there but the amount differs, nothing is recorded and officials see a warning.
-4. **Safeguards.** A code can be used once. Nobody can confirm their own payment with a record they added themselves: another official must approve it. Members can only pay their own fines and loans, and never more than is owed. Every automatic match and every record added is in the audit log.
+**Safeguards in both:** a code can be used once; members can only pay their own fines and loans, never more than is owed; nobody can confirm their own payment with a record they added themselves (another official must approve); an edited amount is flagged; every automatic recording and every record added is in the audit log; balances and full phone numbers from messages are not kept.
 
-**What this can and cannot prove (please read).** A pasted message is just text, and anyone can type one. ChamaPay cannot look inside M-Pesa, so it cannot tell a real message from a faked one by looking at it. What it can do is compare the member's message with the chama's *own* records of money received. A made-up or edited message will not match, so it is never recorded automatically. The weak point is the records themselves: they are only as honest as the officials who add them, which is why self-confirmation is blocked and everything is audited. For a check that does not depend on people, the chama needs its own Daraja paybill (the *Automatic* mode above), where Safaricom confirms each payment directly.
+**What this can and cannot prove (please read).** A pasted message is only text, and anyone can type one. ChamaPay cannot look inside M-Pesa, so it cannot tell a real message from a fake one just by looking. In the default setting the protection is the comparison with the chama's own records, which are only as honest as the officials who add them (hence the self-confirmation block and the audit log). In the *Straight away* setting a member could paste a made-up message, and only the officials' review and later record matching would catch it. There is no payment prompt and no automatic Safaricom confirmation in this app.
 
-Message layouts differ between send money, paybill and till, and Safaricom can change the wording. The reader looks for the 10-character code, the first amount, the date and the other party. It was tested on the common layouts, **not on live Safaricom messages**. If a message cannot be read, the member can type the code and amount instead.
+Message layouts differ between send money, paybill and till, and Safaricom can change the wording. The reader looks for the 10-character code, the first amount, the date and the other party. It was tested on the common layouts, **not on live Safaricom messages**. Try a few real ones first.
 
-## Tests (210 automated, all passing on SQLite; the web-level ones (including the new payment and online-meeting tests) also pass on PostgreSQL)
+Upgrading: chamas that used the old automatic (Daraja) setting keep their payment instructions and move to the default check. Stored Daraja keys are no longer used. `CHAMA_SECRETS_KEY` is no longer needed.
+
+## Tests (207 automated, all passing on SQLite; the web-level ones (including the new payment and online-meeting tests) also pass on PostgreSQL)
 
     python -m unittest discover -s tests -v
 
@@ -137,7 +134,7 @@ The app refuses to start in production without a 32+ character `AUTH_SECRET`. On
 ## Before taking real customers
 
 - PostgreSQL on a paid plan with backups. The web-level tests pass on PostgreSQL 16 and two gunicorn workers start cleanly on an empty database, but still do a full click-through on your real database first.
-- Your Daraja credentials and callback URL, tested in sandbox first.
+- If you charge chamas a subscription through M-Pesa: your Daraja credentials and callback URL for that, tested in sandbox first. Member payments to chamas do not use Daraja.
 - Register with the Office of the Data Protection Commissioner if required, and publish a privacy policy.
 - Have a few real chamas try it with small amounts.
 - Turn on `REQUIRE_OWNER_2FA=1`, set up two-factor login, and keep the recovery codes offline.

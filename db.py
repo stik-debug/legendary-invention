@@ -188,7 +188,8 @@ CREATE INDEX IF NOT EXISTS ix_meetings_chama ON meetings(chama_id, held_at);
 CREATE INDEX IF NOT EXISTS ix_announce_chama ON announcements(chama_id, id);
 CREATE TABLE IF NOT EXISTS chama_pay_config(
   id {PK}, chama_id INTEGER NOT NULL UNIQUE REFERENCES chamas(id), mode TEXT NOT NULL DEFAULT 'MANUAL', shortcode TEXT, instructions TEXT,
-  env TEXT NOT NULL DEFAULT 'sandbox', key_enc TEXT, secret_enc TEXT, passkey_enc TEXT, updated_by INTEGER, updated_at TEXT);
+  env TEXT NOT NULL DEFAULT 'sandbox', key_enc TEXT, secret_enc TEXT, passkey_enc TEXT, updated_by INTEGER, updated_at TEXT,
+  check_mode TEXT NOT NULL DEFAULT 'RECORDS');
 CREATE TABLE IF NOT EXISTS chama_payments(
   id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), user_id INTEGER NOT NULL REFERENCES users(id), purpose TEXT NOT NULL, target_id INTEGER,
   amount_cents BIGINT NOT NULL CHECK(amount_cents>0), phone TEXT, channel TEXT NOT NULL, status TEXT NOT NULL, checkout_id TEXT, receipt TEXT,
