@@ -1,0 +1,6 @@
+{% extends "base.html" %}{% block title %}Member Passport - {{ target.name }}{% endblock %}{% block content %}
+<div class="head"><div><h2>Member Passport</h2><p>{{ target.name }} · {{ target.role|replace('_',' ')|title }}</p></div><span class="pill ok">{{ target.status }}</span></div>{% include '_chama_nav.html' %}
+<div class="card hero3d"><div><small>Member since {{ target.joined_at|date }}</small><h2>{{ target.name }}</h2><p>Contribution and participation record for {{ chama.name }}</p></div><div class="av" style="width:70px;height:70px;font-size:28px">{{ target.name[:1] }}</div></div>
+<div class="stats"><div class="stat gold"><small>Total savings</small><b>KES {{ savings|kes }}</b></div><div class="stat"><small>Loan balance</small><b>KES {{ loan|kes }}</b></div><div class="stat"><small>Contributions</small><b>{{ contribs }}</b></div><div class="stat"><small>Attendance</small><b>{{ present }}/{{ totalmeet }}</b></div></div>
+<div class="card"><h3>Participation</h3><p>Attendance rate: <b>{{ ((present/totalmeet)*100)|round|int if totalmeet else 0 }}%</b></p><p class="mute">Sensitive financial details are only visible to authorized group officials or the member.</p></div>
+{% endblock %}

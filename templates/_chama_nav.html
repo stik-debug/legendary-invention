@@ -1,5 +1,6 @@
 {% set ep = request.endpoint %}
 <nav class="subnav" aria-label="Chama sections">
+<a href="{{ url_for('command_center', chama_id=chama.id) }}" {% if ep=='command_center' %}aria-current="page"{% endif %}>Command Center</a>
 <a href="{{ url_for('chama_home', chama_id=chama.id) }}" {% if ep=='chama_home' %}aria-current="page"{% endif %}>Home</a>
 <a href="{{ url_for('savings', chama_id=chama.id) }}" {% if ep=='savings' %}aria-current="page"{% endif %}>Savings</a>
 <a href="{{ url_for('pay', chama_id=chama.id) }}" {% if ep in ('pay','pay_status','pay_settings','pay_records') %}aria-current="page"{% endif %}>Pay</a>
@@ -7,6 +8,13 @@
 <a href="{{ url_for('fines', chama_id=chama.id) }}" {% if ep=='fines' %}aria-current="page"{% endif %}>Fines</a>
 <a href="{{ url_for('ledger', chama_id=chama.id) }}" {% if ep=='ledger' %}aria-current="page"{% endif %}>Ledger</a>
 <a href="{{ url_for('mgr_list', chama_id=chama.id) }}" {% if ep in ('mgr_list','mgr_view') %}aria-current="page"{% endif %}>Merry-go-round</a>
+<a href="{{ url_for('chama_goals', chama_id=chama.id) }}" {% if ep=='chama_goals' %}aria-current="page"{% endif %}>Goals</a>
+<a href="{{ url_for('investments', chama_id=chama.id) }}" {% if ep=='investments' %}aria-current="page"{% endif %}>Investments</a>
+<a href="{{ url_for('assets', chama_id=chama.id) }}" {% if ep=='assets' %}aria-current="page"{% endif %}>Assets</a>
+<a href="{{ url_for('chama_votes', chama_id=chama.id) }}" {% if ep in ('chama_votes','vote') %}aria-current="page"{% endif %}>Voting</a>
+<a href="{{ url_for('constitution', chama_id=chama.id) }}" {% if ep=='constitution' %}aria-current="page"{% endif %}>Constitution</a>
+<a href="{{ url_for('chama_ai', chama_id=chama.id) }}" {% if ep=='chama_ai' %}aria-current="page"{% endif %}>AI</a>
+<a href="{{ url_for('activity', chama_id=chama.id) }}" {% if ep=='activity' %}aria-current="page"{% endif %}>Activity</a>
 <a href="{{ url_for('meetings', chama_id=chama.id) }}" {% if ep in ('meetings','meeting_view') %}aria-current="page"{% endif %}>Meetings</a>
 <a href="{{ url_for('notices', chama_id=chama.id) }}" {% if ep=='notices' %}aria-current="page"{% endif %}>Notices</a>
 {% if me is defined and me and me.role in ('CHAMA_ADMIN','TREASURER','SECRETARY') %}<a href="{{ url_for('reports', chama_id=chama.id) }}" {% if ep=='reports' %}aria-current="page"{% endif %}>Reports</a>{% endif %}

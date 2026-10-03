@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% block title %}Command Center - {{ chama.name }}{% endblock %}{% block content %}
+<div class="head"><div><h2>ChamaPay Command Center</h2><p>{{ chama.name }} · your group's financial headquarters</p></div><span class="pill ok">Health {{ health }}/100</span></div>
+{% include '_chama_nav.html' %}
+<div class="stats">
+<div class="stat dark"><small>Group wealth</small><b>KES {{ (cash+investments+assets)|kes }}</b></div>
+<div class="stat gold"><small>Total savings</small><b>KES {{ savings|kes }}</b></div>
+<div class="stat"><small>Loan balance</small><b>KES {{ loans|kes }}</b></div>
+<div class="stat"><small>Investments + assets</small><b>KES {{ (investments+assets)|kes }}</b></div>
+</div>
+<div class="grid">
+<div class="card"><h3>Chama Health</h3><div style="display:flex;gap:18px;align-items:center"><div class="ring" style="--p:{{ health }}"><span>{{ health }}<small>/100</small></span></div><div class="grow">{% for k,v in health_parts.items() %}<div class="metric"><span>{{ k }}</span><b>{{ v }}%</b><div class="bar"><i style="width:{{ v }}%"></i></div></div>{% endfor %}</div></div></div>
+<div class="card"><h3>Attention required</h3>{% if alerts %}<ul class="list">{% for level,text,link in alerts %}<li><span class="pill {{ 'bad' if level=='danger' else level }}">{{ text }}</span><a class="btn sm" href="{{ link }}">Open</a></li>{% endfor %}</ul>{% else %}<div class="empty">Everything looks clear right now.</div>{% endif %}</div>
+</div>
+<div class="grid">
+<div class="card"><div class="section-head"><h3>Goals</h3><a class="btn sm" href="{{ url_for('chama_goals',chama_id=chama.id) }}">View all</a></div>{% for g in goals %}<div class="metric"><div style="display:flex;justify-content:space-between"><span>{{ g.name }}</span><b>{{ ((g.current_cents/g.target_cents)*100)|round|int }}%</b></div><div class="bar"><i style="width:{{ [100,((g.current_cents/g.target_cents)*100)]|min }}%"></i></div><small>KES {{ g.current_cents|kes }} of KES {{ g.target_cents|kes }}</small></div>{% else %}<div class="empty">Create your first group goal.</div>{% endfor %}</div>
+<div class="card"><div class="section-head"><h3>Recent activity</h3><a class="btn sm" href="{{ url_for('activity',chama_id=chama.id) }}">View timeline</a></div><ul class="list">{% for a in activities %}<li><span class="grow"><b>{{ a.name or 'System' }}</b><br><small>{{ a.description or a.kind }} · {{ a.occurred_on }}</small></span><span class="amt">{{ '−' if a.direction=='OUT' else '+' }} KES {{ a.amount_cents|kes }}</span></li>{% else %}<li class="empty">No activity yet.</li>{% endfor %}</ul></div>
+</div>
+<div class="card hero3d"><div><h2>Ask ChamaPay AI</h2><p>Ask about savings, loans, investments, assets or goals using your group's recorded data.</p></div><a class="btn gold" href="{{ url_for('chama_ai',chama_id=chama.id) }}">Open AI assistant</a></div>
+{% endblock %}

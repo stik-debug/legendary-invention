@@ -2,8 +2,8 @@
 {% block content %}
 <section class="hero">
 <div>
-<h1>Manage Your Chama.<br><span>Save Together. Grow Together.</span></h1>
-<p class="lead">One trusted place for members, contributions, loans and records, built for Kenyan savings groups. Every member can see the books, so trust comes easy.</p>
+<h1>Your Chama.<br><span>One Digital Headquarters.</span></h1>
+<p class="lead">Save. Borrow. Invest. Vote. Grow. One trusted place for your members, money, meetings and decisions — built for modern Kenyan savings groups.</p>
 <div class="cta"><a class="btn pri" href="{{ url_for('register') }}">Start {{ trial }}-day free trial</a><a class="btn" href="#pricing">See pricing</a></div>
 <p class="mute" style="margin-top:14px">No card needed to start.</p>
 </div>
@@ -17,11 +17,11 @@
 <section class="section">
 <h2>Everything your chama needs.</h2>
 <div class="features">
-{% for t, d, p in [('Members','Add members, assign chairperson, treasurer and secretary roles, and keep every record safe.','M16 11a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0'),('Contributions and savings','Track who has paid and what the group has saved, month by month.','M12 3v18M8 7h6a3 3 0 010 6H8m0 0h7a3 3 0 010 6H8'),('Loans','Members ask, officials approve, and repayments are tracked to the shilling.','M3 7h18v10H3zM12 12m-2.5 0a2.5 2.5 0 105 0 2.5 2.5 0 10-5 0'),('M-Pesa payments','Pay your subscription straight from your phone. Your chama unlocks when the payment is confirmed.','M7 2h10v20H7zM11 18h2')] %}
+{% for t, d, p in [('Command Center','See group wealth, attention alerts, health and goals in one place.','M3 3h18v18H3zM7 15l3-3 3 2 5-6'),('Smart Loans','Applications, eligibility, guarantors, repayment progress and overdue tracking.','M4 5h16v14H4zM8 9h8M8 13h5'),('Goals & Wealth','Track goals, investments, assets and your Chama wealth journey.','M12 3v18M3 12h18'),('Voting & Constitution','Turn proposals into transparent votes and enforce group rules.','M5 4h14v16H5zM8 8h8M8 12h8M8 16h5'),('Meetings','Manage agendas, attendance, minutes, decisions and action items.','M4 5h16v14H4zM8 3v4M16 3v4'),('Member Passport','Give every member a clear record of savings, participation and loans.','M12 12a4 4 0 100-8 4 4 0 000 8M4 21a8 8 0 0116 0'),('ChamaPay AI','Ask authorized questions about the actual data in your Chama.','M12 3a7 7 0 017 7v4a7 7 0 01-7 7 7 7 0 01-7-7v-4a7 7 0 017-7z'),('PWA + Mobile','Install ChamaPay on your phone and manage your group anywhere.','M7 2h10v20H7zM11 18h2')] %}
 <div class="card tilt"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{ p }}"/></svg></div><h3>{{ t }}</h3><p class="mute" style="margin:0">{{ d }}</p></div>
 {% endfor %}
 </div>
-<p class="mute" style="margin-top:14px">Some features, such as contributions, loans, fines and meetings, are being added in stages. Members, plans and billing are live now.</p>
+<div class="card hero3d" style="margin-top:20px"><div><h3 style="color:#fff">Now built for the whole Chama</h3><p>Command Center · Chama Health · Goals · Investments · Assets · Voting · Constitution · Member Passport · AI</p></div><a class="btn gold" href="{{ url_for('register') }}">Build your Chama</a></div>
 </section>
 <section class="section" id="pricing">
 <h2>Simple pricing for your whole chama.</h2>

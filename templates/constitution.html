@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% block title %}Constitution - {{ chama.name }}{% endblock %}{% block content %}
+<div class="head"><div><h2>Digital Chama Constitution</h2><p>Define the rules ChamaPay uses when managing the group.</p></div></div>{% include '_chama_nav.html' %}
+<div class="card"><form method="POST" action="{{ url_for('constitution',chama_id=chama.id) }}">{{ csrf_input() }}<div class="grid">
+<div class="field"><label>Monthly contribution (KES)</label><input name="monthly_contribution" type="number" step="0.01" value="{{ c.monthly_contribution_cents/100 }}"></div>
+<div class="field"><label>Joining fee (KES)</label><input name="joining_fee" type="number" step="0.01" value="{{ c.joining_fee_cents/100 }}"></div>
+<div class="field"><label>Loan interest (%)</label><input name="loan_interest" type="number" step="0.01" value="{{ c.loan_interest_bps/100 }}"></div>
+<div class="field"><label>Maximum loan × savings</label><input name="loan_multiplier" type="number" min="1" max="10" value="{{ c.loan_multiplier }}"></div>
+<div class="field"><label>Repayment period (months)</label><input name="loan_months" type="number" min="1" max="60" value="{{ c.loan_months }}"></div>
+<div class="field"><label>Late payment fine (KES)</label><input name="late_fine" type="number" step="0.01" value="{{ c.late_fine_cents/100 }}"></div>
+<div class="field"><label>Attendance requirement (%)</label><input name="attendance_requirement" type="number" min="0" max="100" value="{{ c.attendance_requirement }}"></div>
+<div class="field"><label>Voting requirement (%)</label><input name="voting_requirement" type="number" min="0" max="100" value="{{ c.voting_requirement }}"></div>
+</div>{% if me.role=='CHAMA_ADMIN' %}<button class="btn pri">Save constitution</button>{% else %}<p class="mute">Only the Chama administrator can change these rules.</p>{% endif %}</form></div>
+{% endblock %}

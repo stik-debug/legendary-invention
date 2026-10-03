@@ -18,6 +18,7 @@ import routes_pay
 import routes_mgr
 import routes_recovery
 import routes_security
+import routes_upgrade
 import services as S
 import twofactor as TF
 from db import DB, audit, init_db
@@ -483,6 +484,9 @@ def create_app(overrides=None):
         rows = db().all(f"""SELECT a.*, u.name actor, c.name chama FROM audit_logs a LEFT JOIN users u ON u.id=a.actor_id
             LEFT JOIN chamas c ON c.id=a.chama_id ORDER BY a.id DESC LIMIT {PAGE} OFFSET {(page - 1) * PAGE}""")
         return render_template('owner_audit.html', rows=rows, page=page, pages=max(1, -(-total // PAGE)))
+
+    # ---------- ChamaPay 2.0 upgrade routes ----------
+    routes_upgrade.register_upgrade_routes(app, db, login_required, ctx)
 
     @app.cli.command('sweep')
     def sweep_cmd():

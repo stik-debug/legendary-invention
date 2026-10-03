@@ -159,3 +159,36 @@ This build includes PWA support for ChamaPay:
 - iPhone/iPad guidance for Safari → Share → Add to Home Screen
 
 The service worker intentionally caches only static assets. Authenticated pages, sessions, forms, financial records, and other dynamic data remain network-only.
+
+
+## ChamaPay 2.0 upgrade
+
+This build preserves the existing ChamaPay architecture and adds a new upgrade layer.
+
+### Added
+- ChamaPay Command Center
+- Chama Health score
+- Goals and goal progress
+- Investment portfolio
+- Group assets
+- Digital voting
+- Digital Chama Constitution
+- Member Passport
+- Financial activity timeline
+- ChamaPay AI data-grounded assistant
+- Payment receipt view
+- Global member search
+- Help/support center
+- Mobile bottom navigation
+- Expanded landing-page positioning
+- Starter plan capacity: 20 members
+- Growth plan capacity: 70 members
+- Pro plan capacity: 100 members
+- Loan due-date support
+- Constitution defaults for new and existing chamas
+
+### Safety
+The upgrade is additive: existing tables/routes/components are retained. New database tables are created automatically and existing databases are migrated additively without dropping existing data.
+
+### AI note
+The included ChamaPay AI interface is intentionally data-grounded and permission-aware. It provides deterministic answers from recorded group data without inventing transactions. A production LLM provider can be connected later through a server-side integration.

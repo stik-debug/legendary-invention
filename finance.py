@@ -188,8 +188,10 @@ def apply_loan(db, chama_id, user_id, cents, purpose, now=None):
             raise BusinessError(f'You can borrow up to KES {limit / 100:,.0f} (your savings times the chama multiple).')
         bps = _n(db, 'SELECT loan_rate_bps FROM chamas WHERE id=?', (chama_id,))
         interest = int((Decimal(cents) * bps / 10000).to_integral_value(ROUND_HALF_UP))
+        months = _n(db, 'SELECT loan_months FROM chama_constitutions WHERE chama_id=?', (chama_id,)) or 6
+        due = (now.date() + timedelta(days=30*months)).isoformat()
         lid = db.insert('loans', chama_id=chama_id, user_id=user_id, principal_cents=cents, interest_cents=interest, total_due_cents=cents + interest,
-                        rate_bps=bps, purpose=(purpose or '').strip()[:200], status='PENDING', applied_at=iso(now))
+                        rate_bps=bps, purpose=(purpose or '').strip()[:200], status='PENDING', applied_at=iso(now), due_date=due)
         audit(db, user_id, 'LOAN_APPLIED', 'loan', lid, chama_id, {'principal_cents': cents})
         who = db.val('SELECT name FROM users WHERE id=?', (user_id,), 'A member')
         notify_roles(db, chama_id, FINANCE_ROLES, f'{who} asked for a loan of KES {cents / 100:,.0f}.', f'/chamas/{chama_id}/loans', user_id, now)

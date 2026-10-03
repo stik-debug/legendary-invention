@@ -155,6 +155,10 @@ def create_chama(db, user_id, name, description, plan_code, now=None):
         trial_end = now + timedelta(days=setting(db, 'trial_days', 7))
         db.insert('subscriptions', chama_id=cid, plan_id=plan['id'], status='TRIAL', trial_ends_at=iso(trial_end),
                   due_at=iso(trial_end), updated_at=iso(now))
+        c=db.one('SELECT contribution_cents, loan_rate_bps, loan_multiplier FROM chamas WHERE id=?',(cid,))
+        db.insert('chama_constitutions', chama_id=cid, monthly_contribution_cents=c['contribution_cents'],
+                  joining_fee_cents=0, loan_interest_bps=c['loan_rate_bps'], loan_multiplier=c['loan_multiplier'],
+                  loan_months=6, late_fine_cents=0, attendance_requirement=80, voting_requirement=50, updated_at=iso(now))
         db.insert('chama_members', chama_id=cid, user_id=user_id, role='CHAMA_ADMIN', status='ACTIVE', joined_at=iso(now))
         audit(db, user_id, 'CHAMA_CREATED', 'chama', cid, cid, {'plan': plan['code']})
     return cid

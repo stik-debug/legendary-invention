@@ -229,9 +229,49 @@ CREATE INDEX IF NOT EXISTS ix_pay_status ON payments(status, completed_at);
 CREATE INDEX IF NOT EXISTS ix_audit_chama ON audit_logs(chama_id, created_at);
 CREATE INDEX IF NOT EXISTS ix_sub_status ON subscriptions(status);
 CREATE INDEX IF NOT EXISTS ix_attempts ON login_attempts(key, at);
+CREATE TABLE IF NOT EXISTS chama_goals(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), name TEXT NOT NULL, description TEXT,
+  target_cents BIGINT NOT NULL CHECK(target_cents>0), current_cents BIGINT NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'ACTIVE', deadline TEXT, created_by INTEGER REFERENCES users(id), created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS chama_investments(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), name TEXT NOT NULL, type TEXT NOT NULL,
+  purchase_date TEXT NOT NULL, purchase_price_cents BIGINT NOT NULL CHECK(purchase_price_cents>=0),
+  current_value_cents BIGINT NOT NULL CHECK(current_value_cents>=0), income_cents BIGINT NOT NULL DEFAULT 0,
+  notes TEXT, status TEXT NOT NULL DEFAULT 'ACTIVE', created_by INTEGER REFERENCES users(id), created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS chama_assets(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), name TEXT NOT NULL, category TEXT NOT NULL,
+  purchase_price_cents BIGINT NOT NULL DEFAULT 0, current_value_cents BIGINT NOT NULL CHECK(current_value_cents>=0),
+  purchase_date TEXT NOT NULL, location TEXT, ownership TEXT, notes TEXT, status TEXT NOT NULL DEFAULT 'ACTIVE',
+  created_by INTEGER REFERENCES users(id), created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS chama_votes(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), title TEXT NOT NULL, description TEXT,
+  opens_at TEXT NOT NULL, closes_at TEXT, status TEXT NOT NULL DEFAULT 'OPEN',
+  created_by INTEGER REFERENCES users(id), created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS chama_vote_responses(
+  id {PK}, vote_id INTEGER NOT NULL REFERENCES chama_votes(id), user_id INTEGER NOT NULL REFERENCES users(id),
+  choice TEXT NOT NULL CHECK(choice IN ('YES','NO','ABSTAIN')), created_at TEXT NOT NULL,
+  UNIQUE(vote_id,user_id));
+CREATE TABLE IF NOT EXISTS chama_constitutions(
+  id {PK}, chama_id INTEGER NOT NULL UNIQUE REFERENCES chamas(id),
+  monthly_contribution_cents BIGINT NOT NULL DEFAULT 0, joining_fee_cents BIGINT NOT NULL DEFAULT 0,
+  loan_interest_bps INTEGER NOT NULL DEFAULT 500, loan_multiplier INTEGER NOT NULL DEFAULT 3,
+  loan_months INTEGER NOT NULL DEFAULT 6, late_fine_cents BIGINT NOT NULL DEFAULT 0,
+  attendance_requirement INTEGER NOT NULL DEFAULT 80, voting_requirement INTEGER NOT NULL DEFAULT 50,
+  updated_by INTEGER REFERENCES users(id), updated_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS ix_goals_chama ON chama_goals(chama_id,status);
+CREATE INDEX IF NOT EXISTS ix_investments_chama ON chama_investments(chama_id,status);
+CREATE INDEX IF NOT EXISTS ix_assets_chama ON chama_assets(chama_id,status);
+CREATE INDEX IF NOT EXISTS ix_votes_chama ON chama_votes(chama_id,status);
+CREATE TABLE IF NOT EXISTS support_tickets(
+  id {PK}, user_id INTEGER NOT NULL REFERENCES users(id), chama_id INTEGER REFERENCES chamas(id),
+  subject TEXT NOT NULL, body TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'OPEN',
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, admin_note TEXT);
+CREATE INDEX IF NOT EXISTS ix_support_user ON support_tickets(user_id, status, id);
+
+
 """
 
-DEFAULT_PLANS = [('starter', 'Starter', 50000, 15, 1), ('growth', 'Growth', 150000, 70, 2), ('business', 'Business', 200000, 100, 3)]
+DEFAULT_PLANS = [('starter', 'Starter', 50000, 20, 1), ('growth', 'Growth', 150000, 70, 2), ('business', 'Pro', 200000, 100, 3)]
 DEFAULT_SETTINGS = {'trial_days': '7', 'grace_days': '3', 'billing_period_days': '30'}
 
 
@@ -307,9 +347,18 @@ def init_db(db):
         ensure_column(db, 'chamas', 'contribution_cents', 'BIGINT NOT NULL DEFAULT 100000')
         ensure_column(db, 'chamas', 'loan_rate_bps', 'INTEGER NOT NULL DEFAULT 1000')
         ensure_column(db, 'chamas', 'loan_multiplier', 'INTEGER NOT NULL DEFAULT 3')
+        ensure_column(db, 'loans', 'due_date', 'TEXT')
         if not db.val('SELECT COUNT(*) FROM subscription_plans'):
             for code, name, price, mx, order in DEFAULT_PLANS:
                 db.insert('subscription_plans', code=code, name=name, price_cents=price, max_members=mx, sort_order=order)
+        db.execute("UPDATE subscription_plans SET max_members=20 WHERE code='starter' AND max_members<20")
+        db.execute("UPDATE subscription_plans SET name='Pro', max_members=100, price_cents=200000 WHERE code='business'")
+        for c in db.all('SELECT id, contribution_cents, loan_rate_bps, loan_multiplier FROM chamas'):
+            if db.val('SELECT COUNT(*) FROM chama_constitutions WHERE chama_id=?',(c['id'],),0)==0:
+                db.insert('chama_constitutions', chama_id=c['id'], monthly_contribution_cents=c['contribution_cents'],
+                          joining_fee_cents=0, loan_interest_bps=c['loan_rate_bps'], loan_multiplier=c['loan_multiplier'],
+                          loan_months=6, late_fine_cents=0, attendance_requirement=80, voting_requirement=50,
+                          updated_at=datetime.utcnow().replace(microsecond=0).isoformat(sep=' '))
         for k, v in DEFAULT_SETTINGS.items():
             if db.val('SELECT COUNT(*) FROM settings WHERE key=?', (k,)) == 0:
                 db.execute('INSERT INTO settings(key,value) VALUES(?,?)', (k, v))

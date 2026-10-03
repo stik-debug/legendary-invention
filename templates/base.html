@@ -23,6 +23,8 @@
 {% if user %}
 {% if user.is_super_admin %}<a class="btn sm gold" href="{{ url_for('owner_home') }}">Control Center</a>{% endif %}
 <a class="btn sm" href="{{ url_for('dashboard') }}">My chamas</a>
+<a class="btn sm" href="{{ url_for('global_search') }}">Search</a>
+<a class="btn sm" href="{{ url_for('help_center') }}">Help</a>
 <a class="btn sm" href="{{ url_for('notifications') }}" aria-label="Alerts">Alerts{% if notif_unread %} <span class="dot">{{ notif_unread if notif_unread<100 else '99+' }}</span>{% endif %}</a>
 <form method="POST" action="{{ url_for('logout') }}" style="margin:0">{{ csrf_input() }}<button class="btn sm">Log out</button></form>
 {% else %}
@@ -46,6 +48,15 @@
 </div>
 
 </main>
+{% if user and request.view_args and request.view_args.get('chama_id') %}
+<nav class="mobile-bottom" aria-label="Mobile Chama navigation">
+<a href="{{ url_for('command_center',chama_id=request.view_args.get('chama_id')) }}">⌂<span>Home</span></a>
+<a href="{{ url_for('savings',chama_id=request.view_args.get('chama_id')) }}">KES<span>Money</span></a>
+<a href="{{ url_for('loans',chama_id=request.view_args.get('chama_id')) }}">↗<span>Loans</span></a>
+<a href="{{ url_for('activity',chama_id=request.view_args.get('chama_id')) }}">☷<span>Activity</span></a>
+<a href="{{ url_for('chama_ai',chama_id=request.view_args.get('chama_id')) }}">✦<span>AI</span></a>
+</nav>
+{% endif %}
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {

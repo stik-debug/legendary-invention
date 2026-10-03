@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% block title %}Search - ChamaPay{% endblock %}{% block content %}
+<div class="head"><div><h2>Global Search</h2><p>Search members across the chamas you belong to.</p></div></div>
+<form class="card" method="GET"><div class="field"><label>Search</label><input name="q" value="{{ q }}" autofocus placeholder="Member name or phone"></div><button class="btn pri">Search</button></form>
+<div class="card tight"><ul class="list">{% for r in results %}<li><span class="av">{{ r.title[:1] }}</span><span class="grow"><b>{{ r.title }}</b><br><small>{{ r.detail }} · {{ r.chama }}</small></span><a class="btn sm" href="{{ url_for('member_passport',chama_id=r.chama_id,user_id=r.user_id) }}">Open</a></li>{% else %}{% if q %}<li class="empty">No matching members found.</li>{% else %}<li class="empty">Search for a member by name or phone.</li>{% endif %}{% endfor %}</ul></div>
+{% endblock %}
