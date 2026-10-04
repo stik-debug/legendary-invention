@@ -18,11 +18,7 @@ def register(app, db, ctx, login_required):
     @app.route('/chamas/<int:chama_id>/pay')
     @login_required
     def pay(chama_id):
-        chama, me, sub = ctx(chama_id)
-        staff = me['role'] in STAFF
-        return render_template('pay.html', chama=chama, me=me, channel=P.channel(db(), chama_id), cfg=P.get_config(db(), chama_id), d=P.dues(db(), chama_id, g.user['id']),
-                               staff=staff, is_admin=me['role'] == 'CHAMA_ADMIN', queue=P.queue(db(), chama_id) if staff else [], trusted=P.unconfirmed(db(), chama_id) if staff else [],
-                               mode=P.check_mode(db(), chama_id), names=P.PURPOSES)
+        return redirect(url_for('universal_pay_page', chama_id=chama_id))
 
     @app.route('/chamas/<int:chama_id>/pay/claim', methods=['POST'])
     @login_required
