@@ -23,12 +23,12 @@
 {% if user %}
 <details class="app-menu">
   <summary class="btn sm menu-trigger" aria-label="Open menu">☰ Menu{% if notif_unread %}<span class="menu-badge">{{ notif_unread if notif_unread<100 else '99+' }}</span>{% endif %}</summary>
-  <div class="app-menu-panel">
+  <div class="app-menu-panel" role="menu">
     <div class="menu-heading">
       <strong>ChamaPay</strong>
       <span>Quick access</span>
     </div>
-    <a class="menu-item menu-primary" href="{{ url_for('dashboard') }}"><span class="menu-icon">⌂</span><span><b>My Chamas</b><small>Open your Chama homepage</small></span></a>
+    <a class="menu-item menu-primary" data-menu-close href="{{ url_for('dashboard') }}"><span class="menu-icon">⌂</span><span><b>My Chamas</b><small>Open your Chama homepage</small></span></a>
     <a class="menu-item" href="{{ url_for('global_search') }}"><span class="menu-icon">⌕</span><span><b>Search</b><small>Find members and Chamas</small></span></a>
     <a class="menu-item" href="{{ url_for('notifications') }}"><span class="menu-icon">🔔</span><span><b>Alerts</b><small>{% if notif_unread %}{{ notif_unread }} unread{% else %}No new alerts{% endif %}</small></span></a>
     <a class="menu-item" href="{{ url_for('notification_settings') }}"><span class="menu-icon">⚙</span><span><b>Settings</b><small>Notifications and preferences</small></span></a>
@@ -48,6 +48,7 @@
 {% with messages = get_flashed_messages(with_categories=true) %}{% for cat, msg in messages %}<div class="flash {{ cat }}" role="status">{{ msg }}</div>{% endfor %}{% endwith %}
 {% block content %}{% endblock %}
 </div>
+<div id="offline-status" class="offline-status" hidden role="status" aria-live="polite"><span class="offline-dot"></span><span data-offline-text>You are offline. Showing saved ChamaPay information where available.</span></div>
 <div id="pwa-install-card" class="pwa-install-card" hidden aria-live="polite">
   <div class="pwa-install-icon"><img src="{{ url_for('static', filename='icons/icon-192.png') }}" alt="ChamaPay"></div>
   <div class="pwa-install-copy">

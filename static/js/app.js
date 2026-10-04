@@ -140,3 +140,45 @@ if(!still&&window.matchMedia('(hover:hover)').matches){
 
   close.addEventListener('click', closeCard);
 })();
+
+// Menu + offline UX.
+(function(){
+  var menu = document.querySelector('.app-menu');
+  if (menu) {
+    document.addEventListener('click', function(e){
+      if (e.target.closest('[data-menu-close]')) menu.removeAttribute('open');
+      else if (!e.target.closest('.app-menu')) menu.removeAttribute('open');
+    });
+    document.addEventListener('keydown', function(e){
+      if (e.key === 'Escape') menu.removeAttribute('open');
+    });
+  }
+
+  // Save a small, non-sensitive homepage summary for the offline screen.
+  if (location.pathname === '/dashboard') {
+    try {
+      var cards = Array.prototype.slice.call(document.querySelectorAll('.dashboard-chama-card'));
+      if (!cards.length) cards = Array.prototype.slice.call(document.querySelectorAll('.my-chamas-hero + .grid .card'));
+      var items = cards.map(function(card){
+        var nameEl = card.querySelector('h3');
+        var metaEl = card.querySelector('p');
+        return {name: nameEl ? nameEl.textContent.replace('→','').trim() : 'My Chama', meta: metaEl ? metaEl.textContent.trim() : 'Chama information'};
+      }).filter(function(x){return x.name;});
+      if (items.length) localStorage.setItem('chamapay-offline-summary', JSON.stringify({savedAt:Date.now(),items:items.slice(0,10)}));
+    } catch(e) {}
+  }
+
+  var offline = document.getElementById('offline-status');
+  function setOnlineState(){
+    if (!offline) return;
+    if (!navigator.onLine) {
+      offline.hidden = false;
+      var t=offline.querySelector('[data-offline-text]'); if(t)t.textContent='You are offline. Showing saved ChamaPay information where available.';
+    } else {
+      offline.hidden = true;
+    }
+  }
+  window.addEventListener('online', setOnlineState);
+  window.addEventListener('offline', setOnlineState);
+  setOnlineState();
+})();
