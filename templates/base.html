@@ -24,9 +24,7 @@
 {% if user.is_super_admin %}<a class="btn sm gold" href="{{ url_for('owner_home') }}">Control Center</a>{% endif %}
 <a class="btn sm" href="{{ url_for('dashboard') }}">My chamas</a>
 <a class="btn sm" href="{{ url_for('global_search') }}">Search</a>
-<a class="btn sm" href="{{ url_for('help_center') }}">Help</a>
 <a class="btn sm" href="{{ url_for('notification_settings') }}">Settings</a>
-<a class="btn sm" href="{{ url_for('organizations') }}">Organizations</a>
 <a class="btn sm" href="{{ url_for('notifications') }}" aria-label="Alerts">Alerts{% if notif_unread %} <span class="dot">{{ notif_unread if notif_unread<100 else '99+' }}</span>{% endif %}</a>
 <form method="POST" action="{{ url_for('logout') }}" style="margin:0">{{ csrf_input() }}<button class="btn sm">Log out</button></form>
 {% else %}

@@ -15,12 +15,13 @@
 <p>This month: {{ month_paid }} of {{ members|length }} members have paid KES {{ chama.contribution_cents|kes }}</p></div>
 <div class="ring" style="--p:{{ (month_paid / members|length * 100)|round|int if members else 0 }}"><span><div>{{ month_paid }}/{{ members|length }}<small>paid</small></div></span></div>
 </div>
+<div class="card" style="margin-bottom:14px"><h3>How members join</h3><p class="mute" style="margin:0">A Chama Admin adds a member using their Kenyan phone number. If they are new to ChamaPay, the app creates their member record and gives you a one-time <b>join code</b>. Give that code to the member so they can register and immediately see this Chama on their phone.</p></div>
 <div class="card tight"><div style="padding:18px 20px 4px;display:flex;justify-content:space-between;align-items:center;gap:10px"><h3 style="margin:0">Members</h3>
 <span style="display:flex;gap:8px">{% if is_admin %}<button class="btn sm" data-open="set">Chama settings</button><button class="btn sm pri" data-open="add">Add member</button>{% endif %}</span></div>
 <ul class="list">
 {% for m in members %}<li><span class="av">{{ m.name[:1] }}</span><span class="grow">{{ m.name }}<br><small>{{ m.phone }}</small></span><span class="pill {{ 'ok' if m.role!='MEMBER' else '' }}">{{ m.role.replace('_',' ')|title }}</span>{% if not m.claimed %}<span class="pill warn">Not registered yet</span>{% if is_admin %}<form method="POST" action="{{ url_for('member_code', chama_id=chama.id, user_id=m.id) }}" style="margin:0">{{ csrf_input() }}<button class="btn sm">New join code</button></form>{% endif %}{% endif %}
 {% if is_admin and m.claimed and m.role!='CHAMA_ADMIN' and m.id!=user.id %}<form method="POST" action="{{ url_for('member_reset_code', chama_id=chama.id, user_id=m.id) }}" data-confirm="Make a password reset code for {{ m.name }}? Give it only to {{ m.name }}." style="margin:0">{{ csrf_input() }}<button class="btn sm">Reset password</button></form>{% endif %}
-{% if can_view_statements %}<a class="btn sm" href="{{ url_for('statement', chama_id=chama.id, user_id=m.id) }}">Statement</a>{% endif %}
+{% if can_view_statements %}<a class="btn sm" href="{{ url_for('statement', chama_id=chama.id, user_id=m.id) }}">Statement</a>{% endif %}<a class="btn sm" href="{{ url_for('member_passport', chama_id=chama.id, user_id=m.id) }}">Digital ID</a>
 {% if is_admin and m.id!=user.id %}<form method="POST" action="{{ url_for('member_remove', chama_id=chama.id, user_id=m.id) }}" data-confirm="Remove {{ m.name }}? Their history is kept." style="margin:0">{{ csrf_input() }}<button class="btn sm bad">Remove</button></form>{% endif %}</li>{% endfor %}
 </ul></div>
 {% if is_admin %}

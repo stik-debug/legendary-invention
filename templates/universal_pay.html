@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Pay - {{ chama.name }}{% endblock %}
+{% block content %}
+<div class="head"><div><h2>Pay</h2><p>{{ chama.name }} · one payment screen for your Chama</p></div></div>
+{% include '_chama_nav.html' %}
+
+<div class="card hero3d tilt">
+  <div><small>Simple digital payment records</small><h2>Pay once. Confirm once. Records update automatically.</h2>
+  <p class="mute">Choose what you are paying for. Your payment stays <b>Pending</b> until a Chama finance official confirms it. No payment gateway is connected yet.</p></div>
+</div>
+
+<div class="card">
+  <h3>Make a payment</h3>
+  <form method="POST" action="{{ url_for('universal_pay_request', chama_id=chama.id) }}">
+    {{ csrf_input() }}
+    <div class="field"><label for="purpose">What are you paying for?</label>
+      <select id="purpose" name="purpose" required>
+        <option value="CONTRIBUTION">Contribution</option>
+        <option value="SAVING">Savings</option>
+        {% if data.loans %}<option value="LOAN">Loan repayment</option>{% endif %}
+        {% if data.rounds %}<option value="MGR">Merry-go-round</option>{% endif %}
+      </select>
+    </div>
+
+    <div class="field" id="loan-target" hidden><label for="loan">Loan to repay</label>
+      <select id="loan" name="target_id">
+        {% for l in data.loans %}<option value="{{ l.id }}" data-balance="{{ l.total_due_cents-l.paid_cents }}">Loan #{{ l.id }} · KES {{ (l.total_due_cents-l.paid_cents)|kes }} remaining</option>{% endfor %}
+      </select>
+    </div>
+
+    <div class="field" id="mgr-target" hidden><label for="mgr">Merry-go-round payment</label>
+      <select id="mgr" name="target_id">
+        {% for r in data.rounds %}<option value="{{ r.id }}" data-amount="{{ r.amount_cents }}">{{ r.name }} · KES {{ r.amount_cents|kes }} · {{ r.recipient }} receives this turn</option>{% endfor %}
+      </select>
+    </div>
+
+    <div class="field"><label for="amount">Amount (KES)</label>
+      <input id="amount" name="amount" inputmode="decimal" value="{{ (data.contribution_left/100)|round(2) if data.contribution_left else '' }}" required>
+      <small id="amount-help" class="mute">Your current contribution balance is KES {{ data.contribution_left|kes }}.</small>
+    </div>
+
+    <div class="field"><label for="method">How did you pay?</label>
+      <select id="method" name="method">{% for m in methods %}<option value="{{ m }}">{{ m }}</option>{% endfor %}</select>
+    </div>
+    <div class="field"><label for="reference">Payment reference / confirmation code</label>
+      <input id="reference" name="reference" maxlength="80" placeholder="e.g. transaction code or bank reference">
+      <small class="mute">For cash, you can leave this blank and the Treasurer can confirm the payment.</small>
+    </div>
+    <div class="field"><label for="note">Note (optional)</label><input id="note" name="note" maxlength="300" placeholder="Anything the Treasurer should know"></div>
+    <button class="btn pri" type="submit">Submit payment for confirmation</button>
+  </form>
+</div>
+
+{% if data.rounds %}
+<div class="card"><h3>Merry-go-round payments</h3><p class="mute">You currently owe a payment on these rounds. After confirmation, the payment goes directly into the merry-go-round pot.</p>
+<ul class="list">{% for r in data.rounds %}<li><span class="grow"><b>{{ r.name }}</b><br><small>KES {{ r.amount_cents|kes }} · {{ r.recipient }} receives this turn · due {{ r.due_date|date }}</small></span><a class="btn sm" href="{{ url_for('mgr_view', chama_id=chama.id, rid=r.id) }}">Open round</a></li>{% endfor %}</ul></div>
+{% endif %}
+
+<div class="card tight"><h3 style="padding:18px 20px 0">My payment requests</h3><ul class="list">
+{% for p in requests %}<li><span class="grow"><b>{{ purposes[p.purpose] }}</b> · KES {{ p.amount_cents|kes }}<br><small>{{ p.method }}{% if p.reference %} · {{ p.reference }}{% endif %} · {{ p.created_at|datetime }}</small></span><span class="pill {{ {'CONFIRMED':'ok','PENDING':'warn','REJECTED':'bad'}.get(p.status,'info') }}">{{ p.status|title }}</span>{% if p.status=='REJECTED' and p.decision_note %}<small class="bad">{{ p.decision_note }}</small>{% endif %}</li>{% else %}<li class="empty grow">No payment requests yet.</li>{% endfor %}
+</ul></div>
+
+{% if staff %}
+<div class="card tight"><h3 style="padding:18px 20px 0">Payments waiting for confirmation</h3><p class="mute" style="padding:0 20px">Confirm only when the Chama has actually received the money. Confirmation posts the payment automatically to the correct contribution, savings, loan, or merry-go-round ledger.</p>
+<ul class="list">{% for p in pending %}<li><span class="av">{{ p.name[:1] }}</span><span class="grow"><b>{{ p.name }}</b> · {{ purposes[p.purpose] }} · KES {{ p.amount_cents|kes }}<br><small>{{ p.method }}{% if p.reference %} · {{ p.reference }}{% endif %}{% if p.note %} · {{ p.note }}{% endif %} · {{ p.created_at|datetime }}</small></span>
+<form method="POST" action="{{ url_for('universal_pay_decide', chama_id=chama.id, pid=p.id, action='approve') }}" style="margin:0">{{ csrf_input() }}<button class="btn sm pri">Confirm</button></form>
+<form method="POST" action="{{ url_for('universal_pay_decide', chama_id=chama.id, pid=p.id, action='reject') }}" style="margin:0;display:flex;gap:5px"><input name="reason" placeholder="Reason" required maxlength="200" style="width:130px"><button class="btn sm bad">Reject</button></form></li>{% else %}<li class="empty grow">No payments are waiting for confirmation.</li>{% endfor %}</ul></div>
+{% endif %}
+
+<script>
+(function(){
+  const purpose=document.getElementById('purpose'), amount=document.getElementById('amount');
+  const loanBox=document.getElementById('loan-target'), mgrBox=document.getElementById('mgr-target');
+  const loan=document.getElementById('loan'), mgr=document.getElementById('mgr'), help=document.getElementById('amount-help');
+  function selectedAmount(select){const o=select && select.options[select.selectedIndex]; return o ? Number(o.dataset.amount||o.dataset.balance||0) : 0;}
+  function refresh(){
+    const v=purpose.value; loanBox.hidden=v!=='LOAN'; mgrBox.hidden=v!=='MGR';
+    if(v==='CONTRIBUTION'){ amount.value={{ (data.contribution_left/100)|round(2) if data.contribution_left else '""' }}; help.textContent='Your current contribution balance is KES {{ data.contribution_left|kes }}.'; }
+    else if(v==='SAVING'){ amount.value=''; help.textContent='Savings payments are added to your savings balance after confirmation.'; }
+    else if(v==='LOAN'){ amount.value=(selectedAmount(loan)/100).toFixed(2); help.textContent='The amount cannot exceed the selected loan balance.'; }
+    else if(v==='MGR'){ amount.value=(selectedAmount(mgr)/100).toFixed(2); help.textContent='Merry-go-round payments must match the round amount.'; }
+  }
+  purpose.addEventListener('change',refresh); if(loan) loan.addEventListener('change',refresh); if(mgr) mgr.addEventListener('change',refresh); refresh();
+})();
+</script>
+{% endblock %}

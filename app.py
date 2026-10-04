@@ -15,6 +15,7 @@ import notify as N
 import routes_community
 import routes_finance
 import routes_pay
+import universal_pay as UP
 import routes_mgr
 import routes_recovery
 import routes_security
@@ -403,6 +404,7 @@ def create_app(overrides=None):
     routes_community.register(app, db, ctx, login_required)
     routes_mgr.register(app, db, ctx, login_required)
     routes_pay.register(app, db, ctx, login_required)
+    UP.register(app, db, ctx, login_required)
     routes_security.register(app, db, owner_required, safe_next)
     routes_recovery.register(app, db, ctx, login_required, owner_required)
     devtools.register(app)

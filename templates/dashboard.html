@@ -1,15 +1,15 @@
 {% extends "base.html" %}{% block title %}My chamas - ChamaPay{% endblock %}
 {% block content %}
-<div class="head"><div><h2>Habari, {{ user.name.split()[0] }}</h2><p>Your chamas</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn" href="{{ url_for('notifications') }}">Alerts{% if notif_unread %} ({{ notif_unread if notif_unread<100 else '99+' }}){% endif %}</a><a class="btn" href="{{ url_for('notification_settings') }}">Settings</a><a class="btn" href="{{ url_for('help_center') }}">Help</a><a class="btn pri" href="{{ url_for('chama_new') }}">New chama</a></div></div>
+<div class="head"><div><h2>My Chamas</h2><p>Habari, {{ user.name.split()[0] }} · choose a Chama to continue</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn" href="{{ url_for('notifications') }}">Alerts{% if notif_unread %} ({{ notif_unread if notif_unread<100 else '99+' }}){% endif %}</a><a class="btn" href="{{ url_for('notification_settings') }}">Settings</a><a class="btn pri" href="{{ url_for('chama_new') }}">+ New Chama</a></div></div>
 {% if chamas %}
-<div class="card" style="margin-bottom:18px"><h3 style="margin-bottom:6px">All functions</h3><p class="mute" style="margin-top:0">Open a Chama first, then use its full function menu. Help, Settings and Alerts are always available above.</p></div>
-<div class="grid">
+<div class="card hero3d tilt my-chamas-hero" style="margin-bottom:18px"><div><small>Your groups</small><h2>My Chamas</h2><p class="mute" style="margin:0">Your Chamas are shown below. Tap <b>Open Chama</b> to access money, loans, payments, merry-go-round and all other functions.</p></div><div class="stat dark" style="min-width:110px"><small>Chamas</small><b>{{ chamas|length }}</b></div></div>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px">
 {% for c in chamas %}
 <div class="card tilt" style="margin:0">
-<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div><h3>{{ c.name }}</h3><p class="mute" style="margin:6px 0 0">{{ c.plan_name }} plan · {{ c.members }} of {{ c.max_members }} members · {{ c.role.replace('_',' ')|title }}</p></div>
+<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div><h3><a href="{{ url_for('chama_home', chama_id=c.id) }}" style="color:inherit;text-decoration:none">{{ c.name }} →</a></h3><p class="mute" style="margin:6px 0 0">{{ c.plan_name }} plan · {{ c.members }} of {{ c.max_members }} members · {{ c.role.replace('_',' ')|title }}</p></div>
 <span class="pill {{ {'ACTIVE':'ok','TRIAL':'info','PAST_DUE':'warn','GRACE_PERIOD':'warn'}.get(c.status,'bad') }}">{{ c.status.replace('_',' ') }}</span></div>
 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px"><a class="btn sm pri" href="{{ url_for('chama_home', chama_id=c.id) }}">Open Chama</a><a class="btn sm" href="{{ url_for('savings', chama_id=c.id) }}">Savings</a><a class="btn sm" href="{{ url_for('loans', chama_id=c.id) }}">Loans</a><a class="btn sm" href="{{ url_for('meetings', chama_id=c.id) }}">Meetings</a><a class="btn sm" href="{{ url_for('chama_more', chama_id=c.id) }}">All functions</a></div>
 </div>
 {% endfor %}</div>
-{% else %}<div class="card empty"><h3>Your Chama is not showing yet</h3><p>We could not find an active Chama membership for this account. If you were already added to a Chama, refresh after logging out and back in. If it still does not appear, use Help to contact support.</p><a class="btn pri" href="{{ url_for('chama_new') }}">Create a new chama</a> <a class="btn" href="{{ url_for('help_center') }}">Get help</a></div>{% endif %}
+{% else %}<div class="card empty"><h3>Your Chama is not showing yet</h3><p>We could not find an active Chama membership for this account. If you were already added to a Chama, refresh after logging out and back in. If it still does not appear, contact support from the Help Center inside the app.</p><a class="btn pri" href="{{ url_for('chama_new') }}">Create a new chama</a></div>{% endif %}
 {% endblock %}

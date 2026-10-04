@@ -262,3 +262,30 @@ def cancel_round(db, chama_id, round_id, reason, actor, now=None):
         audit(db, actor, 'MGR_CANCELLED', 'mgr_round', round_id, chama_id, {'reason': reason})
         for s in slots(db, round_id):
             notify(db, s['user_id'], chama_id, f"{rnd['name']} was cancelled: {reason.strip()[:100]}", f'/chamas/{chama_id}/merry-go-round/{round_id}', actor, now)
+
+
+def add_member(db, chama_id, round_id, user_id, actor, now=None):
+    """Add a Chama member to a round before the first payment is made."""
+    now = now or now_utc()
+    with db.tx():
+        db.lock('chamas', chama_id)
+        rnd = get_round(db, chama_id, round_id)
+        if rnd['status'] != 'ACTIVE':
+            raise BusinessError('Only an active merry-go-round can be changed.')
+        if db.val("SELECT COUNT(*) FROM mgr_payments WHERE round_id=?", (round_id,), 0):
+            raise BusinessError('Members cannot be added after payments have started for this round. Start a new round instead.')
+        count = db.val('SELECT COUNT(*) FROM mgr_slots WHERE round_id=?', (round_id,), 0)
+        if count >= MAX_PEOPLE:
+            raise BusinessError(f'A merry-go-round can have at most {MAX_PEOPLE} members.')
+        active = db.one("SELECT 1 FROM chama_members WHERE chama_id=? AND user_id=? AND status='ACTIVE'", (chama_id, user_id))
+        if not active:
+            raise BusinessError('Choose an active Chama member.')
+        if db.one('SELECT 1 FROM mgr_slots WHERE round_id=? AND user_id=?', (round_id, user_id)):
+            raise BusinessError('That member is already in this merry-go-round.')
+        position = int(db.val('SELECT COALESCE(MAX(position),0)+1 FROM mgr_slots WHERE round_id=?', (round_id,), 1))
+        start = date.fromisoformat(rnd['start_date'])
+        due = due_date(start, rnd['frequency'], position - 1)
+        sid = db.insert('mgr_slots', round_id=round_id, chama_id=chama_id, position=position, user_id=user_id, due_date=due.isoformat())
+        audit(db, actor, 'MGR_MEMBER_ADDED', 'mgr_slot', sid, chama_id, {'round_id': round_id, 'user_id': user_id, 'position': position})
+        notify(db, user_id, chama_id, f'You were added to {rnd["name"]}. Your turn is position {position} on {due.isoformat()}.', f'/chamas/{chama_id}/merry-go-round/{round_id}', actor, now)
+    return sid

@@ -144,3 +144,6 @@ textarea{min-height:90px;resize:vertical}
 
 .mobile-bottom{display:none}
 @media(max-width:700px){body{padding-bottom:74px}.mobile-bottom{position:fixed;display:grid;grid-template-columns:repeat(5,1fr);left:10px;right:10px;bottom:10px;z-index:50;padding:7px 5px calc(7px + env(safe-area-inset-bottom,0px));border:1px solid var(--line);border-radius:20px;background:color-mix(in srgb,var(--solid) 88%,transparent);backdrop-filter:blur(18px);box-shadow:0 14px 40px rgba(0,0,0,.22)}.mobile-bottom a{text-decoration:none;color:var(--mute);text-align:center;font-size:18px;font-weight:800;line-height:1.05}.mobile-bottom span{display:block;font-size:10px;font-weight:700;margin-top:3px}.mobile-bottom a:hover{color:var(--em)}}
+
+.my-chamas-hero{display:flex;align-items:center;justify-content:space-between;gap:18px}
+@media(max-width:520px){.my-chamas-hero{display:block}.my-chamas-hero .stat{margin-top:14px;min-width:0!important}.dashboard-chama-card{min-height:180px}}
