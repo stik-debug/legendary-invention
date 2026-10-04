@@ -238,10 +238,19 @@ def create_app(overrides=None):
     @app.route('/dashboard')
     @login_required
     def dashboard():
-        rows = db().all("""SELECT c.id, c.name, c.description, m.role, s.status, s.due_at, p.name plan_name, p.max_members,
+        # Keep a user's Chama visible even if a legacy/migrated database is missing
+        # its subscription or plan row. Those records should never make the Chama
+        # disappear from the user's dashboard.
+        rows = db().all("""SELECT c.id, c.name, c.description, m.role,
+            COALESCE(s.status, 'ACTIVE') status, s.due_at,
+            COALESCE(p.name, 'Starter') plan_name, COALESCE(p.max_members, 20) max_members,
             (SELECT COUNT(*) FROM chama_members x WHERE x.chama_id=c.id AND x.status='ACTIVE') members
-            FROM chama_members m JOIN chamas c ON c.id=m.chama_id JOIN subscriptions s ON s.chama_id=c.id
-            JOIN subscription_plans p ON p.id=s.plan_id WHERE m.user_id=? AND m.status='ACTIVE' ORDER BY c.name""", (g.user['id'],))
+            FROM chama_members m
+            JOIN chamas c ON c.id=m.chama_id
+            LEFT JOIN subscriptions s ON s.chama_id=c.id
+            LEFT JOIN subscription_plans p ON p.id=s.plan_id
+            WHERE m.user_id=? AND m.status='ACTIVE'
+            ORDER BY c.name""", (g.user['id'],))
         return render_template('dashboard.html', chamas=rows)
 
     @app.route('/chamas/new', methods=['GET', 'POST'])

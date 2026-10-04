@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}All Chama Functions - {{ chama.name }}{% endblock %}
+{% block content %}
+<div class="head"><div><h2>All Chama Functions</h2><p>{{ chama.name }} · everything in one place</p></div><a class="btn pri" href="{{ url_for('chama_home', chama_id=chama.id) }}">Chama Home</a></div>
+{% include '_chama_nav.html' %}
+<div class="grid">
+{% for label, endpoint in [
+('My Dashboard','my_chama_dashboard'),('Home','chama_home'),('Savings','savings'),('Pay','pay'),('Loans','loans'),('Fines','fines'),('Ledger','ledger'),('Merry-go-round','mgr_list'),('Goals','chama_goals'),('Investments','investments'),('Assets','assets'),('Voting','chama_votes'),('Constitution','constitution'),('AI','chama_ai'),('Activity','activity'),('Documents','documents'),('Meetings','meetings'),('Notices','notices'),('Chat','chat')
+] %}
+<a class="card" href="{{ url_for(endpoint, chama_id=chama.id) }}" style="text-decoration:none;color:inherit;margin:0"><h3>{{ label }} →</h3><p class="mute">Open {{ label|lower }}</p></a>
+{% endfor %}
+{% if me.role in ('CHAMA_ADMIN','TREASURER','SECRETARY','AUDITOR') %}<a class="card" href="{{ url_for('financial_check', chama_id=chama.id) }}" style="text-decoration:none;color:inherit;margin:0"><h3>Financial Check →</h3><p class="mute">Review financial consistency</p></a>{% endif %}
+{% if me.role in ('CHAMA_ADMIN','TREASURER','SECRETARY') %}<a class="card" href="{{ url_for('reports', chama_id=chama.id) }}" style="text-decoration:none;color:inherit;margin:0"><h3>Reports →</h3><p class="mute">View and export reports</p></a>{% endif %}
+</div>
+<div class="card" style="margin-top:18px"><h3>Account & support</h3><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn" href="{{ url_for('notifications') }}">Alerts{% if notif_unread %} ({{ notif_unread if notif_unread<100 else '99+' }}){% endif %}</a><a class="btn" href="{{ url_for('notification_settings') }}">Settings</a><a class="btn" href="{{ url_for('help_center') }}">Help Center</a><a class="btn" href="{{ url_for('global_search') }}">Search</a><a class="btn" href="{{ url_for('organizations') }}">Organizations</a></div></div>
+{% endblock %}

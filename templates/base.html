@@ -56,7 +56,7 @@
 <a href="{{ url_for('savings',chama_id=request.view_args.get('chama_id')) }}">KES<span>Money</span></a>
 <a href="{{ url_for('loans',chama_id=request.view_args.get('chama_id')) }}">↗<span>Loans</span></a>
 <a href="{{ url_for('activity',chama_id=request.view_args.get('chama_id')) }}">☷<span>Activity</span></a>
-<a href="{{ url_for('chama_ai',chama_id=request.view_args.get('chama_id')) }}">✦<span>AI</span></a>
+<a href="{{ url_for('chama_more',chama_id=request.view_args.get('chama_id')) }}">☰<span>More</span></a>
 </nav>
 {% endif %}
 <script>
