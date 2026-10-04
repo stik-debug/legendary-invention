@@ -147,3 +147,22 @@ textarea{min-height:90px;resize:vertical}
 
 .my-chamas-hero{display:flex;align-items:center;justify-content:space-between;gap:18px}
 @media(max-width:520px){.my-chamas-hero{display:block}.my-chamas-hero .stat{margin-top:14px;min-width:0!important}.dashboard-chama-card{min-height:180px}}
+
+/* Simple homepage/app menu */
+.app-menu{position:relative;display:inline-block;margin:0}
+.app-menu summary{list-style:none;cursor:pointer;user-select:none}
+.app-menu summary::-webkit-details-marker{display:none}
+.menu-trigger{display:inline-flex;align-items:center;gap:8px}
+.menu-badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 5px;border-radius:999px;font-size:11px;background:var(--danger,#c0392b);color:#fff}
+.app-menu-panel{position:absolute;right:0;top:calc(100% + 10px);width:min(330px,calc(100vw - 24px));padding:10px;border:1px solid rgba(20,50,40,.12);border-radius:20px;background:rgba(255,255,255,.98);box-shadow:0 24px 60px rgba(0,0,0,.18);z-index:1000;backdrop-filter:blur(18px)}
+.menu-heading{padding:10px 12px 12px;display:flex;flex-direction:column;gap:2px}
+.menu-heading strong{font-size:16px}.menu-heading span{font-size:12px;opacity:.62}
+.menu-item,.menu-logout button{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:0;border-radius:14px;background:transparent;color:inherit;text-decoration:none;text-align:left;box-sizing:border-box}
+.menu-item:hover,.menu-logout button:hover{background:rgba(6,56,42,.07)}
+.menu-item b,.menu-logout b{display:block;font-size:14px}.menu-item small,.menu-logout small{display:block;margin-top:2px;font-size:11px;opacity:.62}
+.menu-icon{width:34px;height:34px;display:flex;align-items:center;justify-content:center;flex:0 0 34px;border-radius:11px;background:rgba(6,56,42,.08);font-size:16px}
+.menu-primary .menu-icon{background:rgba(6,56,42,.14)}
+.menu-owner .menu-icon{background:rgba(190,145,35,.15)}
+.menu-divider{height:1px;background:rgba(20,50,40,.1);margin:7px 4px}
+.menu-logout{margin:0}.menu-logout button{font:inherit;cursor:pointer;color:#9a2e25}
+@media(max-width:700px){.app-menu-panel{position:fixed;right:12px;top:66px;width:min(360px,calc(100vw - 24px));max-height:calc(100vh - 82px);overflow:auto;border-radius:20px}.menu-trigger{min-height:42px}.top .links{gap:6px}.top .logo{font-size:18px}}

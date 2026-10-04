@@ -21,12 +21,24 @@
 <a class="logo" href="{{ url_for('index') }}"><i></i>ChamaPay</a>
 <nav class="links" aria-label="Main">
 {% if user %}
-{% if user.is_super_admin %}<a class="btn sm gold" href="{{ url_for('owner_home') }}">Control Center</a>{% endif %}
-<a class="btn sm" href="{{ url_for('dashboard') }}">My chamas</a>
-<a class="btn sm" href="{{ url_for('global_search') }}">Search</a>
-<a class="btn sm" href="{{ url_for('notification_settings') }}">Settings</a>
-<a class="btn sm" href="{{ url_for('notifications') }}" aria-label="Alerts">Alerts{% if notif_unread %} <span class="dot">{{ notif_unread if notif_unread<100 else '99+' }}</span>{% endif %}</a>
-<form method="POST" action="{{ url_for('logout') }}" style="margin:0">{{ csrf_input() }}<button class="btn sm">Log out</button></form>
+<details class="app-menu">
+  <summary class="btn sm menu-trigger" aria-label="Open menu">☰ Menu{% if notif_unread %}<span class="menu-badge">{{ notif_unread if notif_unread<100 else '99+' }}</span>{% endif %}</summary>
+  <div class="app-menu-panel">
+    <div class="menu-heading">
+      <strong>ChamaPay</strong>
+      <span>Quick access</span>
+    </div>
+    <a class="menu-item menu-primary" href="{{ url_for('dashboard') }}"><span class="menu-icon">⌂</span><span><b>My Chamas</b><small>Open your Chama homepage</small></span></a>
+    <a class="menu-item" href="{{ url_for('global_search') }}"><span class="menu-icon">⌕</span><span><b>Search</b><small>Find members and Chamas</small></span></a>
+    <a class="menu-item" href="{{ url_for('notifications') }}"><span class="menu-icon">🔔</span><span><b>Alerts</b><small>{% if notif_unread %}{{ notif_unread }} unread{% else %}No new alerts{% endif %}</small></span></a>
+    <a class="menu-item" href="{{ url_for('notification_settings') }}"><span class="menu-icon">⚙</span><span><b>Settings</b><small>Notifications and preferences</small></span></a>
+    {% if user.is_super_admin %}
+    <a class="menu-item menu-owner" href="{{ url_for('owner_home') }}"><span class="menu-icon">◆</span><span><b>Control Center</b><small>Owner-only administration</small></span></a>
+    {% endif %}
+    <div class="menu-divider"></div>
+    <form method="POST" action="{{ url_for('logout') }}" class="menu-logout">{{ csrf_input() }}<button type="submit"><span class="menu-icon">↪</span><span><b>Log out</b><small>Sign out of ChamaPay</small></span></button></form>
+  </div>
+</details>
 {% else %}
 <a class="btn sm" href="{{ url_for('login') }}">Log in</a><a class="btn sm pri hide-sm" href="{{ url_for('register') }}">Start free</a>
 {% endif %}
