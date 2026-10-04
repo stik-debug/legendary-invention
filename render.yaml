@@ -2,6 +2,31 @@ services:
   - type: web
     name: chamapay
     runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn wsgi:app --workers 2 --threads 4 --timeout 60
+    plan: free
+    buildCommand: python -m pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120 --access-logfile - --error-logfile -
     healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: chamapay-db
+          property: connectionString
+      - key: OWNER_EMAIL
+        sync: false
+      - key: OWNER_PHONE
+        sync: false
+      - key: OWNER_PASSWORD
+        sync: false
+      - key: PAY_INSTRUCTIONS
+        value: Contact ChamaPay support to pay. Your payment will be confirmed in the app.
+      - key: REQUIRE_OWNER_2FA
+        value: "0"
+
+databases:
+  - name: chamapay-db
+    plan: free
+    postgresMajorVersion: "17"

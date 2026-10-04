@@ -64,9 +64,28 @@ def register(app, db, ctx, login_required):
         chama, me, sub = ctx(chama_id)
         rnd = rnd_or_404(chama_id, rid)
         turn = M.turn_status(db(), rnd) if rnd['status'] == 'ACTIVE' else None
-        return render_template('mgr_view.html', chama=chama, me=me, r=rnd, slots=M.slots(db(), rid), turn=turn, pot=M.pot_balance(db(), chama_id),
+        slots_now = M.slots(db(), rid)
+        existing_ids = {s['user_id'] for s in slots_now}
+        available_members = db().all("SELECT u.id,u.name FROM chama_members m JOIN users u ON u.id=m.user_id WHERE m.chama_id=? AND m.status='ACTIVE' ORDER BY u.name", (chama_id,))
+        available_members = [m for m in available_members if m['id'] not in existing_ids]
+        has_payments = bool(db().val('SELECT COUNT(*) FROM mgr_payments WHERE round_id=?', (rid,), 0))
+        my_pending_mgr = bool(db().val("SELECT COUNT(*) FROM payment_requests WHERE chama_id=? AND user_id=? AND purpose='MGR' AND target_id=? AND status='PENDING'", (chama_id, g.user['id'], rid), 0))
+        mgr_pending = db().all("SELECT p.*,u.name FROM payment_requests p JOIN users u ON u.id=p.user_id WHERE p.chama_id=? AND p.purpose='MGR' AND p.target_id=? AND p.status='PENDING' ORDER BY p.id", (chama_id, rid)) if me['role'] in FIN else []
+        return render_template('mgr_view.html', chama=chama, me=me, r=rnd, slots=slots_now, turn=turn, pot=M.pot_balance(db(), chama_id),
                                can=me['role'] in FIN, is_admin=me['role'] == 'CHAMA_ADMIN', can_remind=me['role'] in F.VIEW_ROLES, today=date.today().isoformat(),
+                               available_members=available_members, has_payments=has_payments, my_pending_mgr=my_pending_mgr, mgr_pending=mgr_pending,
                                i_owe=bool(turn and any(u['user_id'] == g.user['id'] for u in turn['unpaid'])))
+
+    @app.route('/chamas/<int:chama_id>/merry-go-round/<int:rid>/members', methods=['POST'])
+    @login_required
+    def mgr_add_member(chama_id, rid):
+        ctx(chama_id, roles=FIN); rnd_or_404(chama_id, rid)
+        try:
+            M.add_member(db(), chama_id, rid, int(request.form.get('user_id')), g.user['id'])
+            flash('Member added to this merry-go-round.', 'success')
+        except (S.BusinessError, TypeError, ValueError) as e:
+            flash(str(e), 'warning')
+        return redirect(url_for('mgr_view', chama_id=chama_id, rid=rid))
 
     @app.route('/chamas/<int:chama_id>/merry-go-round/<int:rid>/pay', methods=['POST'])
     @login_required
