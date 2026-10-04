@@ -115,9 +115,9 @@ Run these on your own computer or a staging database, never on real customers' d
 ## Deploy on Render
 
 1. Create a **PostgreSQL** database. Copy its **Internal Database URL**.
-2. Create a **Web Service** from the project root. Build command: `pip install -r requirements.txt`. Start command: `gunicorn wsgi:app --workers 2 --threads 4 --timeout 60`. A `render.yaml` is included for the same settings.
+2. Create a **Web Service** from the project root. Build command: `python -m pip install --upgrade pip && pip install -r requirements.txt`. Start command: `gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120 --access-logfile - --error-logfile -`. A `render.yaml` is included with a PostgreSQL database, generated `AUTH_SECRET`, and the required environment-variable prompts.
 3. Set environment variables using `.env.example` as the template. At minimum: `AUTH_SECRET`, `DATABASE_URL`, `OWNER_EMAIL`, `OWNER_PHONE`, `OWNER_PASSWORD`, `PAY_INSTRUCTIONS`.
-4. Health check path: `/healthz`.
+4. Health check path: `/healthz`. The included deployment config pins Render to Python 3.13.5 and binds Gunicorn to `0.0.0.0:$PORT`, which is required for reliable Render port detection.
 5. Log in with the owner email and password. The Control Center opens. The OWNER_* settings are checked on every start: if that email already has an account it is promoted to owner, and changing OWNER_PASSWORD resets the owner password (this is your recovery method). Check the deploy logs for a line starting with `OWNER SETUP:` to see what happened.
 6. Optional but recommended: add a Render **Cron Job** running `flask --app app sweep` every hour. (Statuses also update whenever anyone opens a chama.)
 
