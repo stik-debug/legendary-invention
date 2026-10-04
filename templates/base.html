@@ -48,7 +48,6 @@
 {% with messages = get_flashed_messages(with_categories=true) %}{% for cat, msg in messages %}<div class="flash {{ cat }}" role="status">{{ msg }}</div>{% endfor %}{% endwith %}
 {% block content %}{% endblock %}
 </div>
-<div id="offline-status" class="offline-status" hidden role="status" aria-live="polite"><span class="offline-dot"></span><span data-offline-text>You are offline. Showing saved ChamaPay information where available.</span></div>
 <div id="pwa-install-card" class="pwa-install-card" hidden aria-live="polite">
   <div class="pwa-install-icon"><img src="{{ url_for('static', filename='icons/icon-192.png') }}" alt="ChamaPay"></div>
   <div class="pwa-install-copy">

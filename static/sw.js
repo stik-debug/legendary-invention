@@ -1,4 +1,4 @@
-const CACHE = "chamapay-static-v2";
+const CACHE = "chamapay-static-v3";
 const OFFLINE_URL = "/static/offline.html";
 
 self.addEventListener("install", (event) => {
@@ -34,8 +34,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Never cache authenticated pages or financial data. If navigation fails,
-  // provide a useful offline screen instead of the browser's empty error page.
+  // Keep authenticated data out of the cache. If navigation fails,
+  // provide the dedicated offline shell with the last saved Chama summary.
   if (req.mode === "navigate") {
     event.respondWith(
       fetch(req).catch(() => caches.match(OFFLINE_URL))

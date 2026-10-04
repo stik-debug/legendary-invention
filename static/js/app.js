@@ -168,17 +168,4 @@ if(!still&&window.matchMedia('(hover:hover)').matches){
     } catch(e) {}
   }
 
-  var offline = document.getElementById('offline-status');
-  function setOnlineState(){
-    if (!offline) return;
-    if (!navigator.onLine) {
-      offline.hidden = false;
-      var t=offline.querySelector('[data-offline-text]'); if(t)t.textContent='You are offline. Showing saved ChamaPay information where available.';
-    } else {
-      offline.hidden = true;
-    }
-  }
-  window.addEventListener('online', setOnlineState);
-  window.addEventListener('offline', setOnlineState);
-  setOnlineState();
 })();
