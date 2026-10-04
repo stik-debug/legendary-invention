@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: chamapay
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn wsgi:app --workers 2 --threads 4 --timeout 60
+    healthCheckPath: /healthz

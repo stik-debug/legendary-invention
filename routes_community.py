@@ -81,7 +81,9 @@ def register(app, db, ctx, login_required):
         except S.BusinessError:
             abort(404)
         sheet = C.attendance_sheet(db(), chama_id, mid)
-        return render_template('meeting.html', chama=chama, me=me, m=m, sheet=sheet, join_open=C.join_open(m), joined=C.joined_ids(db(), mid), can=me['role'] in COMMS,
+        actions = db().all("SELECT a.*,u.name owner FROM meeting_actions a LEFT JOIN users u ON u.id=a.owner_user_id WHERE a.meeting_id=? ORDER BY a.status,a.due_date,a.id", (mid,))
+        members = db().all("SELECT u.id,u.name FROM chama_members m JOIN users u ON u.id=m.user_id WHERE m.chama_id=? AND m.status='ACTIVE' ORDER BY u.name", (chama_id,))
+        return render_template('meeting.html', chama=chama, me=me, m=m, sheet=sheet, actions=actions, members=members, join_open=C.join_open(m), joined=C.joined_ids(db(), mid), can=me['role'] in COMMS,
                                mine=next((r['status'] for r in sheet if r['id'] == g.user['id']), None))
 
     @app.route('/chamas/<int:chama_id>/meetings/<int:mid>/join')
