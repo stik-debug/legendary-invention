@@ -269,6 +269,13 @@ def register_plus_routes(app, db, login_required, ctx, owner_required):
         db().one('SELECT id FROM meetings WHERE id=? AND chama_id=?',(mid,chama_id)) or abort(404)
         return jsonify(db().all("SELECT a.*,u.name owner FROM meeting_actions a LEFT JOIN users u ON u.id=a.owner_user_id WHERE a.meeting_id=? ORDER BY a.status,a.due_date,a.id",(mid,)))
 
+    # ---------- all functions / More menu ----------
+    @app.route('/chamas/<int:chama_id>/more')
+    @login_required
+    def chama_more(chama_id):
+        chama, me, sub = ctx(chama_id)
+        return render_template('chama_more.html', chama=chama, me=me, sub=sub)
+
     # ---------- notifications preferences ----------
     @app.route('/notification-settings', methods=['GET','POST'])
     @login_required
