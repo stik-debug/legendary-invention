@@ -504,7 +504,9 @@ def create_app(overrides=None):
     return app
 
 
-app = create_app() if os.environ.get('RENDER') or os.environ.get('CHAMAPAY_AUTOSTART') else None
+# Always create the WSGI application when Gunicorn imports this module.
+# This avoids a None app when the hosting platform does not expose RENDER.
+app = create_app()
 
 if __name__ == '__main__':
     create_app().run(debug=False, port=int(os.environ.get('PORT', 5000)))

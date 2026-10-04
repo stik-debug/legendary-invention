@@ -115,8 +115,8 @@ Run these on your own computer or a staging database, never on real customers' d
 ## Deploy on Render
 
 1. Create a **PostgreSQL** database. Copy its **Internal Database URL**.
-2. Create a **Web Service** from this folder. Build command: `pip install -r requirements.txt`. Start command: `gunicorn app:app --workers 2 --threads 4 --timeout 60`.
-3. Set environment variables from `.env.example`. At minimum: `AUTH_SECRET`, `DATABASE_URL`, `OWNER_EMAIL`, `OWNER_PHONE`, `OWNER_PASSWORD`, `PAY_INSTRUCTIONS`.
+2. Create a **Web Service** from the project root. Build command: `pip install -r requirements.txt`. Start command: `gunicorn wsgi:app --workers 2 --threads 4 --timeout 60`. A `render.yaml` is included for the same settings.
+3. Set environment variables using `.env.example` as the template. At minimum: `AUTH_SECRET`, `DATABASE_URL`, `OWNER_EMAIL`, `OWNER_PHONE`, `OWNER_PASSWORD`, `PAY_INSTRUCTIONS`.
 4. Health check path: `/healthz`.
 5. Log in with the owner email and password. The Control Center opens. The OWNER_* settings are checked on every start: if that email already has an account it is promoted to owner, and changing OWNER_PASSWORD resets the owner password (this is your recovery method). Check the deploy logs for a line starting with `OWNER SETUP:` to see what happened.
 6. Optional but recommended: add a Render **Cron Job** running `flask --app app sweep` every hour. (Statuses also update whenever anyone opens a chama.)
@@ -192,3 +192,21 @@ The upgrade is additive: existing tables/routes/components are retained. New dat
 
 ### AI note
 The included ChamaPay AI interface is intentionally data-grounded and permission-aware. It provides deterministic answers from recorded group data without inventing transactions. A production LLM provider can be connected later through a server-side integration.
+
+## ChamaPay 2.1 upgrades
+
+This build adds a broader production-oriented layer while intentionally leaving M-Pesa integration unchanged:
+
+- Private member dashboard with savings, loan, fines, attendance, meetings and votes
+- Loan repayment schedules and guarantor requests/responses
+- Secure permission-controlled document storage (up to 8 MB per document)
+- Meeting action items with owners, due dates and completion tracking
+- Notification preferences (in-app remains enabled; external channels are readiness settings only)
+- Financial reconciliation checks against the ledger
+- Chama JSON backup export and platform-owner data backup export
+- Organization workspace for grouping Chamas owned by the same user
+- Printable financial report / browser Save-as-PDF flow
+- Expanded deterministic ChamaPay AI questions for overdue loans, expenses, attendance, meetings and financial position
+- Platform owner analytics and support-ticket management
+
+M-Pesa/STK/callback integration is deliberately not expanded in this release.
