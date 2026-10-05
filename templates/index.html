@@ -9,9 +9,9 @@
 </div>
 <div class="scene" aria-hidden="true">
 <div class="stack"><div class="coin"></div><div class="coin"></div><div class="coin"></div><div class="coin"></div><div class="coin"></div></div>
-<div class="float a"><small>This month</small>KES 78,000 saved</div>
-<div class="float b"><small>Loan approved</small>KES 10,000</div>
-<div class="float c"><small>Members paid</small>12 of 15</div>
+<div class="float a"><small>This month</small>{{ month_saved|kes }} saved</div>
+<div class="float b"><small>Loans approved</small>{{ loans_approved|kes }}</div>
+<div class="float c"><small>Members paid</small>{{ paid_members }} of {{ total_members }}</div>
 </div>
 </section>
 <section class="section">
