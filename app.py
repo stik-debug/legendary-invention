@@ -179,8 +179,34 @@ def create_app(overrides=None):
     # ---------- public ----------
     @app.route('/')
     def index():
+        # The public landing page must never display invented/demo financial figures.
+        # These are aggregated from real, non-test Chama records only.
+        period = date.today().strftime('%Y-%m')
+        real_chama = 'c.is_test_data=0'
+        month_saved = db().val(
+            f"SELECT COALESCE(SUM(x.amount_cents),0) FROM contributions x"
+            f" JOIN chamas c ON c.id=x.chama_id WHERE {real_chama}"
+            " AND x.period=? AND x.status='PAID'",
+            (period,), 0) or 0
+        loans_approved = db().val(
+            f"SELECT COALESCE(SUM(l.principal_cents),0) FROM loans l"
+            f" JOIN chamas c ON c.id=l.chama_id WHERE {real_chama}"
+            " AND l.decided_at LIKE ? AND l.status IN ('APPROVED','ACTIVE','PAID')",
+            (period + '%',), 0) or 0
+        total_members = db().val(
+            f"SELECT COUNT(*) FROM chama_members m JOIN chamas c ON c.id=m.chama_id"
+            f" WHERE {real_chama} AND m.status='ACTIVE'", (), 0) or 0
+        paid_members = db().val(
+            f"SELECT COUNT(*) FROM chama_members m JOIN chamas c ON c.id=m.chama_id"
+            f" WHERE {real_chama} AND m.status='ACTIVE'"
+            " AND EXISTS (SELECT 1 FROM contributions x WHERE x.chama_id=m.chama_id"
+            " AND x.user_id=m.user_id AND x.period=? AND x.status='PAID')",
+            (period,), 0) or 0
         plans = db().all('SELECT * FROM subscription_plans WHERE is_active=1 ORDER BY sort_order')
-        return render_template('index.html', plans=plans, trial=S.setting(db(), 'trial_days', 7))
+        return render_template(
+            'index.html', plans=plans, trial=S.setting(db(), 'trial_days', 7),
+            month_saved=month_saved, loans_approved=loans_approved,
+            paid_members=paid_members, total_members=total_members)
 
     @app.route('/healthz')
     def healthz():
