@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% block title %}Control Center - ChamaPay{% endblock %}
 {% block content %}
-<div class="head"><div><h2>ChamaPay Control Center</h2><p>Live numbers from your database</p></div></div>{% include '_owner_nav.html' %}
+<div class="head"><div><h2>ChamaPay Control Center</h2><p>Live numbers from your database</p></div></div>{% include '_owner_nav.html' %}<div class="card owner-command-link"><h3>Owner analytics 2.0</h3><p>Revenue trends, subscription risk, failed payments and trust signals.</p><a class="btn pri" href="{{ url_for('owner_analytics_v22') }}">Open Analytics 2.0</a></div>
 {% set b = st.by_status %}
 <div class="stats">
 <div class="stat dark tilt"><small>Monthly revenue</small><b>KES {{ st.revenue_month|kes }}</b></div>

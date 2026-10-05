@@ -20,6 +20,7 @@ import routes_mgr
 import routes_recovery
 import routes_security
 import routes_upgrade
+import routes_v22
 import routes_plus
 import services as S
 import twofactor as TF
@@ -526,6 +527,7 @@ def create_app(overrides=None):
     # ---------- ChamaPay 2.0 upgrade routes ----------
     routes_upgrade.register_upgrade_routes(app, db, login_required, ctx)
     routes_plus.register_plus_routes(app, db, login_required, ctx, owner_required)
+    routes_v22.register_v22_routes(app, db, login_required, ctx, owner_required)
 
     @app.cli.command('sweep')
     def sweep_cmd():

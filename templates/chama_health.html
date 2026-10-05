@@ -1,0 +1,7 @@
+{% extends "base.html" %}{% block title %}Chama Health - {{ chama.name }}{% endblock %}{% block content %}
+<div class="head"><div><h2>Chama Health</h2><p>A simple data-based view of group financial and participation health.</p></div><span class="pill {{ 'ok' if health>=70 else 'warn' }}">{{ label }}</span></div>{% include '_chama_nav.html' %}
+<div class="health-hero card"><div class="health-score" style="--health:{{ health }}"><span>{{ health }}</span><small>/100</small></div><div><h3>{{ label }}</h3><p class="mute">Calculated from recorded contributions, loan repayment, meeting participation, transparency and current open issues.</p></div></div>
+<div class="grid">{% for k,v in parts.items() %}<div class="card"><div class="section-head"><b>{{ k }}</b><strong>{{ v }}%</strong></div><div class="bar large"><i style="width:{{ v }}%"></i></div></div>{% endfor %}</div>
+<div class="card"><h3>What needs attention?</h3><div class="next-grid"><div><b>{{ meta.paid_members }}/{{ meta.total_members }}</b><span>members paid this month</span></div><div><b>{{ meta.overdue_loans }}</b><span>overdue loans</span></div><div><b>{{ meta.open_actions }}</b><span>open meeting actions</span></div><div><b>{{ health }}/100</b><span>overall health</span></div></div></div>
+<p class="mute">Health is an operational indicator, not a credit rating or accounting opinion.</p>
+{% endblock %}

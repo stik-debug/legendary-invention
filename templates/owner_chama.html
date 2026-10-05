@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% block title %}{{ chama.name }} - Control Center{% endblock %}
 {% block content %}
-<div class="head"><div><h2>{{ chama.name }}</h2><p>Created {{ chama.created_at|date }}</p></div><span class="pill {{ {'ACTIVE':'ok','TRIAL':'info','PAST_DUE':'warn','GRACE_PERIOD':'warn'}.get(sub.status,'bad') }}">{{ sub.status.replace('_',' ') }}</span></div>{% include '_owner_nav.html' %}
+<div class="head"><div><h2>{{ chama.name }}</h2><p>Created {{ chama.created_at|date }}</p></div><span class="pill {{ {'ACTIVE':'ok','TRIAL':'info','PAST_DUE':'warn','GRACE_PERIOD':'warn'}.get(sub.status,'bad') }}">{{ sub.status.replace('_',' ') }}</span></div>{% include '_owner_nav.html' %}<div class="card owner-command-link"><h3>Private Chama Command Center</h3><p>Owner-only workspace for attention items, health, quick actions and group intelligence.</p><a class="btn pri" href="{{ url_for('command_center',chama_id=chama.id) }}">Open Command Center</a></div>
 <div class="stats"><div class="stat"><small>Plan</small><b style="font-size:22px">{{ plan.name }}</b></div><div class="stat"><small>Members</small><b>{{ count }} / {{ plan.max_members }}</b></div><div class="stat gold"><small>Payment due</small><b style="font-size:22px">{{ sub.due_at|date }}</b></div></div>
 {% if sub.suspend_reason and sub.status=='SUSPENDED' %}<div class="banner bad"><b>Suspended:</b> {{ sub.suspend_reason }}</div>{% endif %}
 <div class="card"><h3>Actions</h3><div style="display:flex;gap:10px;flex-wrap:wrap">

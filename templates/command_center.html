@@ -1,11 +1,11 @@
 {% extends "base.html" %}{% block title %}Command Center - {{ chama.name }}{% endblock %}{% block content %}
-<div class="head"><div><h2>ChamaPay Command Center</h2><p>{{ chama.name }} · your group's financial headquarters</p></div><span class="pill ok">Health {{ health }}/100</span></div>
-{% include '_chama_nav.html' %}
+<div class="head"><div><h2>ChamaPay Command Center</h2><p>{{ chama.name }} · private owner workspace</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><span class="pill ok">Health {{ health }}/100</span><a class="btn sm" href="{{ url_for('chama_health',chama_id=chama.id) }}">Health details</a><a class="btn sm" href="{{ url_for('chama_trust',chama_id=chama.id) }}">Trust Center</a></div></div>
+
 <div class="stats">
-<div class="stat dark"><small>Group wealth</small><b>KES {{ (cash+investments+assets)|kes }}</b></div>
-<div class="stat gold"><small>Total savings</small><b>KES {{ savings|kes }}</b></div>
-<div class="stat"><small>Loan balance</small><b>KES {{ loans|kes }}</b></div>
-<div class="stat"><small>Investments + assets</small><b>KES {{ (investments+assets)|kes }}</b></div>
+<div class="stat dark"><small>Group wealth</small><b>KES {{ (cash+investments+assets)|kes }}</b><a class="explain-link" href="{{ url_for('explain_metric',chama_id=chama.id,metric='cash') }}">Explain</a></div>
+<div class="stat gold"><small>Total savings</small><b>KES {{ savings|kes }}</b><a class="explain-link" href="{{ url_for('explain_metric',chama_id=chama.id,metric='savings') }}">Explain</a></div>
+<div class="stat"><small>Loan balance</small><b>KES {{ loans|kes }}</b><span class="stat-note">Open/active loan obligations</span></div>
+<div class="stat"><small>Investments + assets</small><b>KES {{ (investments+assets)|kes }}</b><span class="stat-note">Tracked current value</span></div>
 </div>
 <div class="quick-actions card">
   <div class="section-head"><div><h3>⚡ Quick actions</h3><p class="mute">Jump straight to the work that matters.</p></div></div>

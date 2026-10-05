@@ -1,0 +1,6 @@
+{% extends "base.html" %}{% block title %}Finish Chama Setup - {{ chama.name }}{% endblock %}{% block content %}
+<div class="head"><div><h2>Finish setting up {{ chama.name }}</h2><p>Complete these steps to make the Chama ready for everyday use.</p></div><span class="pill {{ 'ok' if pct==100 else 'info' }}">{{ pct }}% complete</span></div>
+<div class="setup-progress"><i style="width:{{ pct }}%"></i></div>
+<div class="setup-list">{% for name,desc,done,link in steps %}<article class="setup-step card"><div class="setup-check">{{ '✓' if done else loop.index }}</div><div class="grow"><h3>{{ name }}</h3><p>{{ desc }}</p></div>{% if done %}<span class="pill ok">Complete</span>{% else %}<a class="btn sm pri" href="{{ link }}">Set up</a>{% endif %}</article>{% endfor %}</div>
+<div class="card"><h3>Next</h3><p>Invite members, confirm your rules, schedule meetings and start recording real transactions. You can return to this checklist at any time.</p><a class="btn" href="{{ url_for('chama_home',chama_id=chama.id) }}">Go to Chama</a></div>
+{% endblock %}

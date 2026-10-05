@@ -1,12 +1,12 @@
 {% extends "base.html" %}{% block title %}{{ chama.name }} - ChamaPay{% endblock %}
 {% block content %}
 <div class="head"><div><h2>{{ chama.name }}</h2><p>{{ chama.description or 'Your chama' }}</p></div>
-<div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn" href="{{ url_for('statement', chama_id=chama.id) }}">My statement</a><a class="btn" href="{{ url_for('subscription', chama_id=chama.id) }}">Subscription</a></div></div>
+<div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn" href="{{ url_for('statement', chama_id=chama.id) }}">My statement</a><a class="btn" href="{{ url_for('subscription', chama_id=chama.id) }}">Subscription</a>{% if is_admin and chama.created_by|int == me.user_id|int %}<a class="btn" href="{{ url_for('chama_setup',chama_id=chama.id) }}">Finish setup</a>{% endif %}</div></div>
 {% include '_chama_nav.html' %}
 {% if sub.status in ('PAST_DUE','GRACE_PERIOD') %}<div class="banner"><h3>Payment overdue</h3><p>Pay before the grace period ends or access will be suspended. Nothing is deleted.</p><a class="btn gold" href="{{ url_for('subscription', chama_id=chama.id) }}">Pay now</a></div>{% endif %}
 <div class="stats">
-<div class="stat dark tilt"><small>Chama cash balance</small><b>KES {{ balance|kes }}</b></div>
-<div class="stat gold tilt"><small>My savings</small><b>KES {{ my_savings|kes }}</b></div>
+<div class="stat dark tilt"><small>Chama cash balance</small><b>KES {{ balance|kes }}</b><a class="explain-link" href="{{ url_for('explain_metric',chama_id=chama.id,metric='cash') }}">Explain</a></div>
+<div class="stat gold tilt"><small>My savings</small><b>KES {{ my_savings|kes }}</b><a class="explain-link" href="{{ url_for('money_timeline',chama_id=chama.id) }}">View proof trail</a></div>
 <div class="stat"><small>I owe on loans</small><b>KES {{ st.loan_balance|kes }}</b></div>
 <div class="stat"><small>Fines I owe</small><b>KES {{ st.fine_balance|kes }}</b></div>
 </div>

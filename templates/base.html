@@ -32,6 +32,8 @@
     <a class="menu-item" data-menu-close href="{{ url_for('global_search') }}"><span class="menu-icon">⌕</span><span><b>Search</b><small>Find members and Chamas</small></span></a>
     <a class="menu-item" data-menu-close href="{{ url_for('notifications') }}"><span class="menu-icon">🔔</span><span><b>Alerts</b><small>{% if notif_unread %}{{ notif_unread }} unread{% else %}No new alerts{% endif %}</small></span></a>
     <a class="menu-item" data-menu-close href="{{ url_for('notification_settings') }}"><span class="menu-icon">⚙</span><span><b>Settings</b><small>Notifications and preferences</small></span></a>
+    <a class="menu-item" data-menu-close href="{{ url_for('security_privacy') }}"><span class="menu-icon">🔐</span><span><b>Security & Privacy</b><small>Account security and data controls</small></span></a>
+    <button class="menu-item data-saver-toggle" type="button" data-data-saver data-menu-close><span class="menu-icon">📶</span><span><b>Data Saver</b><small>Reduce animations and heavy effects</small></span></button>
     {% if user.is_super_admin %}
     <a class="menu-item menu-owner" data-menu-close href="{{ url_for('owner_home') }}"><span class="menu-icon">◆</span><span><b>Control Center</b><small>Owner-only administration</small></span></a>
     {% endif %}

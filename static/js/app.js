@@ -1,6 +1,6 @@
 (function(){
 var root=document.documentElement;
-try{if(localStorage.getItem('perf')==='1')root.classList.add('perf');}catch(e){}
+try{if(localStorage.getItem('perf')==='1')root.classList.add('perf');if(localStorage.getItem('data-saver')==='1')root.classList.add('data-saver');}catch(e){}
 document.addEventListener('click',function(e){
   var o=e.target.closest('[data-open]');if(o){var d=document.getElementById(o.getAttribute('data-open'));if(d&&d.showModal)d.showModal();}
   var f=e.target.closest('[data-form-open]');
@@ -10,6 +10,7 @@ document.addEventListener('click',function(e){
   var c=e.target.closest('[data-close]');if(c){var p=c.closest('dialog');if(p)p.close();}
   if(e.target.tagName==='DIALOG')e.target.close();
   if(e.target.closest('[data-perf]')){var on=root.classList.toggle('perf');try{localStorage.setItem('perf',on?'1':'0');}catch(x){}}
+  if(e.target.closest('[data-data-saver]')){var ds=root.classList.toggle('data-saver');try{localStorage.setItem('data-saver',ds?'1':'0');}catch(x){}}
 });
 document.addEventListener('submit',function(e){var m=e.target.getAttribute('data-confirm');if(m&&!window.confirm(m))e.preventDefault();});
 var still=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -154,11 +155,16 @@ if(!still&&window.matchMedia('(hover:hover)').matches){
     });
   }
 
-  // Save a small, non-sensitive homepage summary for the offline screen.
-  if (location.pathname === '/dashboard') {
+  // Save a deliberately small snapshot. It contains only elements explicitly marked
+  // offline-safe; no authenticated pages or forms are cached by the service worker.
+  if (location.pathname === '/dashboard' || location.pathname.indexOf('/my-dashboard') !== -1) {
     try {
       var cards = Array.prototype.slice.call(document.querySelectorAll('.dashboard-chama-card'));
       if (!cards.length) cards = Array.prototype.slice.call(document.querySelectorAll('.my-chamas-hero + .grid .card'));
+      if (!cards.length) {
+        var safe = Array.prototype.slice.call(document.querySelectorAll('.offline-safe'));
+        if (safe.length) cards = [document.querySelector('.stats') || document.body];
+      }
       var items = cards.map(function(card){
         var nameEl = card.querySelector('h3');
         var metaEl = card.querySelector('p');
@@ -169,6 +175,13 @@ if(!still&&window.matchMedia('(hover:hover)').matches){
         });
         return {name: nameEl ? nameEl.textContent.replace('→','').trim() : 'My Chama', meta: metaEl ? metaEl.textContent.trim() : 'Chama information', metrics:metrics.slice(0,4)};
       }).filter(function(x){return x.name;});
+      if (location.pathname.indexOf('/my-dashboard') !== -1) {
+        var safeItems = Array.prototype.slice.call(document.querySelectorAll('.offline-safe')).map(function(node){
+          var label=node.querySelector('small'); var value=node.querySelector('b');
+          return {name: label ? label.textContent.trim() : 'ChamaPay', meta:'Private offline snapshot', metrics: label && value ? [{label:label.textContent.trim(),value:value.textContent.trim()}] : []};
+        });
+        if (safeItems.length) items = [{name: document.title.replace('My Chama Dashboard - ','').trim() || 'My Chama',meta:'Private dashboard snapshot',metrics:safeItems.map(function(x){return x.metrics[0];}).filter(Boolean)}];
+      }
       if (items.length) localStorage.setItem('chamapay-offline-summary', JSON.stringify({savedAt:Date.now(),items:items.slice(0,10)}));
     } catch(e) {}
   }
