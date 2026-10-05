@@ -162,7 +162,12 @@ if(!still&&window.matchMedia('(hover:hover)').matches){
       var items = cards.map(function(card){
         var nameEl = card.querySelector('h3');
         var metaEl = card.querySelector('p');
-        return {name: nameEl ? nameEl.textContent.replace('→','').trim() : 'My Chama', meta: metaEl ? metaEl.textContent.trim() : 'Chama information'};
+        var metrics = [];
+        card.querySelectorAll('.stat,.metric').forEach(function(node){
+          var label=node.querySelector('small,span'); var value=node.querySelector('b');
+          if(label && value) metrics.push({label:label.textContent.trim(),value:value.textContent.trim()});
+        });
+        return {name: nameEl ? nameEl.textContent.replace('→','').trim() : 'My Chama', meta: metaEl ? metaEl.textContent.trim() : 'Chama information', metrics:metrics.slice(0,4)};
       }).filter(function(x){return x.name;});
       if (items.length) localStorage.setItem('chamapay-offline-summary', JSON.stringify({savedAt:Date.now(),items:items.slice(0,10)}));
     } catch(e) {}

@@ -1,3 +1,5 @@
+# ChamaPay Kenya — V21 Polish Release
+
 # ChamaPay Kenya (stage 5: online meetings + in-app chama payments)
 
 A multi-tenant SaaS for Kenyan chamas. **Stage 1 (billing, security, Control Center, 3D interface), stage 2 (contributions, ledger, loans, fines, statements, chat) and stage 3 (meetings, attendance, announcements, notifications, reports, owner two-factor login, test-data commands) are built.** See "What is and is not built" below. Please read it.

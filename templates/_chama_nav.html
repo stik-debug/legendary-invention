@@ -1,25 +1,54 @@
 {% set ep = request.endpoint %}
-<nav class="subnav" aria-label="Chama sections">
-<a href="{{ url_for('my_chama_dashboard', chama_id=chama.id) }}" {% if ep=='my_chama_dashboard' %}aria-current="page"{% endif %}>My Dashboard</a>
-<a href="{{ url_for('chama_home', chama_id=chama.id) }}" {% if ep=='chama_home' %}aria-current="page"{% endif %}>Home</a>
-<a href="{{ url_for('savings', chama_id=chama.id) }}" {% if ep=='savings' %}aria-current="page"{% endif %}>Savings</a>
-<a href="{{ url_for('universal_pay_page', chama_id=chama.id) }}" {% if ep in ('universal_pay_page','universal_pay_request','universal_pay_decide','pay') %}aria-current="page"{% endif %}>Pay</a>
-<a href="{{ url_for('loans', chama_id=chama.id) }}" {% if ep=='loans' %}aria-current="page"{% endif %}>Loans</a>
-<a href="{{ url_for('fines', chama_id=chama.id) }}" {% if ep=='fines' %}aria-current="page"{% endif %}>Fines</a>
-<a href="{{ url_for('ledger', chama_id=chama.id) }}" {% if ep=='ledger' %}aria-current="page"{% endif %}>Ledger</a>
-<a href="{{ url_for('mgr_list', chama_id=chama.id) }}" {% if ep in ('mgr_list','mgr_view') %}aria-current="page"{% endif %}>Merry-go-round</a>
-<a href="{{ url_for('chama_goals', chama_id=chama.id) }}" {% if ep=='chama_goals' %}aria-current="page"{% endif %}>Goals</a>
-<a href="{{ url_for('investments', chama_id=chama.id) }}" {% if ep=='investments' %}aria-current="page"{% endif %}>Investments</a>
-<a href="{{ url_for('assets', chama_id=chama.id) }}" {% if ep=='assets' %}aria-current="page"{% endif %}>Assets</a>
-<a href="{{ url_for('chama_votes', chama_id=chama.id) }}" {% if ep in ('chama_votes','vote') %}aria-current="page"{% endif %}>Voting</a>
-<a href="{{ url_for('constitution', chama_id=chama.id) }}" {% if ep=='constitution' %}aria-current="page"{% endif %}>Constitution</a>
-<a href="{{ url_for('chama_ai', chama_id=chama.id) }}" {% if ep=='chama_ai' %}aria-current="page"{% endif %}>AI</a>
-<a href="{{ url_for('activity', chama_id=chama.id) }}" {% if ep=='activity' %}aria-current="page"{% endif %}>Activity</a>
-<a href="{{ url_for('documents', chama_id=chama.id) }}" {% if ep=='documents' %}aria-current="page"{% endif %}>Documents</a>
-{% if me is defined and me and me.role in ('CHAMA_ADMIN','TREASURER','SECRETARY','AUDITOR') %}<a href="{{ url_for('financial_check', chama_id=chama.id) }}" {% if ep=='financial_check' %}aria-current="page"{% endif %}>Financial Check</a>{% endif %}
-<a href="{{ url_for('meetings', chama_id=chama.id) }}" {% if ep in ('meetings','meeting_view') %}aria-current="page"{% endif %}>Meetings</a>
-<a href="{{ url_for('notices', chama_id=chama.id) }}" {% if ep=='notices' %}aria-current="page"{% endif %}>Notices</a>
-{% if me is defined and me and me.role in ('CHAMA_ADMIN','TREASURER','SECRETARY') %}<a href="{{ url_for('reports', chama_id=chama.id) }}" {% if ep=='reports' %}aria-current="page"{% endif %}>Reports</a>{% endif %}
-<a href="{{ url_for('chat', chama_id=chama.id) }}" {% if ep=='chat' %}aria-current="page"{% endif %}>Chat{% if unread %}<span class="dot">{{ unread if unread<100 else '99+' }}</span>{% endif %}</a>
-<a href="{{ url_for('chama_more', chama_id=chama.id) }}" {% if ep=='chama_more' %}aria-current="page"{% endif %}>More</a>
+<nav class="subnav v21-subnav" aria-label="Chama sections">
+  <a class="subnav-home" href="{{ url_for('my_chama_dashboard', chama_id=chama.id) }}" {% if ep=='my_chama_dashboard' %}aria-current="page"{% endif %}>⌂ My Dashboard</a>
+  <a href="{{ url_for('chama_home', chama_id=chama.id) }}" {% if ep=='chama_home' %}aria-current="page"{% endif %}>Home</a>
+
+  <details class="nav-group" {% if ep in ('savings','universal_pay_page','universal_pay_request','universal_pay_decide','pay','fines','ledger','statement','member_statement') %}open{% endif %}>
+    <summary>💰 Money</summary>
+    <div class="nav-group-panel">
+      <a href="{{ url_for('savings', chama_id=chama.id) }}" {% if ep=='savings' %}aria-current="page"{% endif %}>Savings</a>
+      <a href="{{ url_for('universal_pay_page', chama_id=chama.id) }}" {% if ep in ('universal_pay_page','universal_pay_request','universal_pay_decide','pay') %}aria-current="page"{% endif %}>Pay</a>
+      <a href="{{ url_for('fines', chama_id=chama.id) }}" {% if ep=='fines' %}aria-current="page"{% endif %}>Fines</a>
+      <a href="{{ url_for('ledger', chama_id=chama.id) }}" {% if ep=='ledger' %}aria-current="page"{% endif %}>Ledger</a>
+      <a href="{{ url_for('statement', chama_id=chama.id) }}" {% if ep in ('statement','member_statement') %}aria-current="page"{% endif %}>My Statement</a>
+    </div>
+  </details>
+
+  <a href="{{ url_for('loans', chama_id=chama.id) }}" {% if ep=='loans' %}aria-current="page"{% endif %}>Loans</a>
+
+  <details class="nav-group" {% if ep in ('mgr_list','mgr_view','chama_goals','investments','assets') %}open{% endif %}>
+    <summary>📈 Growth</summary>
+    <div class="nav-group-panel">
+      <a href="{{ url_for('mgr_list', chama_id=chama.id) }}" {% if ep in ('mgr_list','mgr_view') %}aria-current="page"{% endif %}>Merry-go-round</a>
+      <a href="{{ url_for('chama_goals', chama_id=chama.id) }}" {% if ep=='chama_goals' %}aria-current="page"{% endif %}>Goals</a>
+      <a href="{{ url_for('investments', chama_id=chama.id) }}" {% if ep=='investments' %}aria-current="page"{% endif %}>Investments</a>
+      <a href="{{ url_for('assets', chama_id=chama.id) }}" {% if ep=='assets' %}aria-current="page"{% endif %}>Assets</a>
+    </div>
+  </details>
+
+  <details class="nav-group" {% if ep in ('chama_votes','vote','constitution','meetings','meeting_view','notices','chat','documents','activity') %}open{% endif %}>
+    <summary>👥 Community</summary>
+    <div class="nav-group-panel">
+      <a href="{{ url_for('chama_votes', chama_id=chama.id) }}" {% if ep in ('chama_votes','vote') %}aria-current="page"{% endif %}>Voting</a>
+      <a href="{{ url_for('constitution', chama_id=chama.id) }}" {% if ep=='constitution' %}aria-current="page"{% endif %}>Constitution</a>
+      <a href="{{ url_for('meetings', chama_id=chama.id) }}" {% if ep in ('meetings','meeting_view') %}aria-current="page"{% endif %}>Meetings</a>
+      <a href="{{ url_for('notices', chama_id=chama.id) }}" {% if ep=='notices' %}aria-current="page"{% endif %}>Notices</a>
+      <a href="{{ url_for('chat', chama_id=chama.id) }}" {% if ep=='chat' %}aria-current="page"{% endif %}>Chat</a>
+      <a href="{{ url_for('documents', chama_id=chama.id) }}" {% if ep=='documents' %}aria-current="page"{% endif %}>Documents</a>
+      <a href="{{ url_for('activity', chama_id=chama.id) }}" {% if ep=='activity' %}aria-current="page"{% endif %}>Activity</a>
+    </div>
+  </details>
+
+  <details class="nav-group" {% if ep in ('reports','financial_check','chama_ai') %}open{% endif %}>
+    <summary>🧠 Intelligence</summary>
+    <div class="nav-group-panel">
+      {% if me is defined and me and me.role in ('CHAMA_ADMIN','TREASURER','SECRETARY','AUDITOR') %}<a href="{{ url_for('financial_check', chama_id=chama.id) }}" {% if ep=='financial_check' %}aria-current="page"{% endif %}>Financial Check</a>{% endif %}
+      {% if me is defined and me and me.role in ('CHAMA_ADMIN','TREASURER','SECRETARY') %}<a href="{{ url_for('reports', chama_id=chama.id) }}" {% if ep=='reports' %}aria-current="page"{% endif %}>Reports</a>{% endif %}
+      <a href="{{ url_for('chama_ai', chama_id=chama.id) }}" {% if ep=='chama_ai' %}aria-current="page"{% endif %}>Chama AI</a>
+    </div>
+  </details>
+
+  {% if me is defined and me and chama.created_by|int == me.user_id|int %}
+  <a class="nav-command" href="{{ url_for('command_center', chama_id=chama.id) }}" {% if ep=='command_center' %}aria-current="page"{% endif %}>◆ Command Center</a>
+  {% endif %}
 </nav>
