@@ -1,8 +1,26 @@
-# ChamaPay Kenya — V21 Polish Release
+# ChamaPay Kenya — V22 Trust, Intelligence & Polish Release
 
 # ChamaPay Kenya (stage 5: online meetings + in-app chama payments)
 
 A multi-tenant SaaS for Kenyan chamas. **Stage 1 (billing, security, Control Center, 3D interface), stage 2 (contributions, ledger, loans, fines, statements, chat) and stage 3 (meetings, attendance, announcements, notifications, reports, owner two-factor login, test-data commands) are built.** See "What is and is not built" below. Please read it.
+
+
+## V22 additions
+
+V22 focuses on making the existing product easier, safer and more trustworthy rather than adding another large feature module. It adds:
+
+- Command Center 2.0 polish with owner-only access and clearer explain-this-number links.
+- Member Needs Your Attention panel for contribution, loan and vote actions.
+- Money Timeline and proof/receipt pages for contributions, loan repayments and fine payments.
+- Chama Health Score and Trust Center.
+- Setup completion wizard for Chama owners.
+- Security & Privacy Center, personal data export and privacy request workflow.
+- Owner Privacy Requests and Owner Analytics 2.0.
+- Expanded deterministic Chama AI for savings, unpaid members, loan balances, expenses, investments, assets, goals and meetings.
+- Data Saver mode and a more deliberate offline snapshot.
+- Friendlier recovery/error pages and financial-action warnings.
+
+Financial actions remain server-authorized and M-Pesa integration is not expanded by V22.
 
 ## What is and is not built
 

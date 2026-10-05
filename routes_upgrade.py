@@ -51,7 +51,7 @@ def register_upgrade_routes(app, db, login_required, ctx):
         if db().val("SELECT COUNT(*) FROM chama_votes WHERE chama_id=? AND status='OPEN'",(chama_id,),0): alerts.append(('info','Open vote(s) need member attention',url_for('chama_votes',chama_id=chama_id)))
         return render_template('command_center.html',chama=chama,me=me,sub=sub,members=members,total_members=total_members,
             cash=cash,savings=savings,loans=loans,investments=investments,assets=assets,welfare=welfare,paid=paid,health=health,
-            health_parts=health_parts,alerts=alerts,goals=db().all("SELECT * FROM chama_goals WHERE chama_id=? AND status='ACTIVE' ORDER BY id DESC LIMIT 5",(chama_id,)),
+            health_parts=health_parts,alerts=alerts,pending_loans=pending_loans,overdue=overdue,goals=db().all("SELECT * FROM chama_goals WHERE chama_id=? AND status='ACTIVE' ORDER BY id DESC LIMIT 5",(chama_id,)),
             activities=db().all("""SELECT l.*,u.name FROM ledger_transactions l LEFT JOIN users u ON u.id=l.user_id WHERE l.chama_id=? ORDER BY l.id DESC LIMIT 10""",(chama_id,)))
 
     @app.route('/chamas/<int:chama_id>/goals', methods=['GET','POST'])

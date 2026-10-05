@@ -135,6 +135,16 @@ def register_plus_routes(app, db, login_required, ctx, owner_required):
                           (SELECT COUNT(*) FROM chama_vote_responses r WHERE r.vote_id=v.id) votes
                           FROM chama_votes v WHERE v.chama_id=? AND v.status='OPEN' ORDER BY v.closes_at LIMIT 5""",(g.user['id'],chama_id))
         group_investments = int(db().val("SELECT COALESCE(SUM(current_value_cents),0) FROM chama_investments WHERE chama_id=? AND status='ACTIVE'",(chama_id,),0) or 0)
+        attention=[]
+        period=date.today().isoformat()[:7]
+        if not db().val("SELECT COUNT(*) FROM contributions WHERE chama_id=? AND user_id=? AND period=? AND status='PAID'",(chama_id,g.user['id'],period),0):
+            contribution = int(db().val("SELECT contribution_cents FROM chamas WHERE id=?",(chama_id,),0) or 0)
+            attention.append(('warning',f'Your {period} contribution is not recorded as paid yet.',url_for('savings',chama_id=chama_id), contribution))
+        due_loan=db().one("SELECT id,total_due_cents-paid_cents balance,due_date FROM loans WHERE chama_id=? AND user_id=? AND status='ACTIVE' AND due_date IS NOT NULL ORDER BY due_date LIMIT 1",(chama_id,g.user['id']))
+        if due_loan and due_loan['due_date'] <= (date.today()+timedelta(days=7)).isoformat():
+            attention.append(('danger' if due_loan['due_date'] < date.today().isoformat() else 'info',f'Loan payment due {due_loan["due_date"]}: KES {due_loan["balance"]/100:,.2f} outstanding.',url_for('loans',chama_id=chama_id), due_loan['balance']))
+        open_vote=db().one("SELECT v.id,v.title FROM chama_votes v WHERE v.chama_id=? AND v.status='OPEN' AND NOT EXISTS (SELECT 1 FROM chama_vote_responses r WHERE r.vote_id=v.id AND r.user_id=?) ORDER BY v.id DESC LIMIT 1",(chama_id,g.user['id']))
+        if open_vote: attention.append(('info',f'New vote waiting: {open_vote["title"]}',url_for('chama_votes',chama_id=chama_id),0))
         attendance = db().val("SELECT COUNT(*) FROM attendance WHERE chama_id=? AND user_id=? AND status='PRESENT'",(chama_id,g.user['id']),0)
         total_att = db().val("SELECT COUNT(*) FROM attendance WHERE chama_id=? AND user_id=?",(chama_id,g.user['id']),0)
         streak = 0
@@ -143,7 +153,7 @@ def register_plus_routes(app, db, login_required, ctx, owner_required):
             elif streak == 0 and row['period'] == date.today().isoformat()[:7]: streak += 1
             else: break
         return render_template('my_dashboard.html',chama=chama,me=me,sub=sub,st=st,upcoming=upcoming,votes=votes,
-                               group_investments=group_investments,attendance=attendance,total_att=total_att,streak=streak)
+                               group_investments=group_investments,attendance=attendance,total_att=total_att,streak=streak,attention=attention)
 
     # ---------- documents ----------
     @app.route('/chamas/<int:chama_id>/documents')
@@ -309,7 +319,7 @@ def register_plus_routes(app, db, login_required, ctx, owner_required):
     def platform_backup():
         # Platform backup intentionally excludes users/passwords/secrets. It is a data archive, not a credential dump.
         payload={'format':'chamapay-platform-backup-v1','exported_at':_stamp(),'tables':{}}
-        for table in ('chamas','subscriptions','subscription_plans','payments','payment_webhooks','audit_logs','support_tickets','organizations','organization_members','organization_chamas'):
+        for table in ('chamas','subscriptions','subscription_plans','payments','payment_webhooks','audit_logs','support_tickets','organizations','organization_members','organization_chamas','privacy_requests'):
             try: payload['tables'][table]=db().all('SELECT * FROM '+table+' LIMIT 100000')
             except Exception: payload['tables'][table]=[]
         return Response(json.dumps(payload,default=str,indent=2),mimetype='application/json',headers={'Content-Disposition':'attachment; filename=chamapay-platform-backup.json'})
@@ -409,11 +419,30 @@ def register_plus_routes(app, db, login_required, ctx, owner_required):
         chama,me,sub=ctx(chama_id)
         q=(request.form.get('question') or '').strip()
         if not q: return redirect(url_for('chama_ai',chama_id=chama_id))
-        ql=q.lower(); answer='I can answer questions from recorded ChamaPay data. Try contributions, savings, loans, overdue loans, expenses, investments, assets, goals, attendance, meetings or financial position.'
-        if 'overdue' in ql and 'loan' in ql:
-            n=db().val("SELECT COUNT(*) FROM loans WHERE chama_id=? AND status='ACTIVE' AND due_date IS NOT NULL AND due_date<?",(chama_id,date.today().isoformat()),0); answer=f'{n} active loan(s) are past their recorded due date.'
+        ql=q.lower(); answer='I can answer questions from authorized recorded ChamaPay data. Try savings, contributions, unpaid members, loans, overdue loans, expenses, investments, assets, goals, attendance, meetings, members or financial position.'
+        if ('unpaid' in ql or 'not paid' in ql) and ('member' in ql or 'contribution' in ql):
+            period=date.today().isoformat()[:7]
+            rows=db().all("""SELECT u.name FROM chama_members m JOIN users u ON u.id=m.user_id
+                WHERE m.chama_id=? AND m.status='ACTIVE' AND NOT EXISTS
+                (SELECT 1 FROM contributions c WHERE c.chama_id=m.chama_id AND c.user_id=m.user_id AND c.period=? AND c.status='PAID')
+                ORDER BY u.name LIMIT 100""",(chama_id,period))
+            answer=f'{len(rows)} active member(s) have no recorded paid contribution for {period}.' + (" Names: " + ', '.join(r['name'] for r in rows[:12]) + (" and more." if len(rows)>12 else '') if rows else '')
+        elif 'saving' in ql or 'contribution' in ql:
+            total=db().val("SELECT COALESCE(SUM(amount_cents),0) FROM contributions WHERE chama_id=? AND status='PAID'",(chama_id,),0); month=db().val("SELECT COALESCE(SUM(amount_cents),0) FROM contributions WHERE chama_id=? AND status='PAID' AND period=?",(chama_id,date.today().isoformat()[:7]),0); answer=f'Recorded savings are KES {total/100:,.2f} in total, with KES {month/100:,.2f} recorded for {date.today().isoformat()[:7]}. Voided entries are excluded.'
+        elif 'overdue' in ql and 'loan' in ql:
+            n=db().val("SELECT COUNT(*) FROM loans WHERE chama_id=? AND status='ACTIVE' AND due_date IS NOT NULL AND due_date<?",(chama_id,date.today().isoformat()),0); amount=db().val("SELECT COALESCE(SUM(total_due_cents-paid_cents),0) FROM loans WHERE chama_id=? AND status='ACTIVE' AND due_date IS NOT NULL AND due_date<?",(chama_id,date.today().isoformat()),0); answer=f'{n} active loan(s) are past their recorded due date, with KES {amount/100:,.2f} still due across those loans.'
+        elif 'loan' in ql and ('balance' in ql or 'outstanding' in ql):
+            amount=db().val("SELECT COALESCE(SUM(total_due_cents-paid_cents),0) FROM loans WHERE chama_id=? AND status IN ('ACTIVE','APPROVED','PENDING')",(chama_id,),0); answer=f'The recorded outstanding loan obligation is KES {amount/100:,.2f}.'
         elif 'expense' in ql:
             n=db().val("SELECT COALESCE(SUM(amount_cents),0) FROM ledger_transactions WHERE chama_id=? AND account='MAIN' AND direction='OUT' AND kind='EXPENSE'",(chama_id,),0); answer=f'Recorded expenses total KES {n/100:,.2f}.'
+        elif 'investment' in ql:
+            n=db().val("SELECT COALESCE(SUM(current_value_cents),0) FROM chama_investments WHERE chama_id=? AND status='ACTIVE'",(chama_id,),0); answer=f'Active tracked investments have a current recorded value of KES {n/100:,.2f}.'
+        elif 'asset' in ql:
+            n=db().val("SELECT COALESCE(SUM(current_value_cents),0) FROM chama_assets WHERE chama_id=? AND status='ACTIVE'",(chama_id,),0); answer=f'Active tracked assets have a current recorded value of KES {n/100:,.2f}.'
+        elif 'goal' in ql:
+            rows=db().all("SELECT name,current_cents,target_cents FROM chama_goals WHERE chama_id=? AND status='ACTIVE' ORDER BY id DESC LIMIT 10",(chama_id,)); answer='Active goals: ' + (', '.join(f"{r['name']} — KES {r['current_cents']/100:,.2f} of KES {r['target_cents']/100:,.2f}" for r in rows) if rows else 'none recorded.')
+        elif 'member' in ql:
+            n=db().val("SELECT COUNT(*) FROM chama_members WHERE chama_id=? AND status='ACTIVE'",(chama_id,),0); answer=f'There are {n} active members in this Chama.'
         elif 'attendance' in ql:
             p=db().val("SELECT COUNT(*) FROM attendance WHERE chama_id=? AND status='PRESENT'",(chama_id,),0); t=db().val("SELECT COUNT(*) FROM attendance WHERE chama_id=?",(chama_id,),0); answer=f'Recorded attendance is {p} present marks out of {t} attendance marks.'
         elif 'meeting' in ql:

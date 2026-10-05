@@ -306,6 +306,10 @@ CREATE INDEX IF NOT EXISTS ix_documents_chama ON member_documents(chama_id,entit
 CREATE INDEX IF NOT EXISTS ix_meeting_actions ON meeting_actions(chama_id,status,due_date);
 CREATE INDEX IF NOT EXISTS ix_org_members ON organization_members(organization_id,status);
 CREATE INDEX IF NOT EXISTS ix_org_chamas ON organization_chamas(organization_id);
+CREATE TABLE IF NOT EXISTS privacy_requests(
+  id {PK}, user_id INTEGER NOT NULL REFERENCES users(id), kind TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'OPEN',
+  reason TEXT, created_at TEXT NOT NULL, resolved_at TEXT, resolution TEXT);
+CREATE INDEX IF NOT EXISTS ix_privacy_requests_user ON privacy_requests(user_id,status,id);
 
 
 """
