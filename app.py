@@ -135,7 +135,16 @@ def create_app(overrides=None):
                                                 "font-src https://fonts.gstatic.com; img-src 'self' data:; script-src 'self'; frame-ancestors 'none'; form-action 'self'")
         if app.config['IS_PRODUCTION']:
             r.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
-        if request.endpoint not in ('static',):
+        if request.endpoint == 'static':
+            # Static assets are versioned by the service-worker cache. Let browsers
+            # reuse them instead of asking Flask for them on every navigation.
+            r.headers['Cache-Control'] = 'public, max-age=604800, stale-while-revalidate=86400'
+        elif request.endpoint == 'index' and request.method == 'GET':
+            # The public homepage contains aggregate, non-user-specific numbers.
+            # A short cache avoids recalculating the same landing-page aggregates
+            # on every visit while keeping the figures reasonably fresh.
+            r.headers['Cache-Control'] = 'public, max-age=30, stale-while-revalidate=60'
+        else:
             r.headers['Cache-Control'] = 'no-store'
         return r
 
