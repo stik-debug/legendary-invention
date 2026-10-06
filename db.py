@@ -28,6 +28,11 @@ class DB:
             self.conn = sqlite3.connect(path, isolation_level=None, timeout=15)
             self.conn.row_factory = sqlite3.Row
             self.conn.execute('PRAGMA foreign_keys=ON')
+            # WAL lets readers continue while another request writes, which is
+            # particularly helpful for the dashboard on small Render instances.
+            self.conn.execute('PRAGMA journal_mode=WAL')
+            self.conn.execute('PRAGMA synchronous=NORMAL')
+            self.conn.execute('PRAGMA busy_timeout=15000')
 
     def _sql(self, sql):
         # psycopg treats every % as a placeholder, so a literal % (for example LIKE 'abc%') must be doubled
@@ -405,6 +410,26 @@ def init_db(db):
         for k, v in DEFAULT_SETTINGS.items():
             if db.val('SELECT COUNT(*) FROM settings WHERE key=?', (k,)) == 0:
                 db.execute('INSERT INTO settings(key,value) VALUES(?,?)', (k, v))
+
+        # Hot-path indexes. These cover the most common member dashboard,
+        # savings, loan, notification and activity lookups without changing
+        # application behavior. CREATE IF NOT EXISTS is safe on upgrades.
+        hot_indexes = [
+            'CREATE INDEX IF NOT EXISTS idx_cm_user_status ON chama_members(user_id,status)',
+            'CREATE INDEX IF NOT EXISTS idx_cm_chama_status ON chama_members(chama_id,status)',
+            'CREATE INDEX IF NOT EXISTS idx_contrib_chama_period_status ON contributions(chama_id,period,status)',
+            'CREATE INDEX IF NOT EXISTS idx_contrib_user_chama_status ON contributions(user_id,chama_id,status)',
+            'CREATE INDEX IF NOT EXISTS idx_loans_chama_status_due ON loans(chama_id,status,due_date)',
+            'CREATE INDEX IF NOT EXISTS idx_loans_user_chama_status ON loans(user_id,chama_id,status)',
+            'CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id,read_at)',
+            'CREATE INDEX IF NOT EXISTS idx_messages_chama_id ON messages(chama_id,id)',
+            'CREATE INDEX IF NOT EXISTS idx_meetings_chama_status_held ON meetings(chama_id,status,held_at)',
+            'CREATE INDEX IF NOT EXISTS idx_votes_chama_status ON chama_votes(chama_id,status)',
+            'CREATE INDEX IF NOT EXISTS idx_ledger_chama_date ON ledger_transactions(chama_id,occurred_on,id)',
+            'CREATE INDEX IF NOT EXISTS idx_audit_chama_date ON audit_logs(chama_id,created_at,id)',
+        ]
+        for stmt in hot_indexes:
+            db.execute(stmt)
 
 
 def audit(db, actor_id, action, entity_type=None, entity_id=None, chama_id=None, meta=None):
