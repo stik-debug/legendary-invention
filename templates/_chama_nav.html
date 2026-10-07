@@ -16,7 +16,7 @@
   <a href="{{ url_for('constitution', chama_id=chama.id) }}" {% if ep=='constitution' %}aria-current="page"{% endif %}>Constitution</a>
   <a href="{{ url_for('meetings', chama_id=chama.id) }}" {% if ep in ('meetings','meeting_view') %}aria-current="page"{% endif %}>Meetings</a>
   <a href="{{ url_for('notices', chama_id=chama.id) }}" {% if ep=='notices' %}aria-current="page"{% endif %}>Notices</a>
-  <a href="{{ url_for('chat', chama_id=chama.id) }}" {% if ep=='chat' %}aria-current="page"{% endif %}>Chat</a>
+  <a href="{{ url_for('chat', chama_id=chama.id) }}" {% if ep=='chat' %}aria-current="page"{% endif %}>Chat{% if unread %} <span class="dot">{{ unread if unread<100 else '99+' }}</span>{% endif %}</a>
   <a href="{{ url_for('documents', chama_id=chama.id) }}" {% if ep=='documents' %}aria-current="page"{% endif %}>Documents</a>
   <a href="{{ url_for('activity', chama_id=chama.id) }}" {% if ep=='activity' %}aria-current="page"{% endif %}>Activity</a>
   <a href="{{ url_for('chama_ai', chama_id=chama.id) }}" {% if ep=='chama_ai' %}aria-current="page"{% endif %}>🧠 AI</a>

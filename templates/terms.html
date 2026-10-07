@@ -1,0 +1,43 @@
+{% extends "base.html" %}{% block title %}Terms of Use - ChamaPay{% endblock %}
+{% block content %}
+{# NOTE: plain-language starting text. Have a Kenyan lawyer review it before launch. #}
+<div class="head"><div><h2>Terms of Use</h2><p>Last updated 7 October 2026</p></div></div>
+<div class="card" style="line-height:1.6">
+<h3>What ChamaPay is</h3>
+<p>ChamaPay is a record-keeping and management tool for savings groups. <b>ChamaPay does not hold your group's money and does not move money.</b> Payments happen outside the app, for example by M-Pesa, bank or cash. ChamaPay records them and helps you track them.</p>
+
+<h3>Your account</h3>
+<ul>
+<li>You must be 18 or over and give correct details.</li>
+<li>Keep your password and any codes private. You are responsible for what happens under your account.</li>
+<li>Tell your chairperson or us quickly if you think someone else has access.</li>
+</ul>
+
+<h3>Your chama's records</h3>
+<ul>
+<li>Each chama makes its own rules. ChamaPay does not decide disputes between members.</li>
+<li>Officials who enter or approve records are responsible for keeping them accurate and fair.</li>
+<li>Do not enter someone else's personal information unless your chama has a good reason to hold it.</li>
+</ul>
+
+<h3>Acceptable use</h3>
+<p>Do not use ChamaPay to cheat or defraud anyone, to break the law, to harass others, or to try to get into accounts or data that are not yours. We may suspend accounts that do.</p>
+
+<h3>Plans and payment</h3>
+<p>Each chama chooses a monthly plan, with a free trial first. The price is per chama, not per member, and the member limits and prices shown on our home page apply. If a plan is not paid, the chama may be limited until it is paid, but its records are kept.</p>
+
+<h3>Availability</h3>
+<p>We work to keep ChamaPay available and accurate, but we cannot promise it will never be interrupted or free of mistakes. Please keep your own copy of important records, and use the download options in the app.</p>
+
+<h3>Our responsibility</h3>
+<p>To the fullest extent the law allows, ChamaPay is not responsible for losses that come from decisions your chama makes, from money handled outside the app, or from a service interruption. Nothing here limits any rights you have under Kenyan law that cannot be limited.</p>
+
+<h3>Ending your use</h3>
+<p>You can ask to delete your account at any time (see the <a href="{{ url_for('privacy_policy') }}">Privacy Policy</a>). We may end or suspend access that breaks these terms.</p>
+
+<h3>Changes and law</h3>
+<p>We may update these terms and will tell you in the app when the changes matter. These terms are governed by the laws of Kenya.</p>
+{% if support_contact %}<p>Questions: <b>{{ support_contact }}</b></p>{% endif %}
+</div>
+<p class="mute" style="text-align:center"><a href="{{ url_for('privacy_policy') }}">Privacy Policy</a> · <a href="{{ url_for('index') }}">Home</a></p>
+{% endblock %}

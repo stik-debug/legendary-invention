@@ -7,5 +7,6 @@
 <div class="field"><label for="pw">Password</label><input id="pw" type="password" name="password" minlength="8" autocomplete="new-password" required><small>At least 8 characters.</small></div>
 <div class="field"><label for="cf">Confirm password</label><input id="cf" type="password" name="confirm" autocomplete="new-password" required></div>
 <div class="field"><label for="jc">Join code (only if your chama gave you one)</label><input id="jc" name="join_code" inputmode="numeric" autocomplete="off" maxlength="8"><small>If your chairperson already added your number, enter the 8-digit code they gave you.</small></div>
+<p class="mute" style="font-size:13px">By creating an account you agree to the <a href="{{ url_for('terms') }}" target="_blank" rel="noopener">Terms of Use</a> and the <a href="{{ url_for('privacy_policy') }}" target="_blank" rel="noopener">Privacy Policy</a>.</p>
 <button class="btn pri block">Create account</button></form>
 <p class="mute" style="text-align:center;margin-bottom:0">Already registered? <a href="{{ url_for('login') }}">Log in</a></p></div>{% endblock %}
