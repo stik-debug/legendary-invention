@@ -187,3 +187,27 @@ if(!still&&window.matchMedia('(hover:hover)').matches){
   }
 
 })();
+
+// Small secure convenience actions used by payment and member-invitation screens.
+(function(){
+  function copyText(value, button){
+    if(!value) return;
+    var done=function(){ if(button){ var old=button.textContent; button.textContent='Copied'; setTimeout(function(){button.textContent=old;},1400); } };
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(value).then(done).catch(function(){ fallback(); }); }
+    else fallback();
+    function fallback(){
+      var ta=document.createElement('textarea'); ta.value=value; ta.setAttribute('readonly',''); ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');done();}catch(e){} document.body.removeChild(ta);
+    }
+  }
+  document.addEventListener('click',function(e){
+    var c=e.target.closest('[data-copy-text]');
+    if(c){e.preventDefault();copyText(c.getAttribute('data-copy-text'),c);return;}
+    var s=e.target.closest('[data-share-text]');
+    if(s){
+      e.preventDefault(); var text=s.getAttribute('data-share-text')||'';
+      if(navigator.share){navigator.share({title:'ChamaPay member join code',text:text}).catch(function(){});}
+      else copyText(text,s);
+    }
+  });
+})();

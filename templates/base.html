@@ -16,7 +16,7 @@
 </head>
 <body>
 <header class="top"><div class="wrap">
-<a class="logo" href="{{ url_for('index') }}"><i></i>ChamaPay</a>
+<a class="logo" href="{{ url_for('index') }}"><img src="{{ url_for('static', filename='logo.jpg') }}" alt="ChamaPay" width="34" height="34"><span>ChamaPay</span></a>
 <nav class="links" aria-label="Main">
 {% if user %}
 <details class="app-menu">

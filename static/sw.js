@@ -1,9 +1,9 @@
-const CACHE = "chamapay-static-v4";
+const CACHE = "chamapay-static-v5";
 const OFFLINE_URL = "/static/offline.html";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE).then(cache => cache.addAll([OFFLINE_URL, "/static/css/app.css", "/static/js/app.js", "/static/manifest.webmanifest"]))
+    caches.open(CACHE).then(cache => cache.addAll([OFFLINE_URL, "/static/css/app.css", "/static/js/app.js", "/static/manifest.webmanifest", "/static/logo.jpg", "/static/icons/icon-192.png", "/static/icons/icon-512.png"]))
       .then(() => self.skipWaiting())
   );
 });

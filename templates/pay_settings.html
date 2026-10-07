@@ -1,12 +1,34 @@
-{% extends "base.html" %}{% block title %}Payment settings - {{ chama.name }}{% endblock %}
+{% extends "base.html" %}{% block title %}Payment setup - {{ chama.name }}{% endblock %}
 {% block content %}
-<div class="head"><div><h2>Payment settings</h2><p>{{ chama.name }}</p></div><a class="btn" href="{{ url_for('pay', chama_id=chama.id) }}">Back</a></div>
+<div class="head"><div><h2>Payment setup</h2><p>{{ chama.name }} · Chairperson / Chama Admin</p></div><a class="btn" href="{{ url_for('universal_pay_page', chama_id=chama.id) }}">Back to Pay</a></div>
 {% include '_chama_nav.html' %}
-<div class="card"><h3>Your money stays yours</h3><p class="mute" style="margin:0">Members pay straight into <b>your chama's own</b> paybill, till or phone, the way they already do. ChamaPay never holds chama money and never sends payment prompts. After paying, the member pastes the M-Pesa message and the payment is recorded.</p></div>
+<div class="card hero3d tilt">
+  <div><small>Member payment instructions</small><h2>Tell members exactly where to send the Chama's money.</h2><p class="mute">This is manual payment recording — ChamaPay does not hold the Chama's money and does not initiate M-Pesa transactions. Members pay the Chama directly, then submit the reference for an official to confirm.</p></div>
+</div>
 <form method="POST" class="card">{{ csrf_input() }}
-<div class="field"><label for="i">Where members pay (they see this on the Pay page)</label><textarea id="i" name="instructions" rows="3" maxlength="500" required placeholder="Paybill 123456, account: your name">{{ cfg.instructions if cfg and cfg.instructions else '' }}</textarea></div>
-<div class="field"><label>When is a pasted message recorded?</label>
-<label style="display:block;font-weight:400;margin:6px 0"><input type="radio" name="check_mode" value="RECORDS" style="width:auto;min-height:0" {% if mode=='RECORDS' %}checked{% endif %}> <b>After it matches the chama's M-Pesa records</b> (safest). Officials paste the messages the chama received under Pay &gt; M-Pesa records. A made-up or edited message never matches.</label>
-<label style="display:block;font-weight:400;margin:6px 0"><input type="radio" name="check_mode" value="TRUST" style="width:auto;min-height:0" {% if mode=='TRUST' %}checked{% endif %}> <b>Straight away</b> (fastest, trusts members). A readable message from the last 7 days is recorded at once. Officials are told and can cancel a mistake, and any mismatch is flagged when the chama's records are added later. A member could paste a made-up message, so choose this only if your group trusts each other.</label></div>
-<button class="btn pri">Save</button></form>
+<div class="field"><label for="pm">Payment method</label><select id="pm" name="payment_method" required>
+{% for key,label in payment_methods.items() %}<option value="{{ key }}" {% if cfg and cfg.payment_method==key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+</select><small>Choose the main payment method members should use.</small></div>
+<div class="field" id="account-field"><label for="sc" id="account-label">PayBill / Till / phone / bank account</label><input id="sc" name="shortcode" value="{{ cfg.shortcode if cfg and cfg.shortcode else '' }}" maxlength="80" autocomplete="off"><small id="account-help">Enter the exact number or account members should pay.</small></div>
+<div class="field" id="name-field"><label for="an">Account / business name</label><input id="an" name="payment_account_name" value="{{ cfg.payment_account_name if cfg and cfg.payment_account_name else '' }}" maxlength="120"><small>For M-Pesa PayBill or Till, this helps members confirm they are paying the correct Chama.</small></div>
+<div class="field"><label for="i">Member instructions</label><textarea id="i" name="instructions" rows="4" maxlength="500" required placeholder="M-Pesa PayBill 123456, account name Uwezo Chama. Enter your name as the account/reference where required. After paying, submit the M-Pesa confirmation code in ChamaPay.">{{ cfg.instructions if cfg and cfg.instructions else '' }}</textarea><small>These instructions are shown to members on the Pay screen.</small></div>
+<div class="field"><label>Payment confirmation rule</label>
+<label style="display:block;font-weight:400;margin:7px 0"><input type="radio" name="check_mode" value="RECORDS" style="width:auto;min-height:0" {% if mode=='RECORDS' %}checked{% endif %}> <b>Confirm against Chama records</b> — safest. An official adds the received payment record before it is posted automatically.</label>
+<label style="display:block;font-weight:400;margin:7px 0"><input type="radio" name="check_mode" value="TRUST" style="width:auto;min-height:0" {% if mode=='TRUST' %}checked{% endif %}> <b>Record from member proof</b> — faster, but officials must review discrepancies.</label></div>
+<button class="btn pri">Save payment setup</button></form>
+<script>
+(function(){
+ const pm=document.getElementById('pm'), label=document.getElementById('account-label'), help=document.getElementById('account-help'), nf=document.getElementById('name-field');
+ function refresh(){
+   const v=pm.value;
+   if(v==='MPESA_PAYBILL'){label.textContent='M-Pesa PayBill number';help.textContent='The PayBill number members should enter in M-Pesa.';nf.hidden=false;}
+   else if(v==='MPESA_TILL'){label.textContent='M-Pesa Till / Buy Goods number';help.textContent='The Till number members should use.';nf.hidden=false;}
+   else if(v==='MPESA_SEND'){label.textContent='M-Pesa phone number';help.textContent='The registered number members should send money to.';nf.hidden=true;}
+   else if(v==='BANK'){label.textContent='Bank account / payment identifier';help.textContent='Enter the bank account number or other identifier members need.';nf.hidden=false;}
+   else if(v==='CASH'){label.textContent='Collection point / contact';help.textContent='Optional — describe where the Treasurer receives cash.';nf.hidden=true;}
+   else {label.textContent='Payment identifier';help.textContent='Optional if the full details are explained below.';nf.hidden=false;}
+ }
+ pm.addEventListener('change',refresh); refresh();
+})();
+</script>
 {% endblock %}

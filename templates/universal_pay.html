@@ -1,13 +1,27 @@
 {% extends "base.html" %}
 {% block title %}Pay - {{ chama.name }}{% endblock %}
 {% block content %}
-<div class="head"><div><h2>Pay</h2><p>{{ chama.name }} · one payment screen for your Chama</p></div></div>
+<div class="head"><div><h2>Pay</h2><p>{{ chama.name }} · one payment screen for your Chama</p></div><div>{% if me.role=='CHAMA_ADMIN' %}<a class="btn" href="{{ url_for('pay_settings',chama_id=chama.id) }}">Payment setup</a>{% endif %}</div></div>
 {% include '_chama_nav.html' %}
 
 <div class="card hero3d tilt">
-  <div><small>Simple digital payment records</small><h2>Pay once. Confirm once. Records update automatically.</h2>
-  <p class="mute">Choose what you are paying for. Your payment stays <b>Pending</b> until a Chama finance official confirms it. No payment gateway is connected yet.</p></div>
+  <div><small>Simple digital payment records</small><h2>Pay the Chama directly, then record it here.</h2>
+  <p class="mute">Your money goes directly to the Chama's payment method. ChamaPay does not hold the money or initiate a payment. Your request stays <b>Pending</b> until a Chama finance official confirms the payment.</p></div>
 </div>
+
+{% if pay_config and (pay_config.instructions or pay_config.shortcode) %}
+<div class="card payment-method-card">
+  <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
+    <div><small class="pill info">Payment method</small><h3 style="margin:9px 0 5px">{{ {'MPESA_PAYBILL':'M-Pesa PayBill','MPESA_TILL':'M-Pesa Till / Buy Goods','MPESA_SEND':'M-Pesa Send Money','BANK':'Bank transfer','CASH':'Cash','OTHER':'Other'}.get(pay_config.payment_method,'Payment method') }}</h3>
+    {% if pay_config.shortcode %}<div class="payment-number">{{ pay_config.shortcode }}</div>{% endif %}
+    {% if pay_config.payment_account_name %}<p style="margin:5px 0 0"><b>Account / business:</b> {{ pay_config.payment_account_name }}</p>{% endif %}</div>
+    {% if pay_config.shortcode %}<button class="btn sm" type="button" data-copy-text="{{ pay_config.shortcode }}">Copy number</button>{% endif %}
+  </div>
+  <div class="payment-instructions"><b>How to pay</b><p style="white-space:pre-wrap;margin:6px 0 0">{{ pay_config.instructions }}</p></div>
+</div>
+{% else %}
+<div class="card warning"><h3>Payment method not set yet</h3><p class="mute">{% if me.role=='CHAMA_ADMIN' %}Open <b>Payment setup</b> above and add the Chama's PayBill, Till, bank account, phone number or cash collection instructions.{% else %}Ask the Chairperson / Chama Admin to add the Chama's payment method before making a payment.{% endif %}</p></div>
+{% endif %}
 
 <div class="card">
   <h3>Make a payment</h3>

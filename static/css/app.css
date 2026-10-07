@@ -8,9 +8,7 @@ a{color:var(--em-d)}:focus-visible{outline:3px solid var(--gold);outline-offset:
 .wrap{max-width:1040px;margin:0 auto;padding:0 20px}
 .top{position:sticky;top:0;z-index:30;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);background:color-mix(in srgb,var(--bg) 72%,transparent);border-bottom:1px solid var(--line);padding-top:env(safe-area-inset-top,0px)}
 .top .wrap{display:flex;align-items:center;justify-content:space-between;height:62px;gap:10px}
-.logo{font:800 21px "Bricolage Grotesque",sans-serif;text-decoration:none;color:var(--ink);display:flex;align-items:center;gap:9px}
-.logo i{width:30px;height:30px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#FFE08A,var(--gold) 55%,var(--gold-d));box-shadow:0 3px 0 var(--gold-d),0 6px 10px rgba(0,0,0,.2);display:block;position:relative}
-.logo i:after{content:"C";position:absolute;inset:0;display:grid;place-items:center;font:800 15px "Bricolage Grotesque";color:#5A3D00}
+.logo{font:800 21px "Bricolage Grotesque",sans-serif;text-decoration:none;color:var(--ink);display:flex;align-items:center;gap:9px}.logo img{width:34px;height:34px;border-radius:10px;display:block;object-fit:cover;box-shadow:0 4px 12px rgba(0,0,0,.18)}
 nav.links{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 20px;border-radius:14px;font:700 15px "DM Sans",sans-serif;text-decoration:none;border:0;cursor:pointer;min-height:44px;color:var(--ink);background:var(--solid);box-shadow:0 3px 0 var(--line),var(--sh);transition:transform .15s,box-shadow .15s}
 .btn:hover{transform:translateY(-2px)}.btn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--line)}
@@ -196,3 +194,11 @@ textarea{min-height:90px;resize:vertical}
 .v22-direct-nav .all-functions-link{background:var(--em-x);color:var(--em);border-color:var(--em)}
 @media(max-width:800px){.v22-direct-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible;gap:7px;padding-bottom:12px}.v22-direct-nav>a{width:100%;justify-content:center;box-sizing:border-box}.v22-direct-nav .all-functions-link{grid-column:1/-1}}
 @media(max-width:420px){.v22-direct-nav{grid-template-columns:repeat(2,minmax(0,1fr))}.v22-direct-nav>a{padding:9px 7px;font-size:12px}}
+
+/* V23: payment setup and secure one-time member invitation */
+.payment-method-card{border:1px solid rgba(13,95,224,.16);background:linear-gradient(135deg,#fff,#f7fbff)}
+.payment-number{font:800 28px "Bricolage Grotesque",sans-serif;letter-spacing:.5px;margin-top:7px}
+.payment-instructions{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.join-code-card{display:grid;gap:12px;margin-bottom:16px;border:1px solid rgba(13,95,224,.2);background:linear-gradient(135deg,#fff,#f7fbff)}
+.join-code-value{font:900 38px/1 "Bricolage Grotesque",sans-serif;letter-spacing:5px;text-align:center;padding:16px;border-radius:18px;background:#eef5ff;color:#0d5fe0;box-shadow:inset 0 0 0 1px rgba(13,95,224,.12)}
+@media(max-width:560px){.join-code-value{font-size:30px;letter-spacing:3px}.payment-number{font-size:24px}.logo img{width:32px;height:32px}}
