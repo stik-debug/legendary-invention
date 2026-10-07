@@ -44,7 +44,9 @@ def create_app(overrides=None):
         PAY_INSTRUCTIONS=os.environ.get('PAY_INSTRUCTIONS', 'Contact ChamaPay support to pay. Your chama is reactivated as soon as we record your payment.'),
         SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax', SESSION_COOKIE_SECURE=production,
         PERMANENT_SESSION_LIFETIME=timedelta(days=14), MAX_CONTENT_LENGTH=10 * 1024 * 1024,
-        REQUIRE_OWNER_2FA=os.environ.get('REQUIRE_OWNER_2FA') == '1')
+        REQUIRE_OWNER_2FA=os.environ.get('REQUIRE_OWNER_2FA') == '1',
+        # SMS one-time codes (signup, login gate, change phone/password, forgot password). OFF until SMS delivery works.
+        SMS_OTP_ENABLED=os.environ.get('SMS_OTP_ENABLED') == '1')
     app.config.update(overrides or {})
     if len(app.config['SECRET_KEY']) < 32:
         if production:
@@ -252,8 +254,15 @@ def create_app(overrides=None):
                                           generate_password_hash(f['password']), check_password_hash)
                     if uid is None:
                         uid = S.create_user(db(), f.get('name'), f.get('email'), f.get('phone'), generate_password_hash(f['password']))
-                    # Signup is a sensitive action: verify ownership of the phone before creating a logged-in session.
                     db().commit()
+                    if not app.config['SMS_OTP_ENABLED']:
+                        # SMS verification is switched off: create the account and log the person in.
+                        with db().tx():
+                            audit(db(), uid, 'USER_REGISTERED', 'user', uid)
+                        row = db().one('SELECT session_epoch FROM users WHERE id=?', (uid,))
+                        session.clear(); session['uid'] = uid; session['ep'] = row['session_epoch']; session.permanent = True
+                        return redirect(url_for('dashboard'))
+                    # Signup is a sensitive action: verify ownership of the phone before creating a logged-in session.
                     ok, msg, oid = OTP.request_otp(app, db(), uid, f.get('phone'), 'signup', request.remote_addr)
                     if not ok:
                         flash(msg, 'warning')
@@ -280,7 +289,7 @@ def create_app(overrides=None):
                 # New/unverified accounts must complete phone verification once before
                 # they can establish a normal password session. After verification,
                 # ordinary logins never require SMS OTP again.
-                if not u.get('phone_verified_at'):
+                if app.config['SMS_OTP_ENABLED'] and not u.get('phone_verified_at'):
                     ok, msg, oid = OTP.request_otp(app, db(), u['id'], u['phone'], 'login_phone_verify', request.remote_addr)
                     if not ok:
                         flash(msg, 'warning')

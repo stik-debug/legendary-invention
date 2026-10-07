@@ -1,8 +1,11 @@
 """User-facing SMS OTP flows. Ordinary login never uses this module."""
+from datetime import timedelta
+
 from flask import flash, g, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import auth_otp as OTP
+import recovery as RC
 import services as S
 from db import audit
 
@@ -15,6 +18,18 @@ def safe_next_local(value):
 
 
 def register(app, db, login_required):
+    # When SMS_OTP_ENABLED is off (the default) the pages below fall back to password-based checks and, for
+    # a forgotten password, the one-time code a chairperson or the owner issues. The SMS code paths stay intact.
+    def sms_on():
+        return bool(app.config.get('SMS_OTP_ENABLED'))
+
+    def too_many(key):
+        db().execute('DELETE FROM login_attempts WHERE at<?', (S.iso(S.now_utc() - timedelta(minutes=10)),)); db().commit()
+        return db().val('SELECT COUNT(*) FROM login_attempts WHERE key=?', (key,), 0) >= 6
+
+    def note_fail(key):
+        db().execute('INSERT INTO login_attempts(key,at) VALUES(?,?)', (key, S.iso(S.now_utc()))); db().commit()
+
     @app.route('/otp/resend', methods=['POST'])
     def otp_resend():
         flow = session.get('otp_flow') or {}
@@ -107,6 +122,26 @@ def register(app, db, login_required):
     @app.route('/security/phone', methods=['GET', 'POST'])
     @login_required
     def phone_change():
+        if not sms_on():
+            key = f'phonechg|{g.user["id"]}'
+            if request.method == 'POST':
+                new_phone = S.normalize_phone(request.form.get('new_phone'))
+                if too_many(key):
+                    flash('Too many attempts. Wait 10 minutes and try again.', 'danger')
+                elif not g.user['password_hash'] or not check_password_hash(g.user['password_hash'], request.form.get('current_password', '')):
+                    note_fail(key)
+                    flash('Your current password is not correct.', 'danger')
+                elif not new_phone:
+                    flash('Enter a valid Kenyan phone number.', 'danger')
+                elif db().val('SELECT COUNT(*) FROM users WHERE phone=? AND id!=?', (new_phone, g.user['id']), 0):
+                    flash('That phone number is already linked to another account.', 'danger')
+                else:
+                    with db().tx():
+                        db().execute('UPDATE users SET phone=?, phone_verified_at=NULL WHERE id=?', (new_phone, g.user['id']))
+                        audit(db(), g.user['id'], 'PHONE_CHANGED', 'user', g.user['id'], None, {'phone_verified': False})
+                    flash('Your phone number has been changed.', 'success')
+                    return redirect(url_for('security_privacy'))
+            return render_template('phone_change.html', stage='simple', flow={})
         flow = session.get('otp_flow') or {}
         if request.method == 'POST':
             if flow.get('purpose') == 'phone_change_new' and flow.get('current_verified'):
@@ -135,6 +170,28 @@ def register(app, db, login_required):
     @app.route('/security/password', methods=['GET', 'POST'])
     @login_required
     def password_change():
+        if not sms_on():
+            key = f'pwchg|{g.user["id"]}'
+            if request.method == 'POST':
+                password = request.form.get('password') or ''
+                confirm = request.form.get('confirm') or ''
+                if too_many(key):
+                    flash('Too many attempts. Wait 10 minutes and try again.', 'danger')
+                elif not g.user['password_hash'] or not check_password_hash(g.user['password_hash'], request.form.get('current_password', '')):
+                    note_fail(key)
+                    flash('Your current password is not correct.', 'danger')
+                elif len(password) < 8:
+                    flash('Password must be at least 8 characters.', 'danger')
+                elif password != confirm:
+                    flash('Passwords do not match.', 'danger')
+                else:
+                    with db().tx():
+                        db().execute('UPDATE users SET password_hash=?, session_epoch=session_epoch+1 WHERE id=?', (generate_password_hash(password), g.user['id']))
+                        audit(db(), g.user['id'], 'PASSWORD_CHANGED', 'user', g.user['id'], None, {'sms_otp': False})
+                    session.clear()
+                    flash('Your password was changed. Please log in again.', 'success')
+                    return redirect(url_for('login'))
+            return render_template('password_change.html', verified=False, simple=True)
         flow = session.get('otp_flow') or {}
         if request.method == 'POST':
             if flow.get('purpose') == 'password_change_verified' and flow.get('user_id') == g.user['id']:
@@ -162,6 +219,25 @@ def register(app, db, login_required):
 
     @app.route('/forgot', methods=['GET', 'POST'])
     def forgot():
+        if not sms_on():
+            if request.method == 'POST':
+                f = request.form
+                key = f'forgot|{S.normalize_phone(f.get("phone")) or "-"}|{request.remote_addr}'
+                if too_many(key):
+                    flash('Too many attempts. Wait 10 minutes and try again.', 'danger')
+                    return render_template('forgot.html', stage='code'), 429
+                if (f.get('password') or '') != (f.get('confirm') or ''):
+                    flash('Passwords do not match.', 'danger')
+                else:
+                    try:
+                        RC.reset_password(db(), f.get('phone'), f.get('code'), f.get('password'), generate_password_hash, check_password_hash)
+                        session.clear()
+                        flash('Your password was changed. You can now log in.', 'success')
+                        return redirect(url_for('login'))
+                    except S.BusinessError as e:
+                        note_fail(key)
+                        flash(str(e), 'danger')
+            return render_template('forgot.html', stage='code')
         flow = session.get('otp_flow') or {}
         if request.method == 'POST':
             action = request.form.get('action') or 'request'

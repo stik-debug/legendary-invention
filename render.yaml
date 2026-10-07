@@ -31,6 +31,8 @@ services:
         value: Contact ChamaPay support to pay. Your payment will be confirmed in the app.
       - key: REQUIRE_OWNER_2FA
         value: "0"
+      - key: SMS_OTP_ENABLED
+        value: "0"
 
 databases:
   - name: chamapay-db

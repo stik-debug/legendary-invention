@@ -33,7 +33,7 @@ The member must:
 
 1. Register using the same phone number the admin added.
 2. Enter the 8-digit join code.
-3. Complete SMS phone verification.
+3. Complete SMS phone verification (only when `SMS_OTP_ENABLED=1`; while it is off, registration logs the member straight in).
 
 The join code is hashed in the database, shown in plaintext only to the admin at issuance, and destroyed after successful registration. Five incorrect attempts lock the code until the admin issues a new one.
 
