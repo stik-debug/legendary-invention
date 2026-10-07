@@ -2,6 +2,7 @@ import hmac
 import os
 import secrets
 import time
+import threading
 from datetime import date, timedelta
 from functools import wraps
 
@@ -22,7 +23,9 @@ import routes_security
 import routes_upgrade
 import routes_v22
 import routes_plus
+import routes_otp
 import services as S
+import auth_otp as OTP
 import twofactor as TF
 from db import DB, audit, init_db
 from providers import MpesaPaymentProvider, get_provider
@@ -125,6 +128,18 @@ def create_app(overrides=None):
             except Exception:
                 pass
         return {'user': g.get('user'), 'S': S, 'unread': unread, 'notif_unread': notif}
+
+    @app.after_request
+    def deliver_queued_sms(r):
+        # SMS is deliberately processed after the response is prepared and in a separate
+        # daemon thread so Africa's Talking latency never makes a financial action feel slow.
+        if os.environ.get('AT_USERNAME') and os.environ.get('AT_API_KEY'):
+            try:
+                t = threading.Thread(target=N.process_sms_outbox, args=(app.config['DATABASE_URL'], 8), daemon=True)
+                t.start()
+            except Exception:
+                pass
+        return r
 
     @app.after_request
     def headers(r):
@@ -237,9 +252,15 @@ def create_app(overrides=None):
                                           generate_password_hash(f['password']), check_password_hash)
                     if uid is None:
                         uid = S.create_user(db(), f.get('name'), f.get('email'), f.get('phone'), generate_password_hash(f['password']))
-                    session.clear(); session['uid'] = uid; session.permanent = True
-                    audit(db(), uid, 'USER_REGISTERED', 'user', uid); db().commit()
-                    return redirect(url_for('dashboard'))
+                    # Signup is a sensitive action: verify ownership of the phone before creating a logged-in session.
+                    db().commit()
+                    ok, msg, oid = OTP.request_otp(app, db(), uid, f.get('phone'), 'signup', request.remote_addr)
+                    if not ok:
+                        flash(msg, 'warning')
+                        return render_template('register.html')
+                    session.clear(); session['otp_flow'] = {'purpose':'signup', 'user_id':uid,
+                                                            'phone':S.normalize_phone(f.get('phone')), 'otp_id':oid}
+                    return redirect(url_for('otp_verify'))
                 except S.BusinessError as e:
                     flash(str(e), 'danger')
         return render_template('register.html')
@@ -256,6 +277,17 @@ def create_app(overrides=None):
             u = db().one('SELECT * FROM users WHERE is_active=1 AND (email=? OR phone=?)', (ident, phone or '-'))
             if u and u['claimed'] and u['password_hash'] and check_password_hash(u['password_hash'], request.form.get('password', '')):
                 nxt = safe_next(request.args.get('next'))
+                # New/unverified accounts must complete phone verification once before
+                # they can establish a normal password session. After verification,
+                # ordinary logins never require SMS OTP again.
+                if not u.get('phone_verified_at'):
+                    ok, msg, oid = OTP.request_otp(app, db(), u['id'], u['phone'], 'login_phone_verify', request.remote_addr)
+                    if not ok:
+                        flash(msg, 'warning')
+                        return render_template('login.html')
+                    session.clear(); session['otp_flow'] = {'purpose':'login_phone_verify', 'user_id':u['id'],
+                                                            'phone':S.normalize_phone(u['phone']), 'otp_id':oid, 'next':nxt}
+                    return redirect(url_for('otp_verify'))
                 if u['is_super_admin'] and u['totp_enabled']:
                     session.clear(); session['pre2fa'] = u['id']; session['pre2fa_at'] = time.time(); session['pre2fa_next'] = nxt
                     return redirect(url_for('login_2fa'))
@@ -443,6 +475,7 @@ def create_app(overrides=None):
     UP.register(app, db, ctx, login_required)
     routes_security.register(app, db, owner_required, safe_next)
     routes_recovery.register(app, db, ctx, login_required, owner_required)
+    routes_otp.register(app, db, login_required)
     devtools.register(app)
 
     # ---------- owner control center ----------
@@ -453,7 +486,7 @@ def create_app(overrides=None):
         st = S.owner_stats(db())
         recent = db().all("""SELECT p.*, c.name chama FROM payments p JOIN chamas c ON c.id=p.chama_id ORDER BY p.id DESC LIMIT 8""")
         integrations = [('M-Pesa', 'READY' if MpesaPaymentProvider().configured() else 'CONFIGURATION REQUIRED'),
-                        ('Email', 'NOT BUILT YET'), ('SMS', 'NOT BUILT YET'),
+                        ('Email', 'NOT CONFIGURED'), ('SMS', 'READY' if os.environ.get('AT_USERNAME') and os.environ.get('AT_API_KEY') else 'CONFIGURATION REQUIRED'),
                         ('Database', 'PostgreSQL' if db().pg else 'SQLite (not safe for production)')]
         return render_template('owner_home.html', st=st, recent=recent, integrations=integrations)
 

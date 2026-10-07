@@ -64,7 +64,7 @@
 <div class="card tight"><h3 style="padding:18px 20px 0">Payments waiting for confirmation</h3><p class="mute" style="padding:0 20px">Confirm only when the Chama has actually received the money. Confirmation posts the payment automatically to the correct contribution, savings, loan, or merry-go-round ledger.</p>
 <ul class="list">{% for p in pending %}<li><span class="av">{{ p.name[:1] }}</span><span class="grow"><b>{{ p.name }}</b> · {{ purposes[p.purpose] }} · KES {{ p.amount_cents|kes }}<br><small>{{ p.method }}{% if p.reference %} · {{ p.reference }}{% endif %}{% if p.note %} · {{ p.note }}{% endif %} · {{ p.created_at|datetime }}</small></span>
 <form method="POST" action="{{ url_for('universal_pay_decide', chama_id=chama.id, pid=p.id, action='approve') }}" style="margin:0">{{ csrf_input() }}<button class="btn sm pri">Confirm</button></form>
-<form method="POST" action="{{ url_for('universal_pay_decide', chama_id=chama.id, pid=p.id, action='reject') }}" style="margin:0;display:flex;gap:5px"><input name="reason" placeholder="Reason" required maxlength="200" style="width:130px"><button class="btn sm bad">Reject</button></form></li>{% else %}<li class="empty grow">No payments are waiting for confirmation.</li>{% endfor %}</ul></div>
+<form method="POST" action="{{ url_for('universal_pay_decide', chama_id=chama.id, pid=p.id, action='reject') }}" style="margin:0;display:flex;gap:5px">{{ csrf_input() }}<input name="reason" placeholder="Reason" required maxlength="200" style="width:130px"><button class="btn sm bad">Reject</button></form></li>{% else %}<li class="empty grow">No payments are waiting for confirmation.</li>{% endfor %}</ul></div>
 {% endif %}
 
 <script>
