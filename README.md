@@ -27,7 +27,7 @@ Financial actions remain server-authorized and M-Pesa integration is not expande
 | Feature | Status | Notes |
 |---|---|---|
 | Registration, login, logout | Built, tested | Hashed passwords, CSRF, rate limiting, secure cookies |
-| Password reset (no SMS or email) | Built, tested | A trusted person issues a one-time 8-digit code (like the join code); the member enters it on **Forgot password**. Chairperson can do it for ordinary members who belong to one chama only; the ChamaPay owner can do it for anyone (Control Center > Users). Code works once, expires in 60 minutes, locks after 5 wrong tries, is stored hashed, and logs the account out everywhere else. The owner account itself is recovered with env vars |
+| SMS security OTP | Built | Ordinary login does **not** require SMS OTP. SMS OTP is used for signup phone verification, Forgot Password, changing the phone number (current phone + new phone verification), and changing a password from Security & Privacy. Codes are 6 digits, expire after 5 minutes, are single-use, hashed, attempt-limited and resend/rate limited. |
 | Merry-go-round (rotating savings) | Built, tested | Each round has an order (random draw or typed), an amount and weekly/monthly turns. Everyone except that turn's recipient pays in; when all have paid, an official pays the pot to the recipient (never to themselves). **The pot is a separate money account** (`MGR` in the ledger): loans, expenses and "cash in hand" only look at the main account, so the pot can never be lent or spent. "Your turn to pay" alerts, reminders (max one per 12 hours), cancel, reports and CSV. See the section below |
 | Online meetings | Built, tested | When scheduling, choose *In person*, *Online with a free video room* (Jitsi, an unguessable room name is made for you) or *Online with my own link* (Zoom, Google Meet, Teams: https only). Members of that chama only see a **Join** button from 30 minutes before the start until 4 hours after. Opening it marks the member **Joined online** on the attendance sheet as a hint: nobody is marked present automatically, an official still confirms (so absence fines stay fair) |
 | Paying the chama (contributions, fines, loan repayments) | Built, tested | Members pay the chama's **own** paybill, till or phone as they always do, then paste the M-Pesa message in the app. The code and amount are read from it and the payment is recorded with the same finance rules and ledger as a treasurer entry. ChamaPay never holds chama money and sends no payment prompts. See "Paying the chama" below |
@@ -56,9 +56,21 @@ Financial actions remain server-authorized and M-Pesa integration is not expande
 | Announcements (notice board) | Built, tested | Chairperson/secretary post and pin. Members read. Removed notices are kept in the database |
 | In-app notifications (the Alerts bell) | Built, tested | Contributions, loans, fines, notices and meetings alert the right people. Nobody is alerted about their own action. Stays inside the app |
 | Reports and CSV export | Built, tested | Officials only: cash, savings, loans out, fines owed, who has not paid, collections by month, attendance. CSV for members, contributions, loans, fines, attendance (plus the ledger). Cells are spreadsheet-formula safe |
-| Email and SMS | NOT built | Shown as NOT BUILT YET, never faked |
+| Email and SMS | SMS built | Africa's Talking SMS is used for account-security OTPs and existing in-app notification SMS. Email is not required for security flows. |
 | Test-data commands (seed/reset/validate) | Built, tested | `flask --app app seed`, `reset-test-data`, `validate`. See "Test-data commands" below |
 | Two-factor login for owner | Built, tested | Authenticator app (TOTP) plus 8 one-time recovery codes. Optional `REQUIRE_OWNER_2FA=1`. See "Owner two-factor login" below |
+
+
+### SMS security OTP
+
+ChamaPay deliberately does **not** ask for an SMS code on every login. Normal login remains email/phone + password (with the existing owner authenticator-app 2FA when enabled). SMS OTP is reserved for sensitive actions:
+
+- New-account phone verification during signup
+- Forgot password / password recovery
+- Changing the current phone number (verify the current number, then the new number)
+- Changing a password from Security & Privacy
+
+Each OTP is 6 digits, expires in 5 minutes, is stored only as a hash, becomes invalid after successful use, locks after 5 failed attempts, and has resend/request rate limits. OTP messages bypass ordinary SMS notification preferences because they are security messages. Keep `AT_USERNAME`, `AT_API_KEY` and optional `AT_SENDER_ID` in Render environment variables; never commit them to source control.
 
 ## Online meetings
 

@@ -3,8 +3,8 @@ services:
     name: chamapay
     runtime: python
     plan: free
-    buildCommand: python -m pip install --upgrade pip && pip install -r requirements.txt
-    startCommand: gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120 --access-logfile - --error-logfile -
+    buildCommand: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+    startCommand: gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120 --access-logfile - --error-logfile -
     healthCheckPath: /healthz
     envVars:
       - key: PYTHON_VERSION
@@ -20,6 +20,12 @@ services:
       - key: OWNER_PHONE
         sync: false
       - key: OWNER_PASSWORD
+        sync: false
+      - key: AT_USERNAME
+        sync: false
+      - key: AT_API_KEY
+        sync: false
+      - key: AT_SENDER_ID
         sync: false
       - key: PAY_INSTRUCTIONS
         value: Contact ChamaPay support to pay. Your payment will be confirmed in the app.
