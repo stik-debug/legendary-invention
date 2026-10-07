@@ -1,6 +1,14 @@
 {% extends "base.html" %}{% block title %}Forgot password - ChamaPay{% endblock %}
 {% block content %}<div class="auth card"><h1>Forgot your password?</h1>
-{% if stage == 'reset' %}
+{% if stage == 'code' %}
+<p class="mute">Ask your Chama chairperson (or ChamaPay support) for a one-time reset code. Then enter your phone number, the 8-digit code, and a new password.</p>
+<form method="POST">{{ csrf_input() }}
+<div class="field"><label for="ph">Your phone number</label><input id="ph" type="tel" name="phone" placeholder="0712345678" autocomplete="tel" required autofocus></div>
+<div class="field"><label for="cd">Reset code</label><input id="cd" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="12" required></div>
+<div class="field"><label for="pw">New password</label><input id="pw" type="password" name="password" autocomplete="new-password" minlength="8" required></div>
+<div class="field"><label for="cf">Repeat new password</label><input id="cf" type="password" name="confirm" autocomplete="new-password" minlength="8" required></div>
+<button class="btn pri block">Set new password</button></form>
+{% elif stage == 'reset' %}
 <p class="mute">Your phone has been verified. Choose a new password.</p>
 <form method="POST">{{ csrf_input() }}<input type="hidden" name="action" value="verify_password">
 <div class="field"><label for="pw">New password</label><input id="pw" type="password" name="password" autocomplete="new-password" minlength="8" required autofocus></div>

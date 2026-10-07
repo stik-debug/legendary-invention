@@ -1,6 +1,12 @@
 {% extends "base.html" %}{% block title %}Change phone number - ChamaPay{% endblock %}
 {% block content %}<div class="auth card"><h1>Change phone number</h1>
-{% if stage == 'new' %}
+{% if stage == 'simple' %}
+<p class="mute">Enter your current password and the new phone number.</p>
+<form method="POST">{{ csrf_input() }}
+<div class="field"><label for="cp">Current password</label><input id="cp" type="password" name="current_password" autocomplete="current-password" required autofocus></div>
+<div class="field"><label for="np">New phone number</label><input id="np" type="tel" name="new_phone" placeholder="0712345678" autocomplete="tel" required></div>
+<button class="btn pri block">Change phone number</button></form>
+{% elif stage == 'new' %}
 <p class="mute">Your current phone is verified. Enter the new number; we will send a second code to prove you control it.</p>
 <form method="POST">{{ csrf_input() }}
 <div class="field"><label for="np">New phone number</label><input id="np" type="tel" name="new_phone" placeholder="0712345678" autocomplete="tel" required autofocus></div>
