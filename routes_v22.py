@@ -188,6 +188,22 @@ def register_v22_routes(app, db, login_required, ctx, owner_required):
         audit(db(),g.user['id'],'PRIVACY_REQUEST_UPDATED','privacy_request',request_id,None,{'status':status})
         db().commit(); flash('Privacy request updated.','success'); return redirect(url_for('owner_privacy'))
 
+    @app.route('/owner/privacy/<int:request_id>/anonymise', methods=['POST'])
+    @owner_required
+    def owner_privacy_anonymise(request_id):
+        import accounts as AC
+        from services import BusinessError
+        r = db().one('SELECT * FROM privacy_requests WHERE id=?', (request_id,))
+        if not r or r['kind'] != 'DELETION':
+            abort(404)
+        try:
+            AC.anonymise_user(db(), g.user['id'], r['user_id'])
+        except BusinessError as e:
+            flash(str(e), 'warning'); return redirect(url_for('owner_privacy'))
+        db().execute('UPDATE privacy_requests SET status=?,resolution=?,resolved_at=? WHERE id=?',
+                     ('RESOLVED', 'Account anonymised. Personal details removed; the group\'s financial records are kept without the person\'s identity.', _stamp(), request_id))
+        db().commit(); flash('Account anonymised and the request resolved.', 'success'); return redirect(url_for('owner_privacy'))
+
     @app.route('/owner/analytics-v22')
     @owner_required
     def owner_analytics_v22():

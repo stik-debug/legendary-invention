@@ -46,7 +46,8 @@ def create_app(overrides=None):
         PERMANENT_SESSION_LIFETIME=timedelta(days=14), MAX_CONTENT_LENGTH=10 * 1024 * 1024,
         REQUIRE_OWNER_2FA=os.environ.get('REQUIRE_OWNER_2FA') == '1',
         # SMS one-time codes (signup, login gate, change phone/password, forgot password). OFF until SMS delivery works.
-        SMS_OTP_ENABLED=os.environ.get('SMS_OTP_ENABLED') == '1')
+        SMS_OTP_ENABLED=os.environ.get('SMS_OTP_ENABLED') == '1',
+        SUPPORT_CONTACT=os.environ.get('SUPPORT_CONTACT', ''))
     app.config.update(overrides or {})
     if len(app.config['SECRET_KEY']) < 32:
         if production:
@@ -234,6 +235,14 @@ def create_app(overrides=None):
             'index.html', plans=plans, trial=S.setting(db(), 'trial_days', 7),
             month_saved=month_saved, loans_approved=loans_approved,
             paid_members=paid_members, total_members=total_members)
+
+    @app.route('/privacy-policy')
+    def privacy_policy():
+        return render_template('privacy_policy.html', support_contact=app.config.get('SUPPORT_CONTACT'))
+
+    @app.route('/terms')
+    def terms():
+        return render_template('terms.html', support_contact=app.config.get('SUPPORT_CONTACT'))
 
     @app.route('/healthz')
     def healthz():

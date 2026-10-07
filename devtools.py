@@ -109,7 +109,22 @@ def reset_test_data(db, dry_run=True):
         return counts
     cs = _in(chamas or [0])
     us = _in(users or [0])
+    org = f'(SELECT id FROM organizations WHERE created_by IN {us})'
     steps = [
+        # newer tables first (children before parents); every table with a foreign key to a chama or user is covered
+        ('chama_vote_responses', f'user_id IN {us} OR vote_id IN (SELECT id FROM chama_votes WHERE chama_id IN {cs})'),
+        ('chama_votes', f'chama_id IN {cs}'), ('chama_goals', f'chama_id IN {cs}'), ('chama_investments', f'chama_id IN {cs}'),
+        ('chama_assets', f'chama_id IN {cs}'), ('chama_constitutions', f'chama_id IN {cs}'),
+        ('member_documents', f'chama_id IN {cs} OR uploaded_by IN {us}'), ('support_tickets', f'chama_id IN {cs} OR user_id IN {us}'),
+        ('payment_requests', f'chama_id IN {cs} OR user_id IN {us} OR decided_by IN {us}'),
+        ('mpesa_records', f'chama_id IN {cs} OR added_by IN {us}'), ('meeting_actions', f'chama_id IN {cs}'),
+        ('loan_installments', f'loan_id IN (SELECT id FROM loans WHERE chama_id IN {cs})'),
+        ('loan_guarantors', f'chama_id IN {cs} OR guarantor_user_id IN {us}'),
+        ('organization_members', f'user_id IN {us} OR organization_id IN {org}'),
+        ('organization_chamas', f'chama_id IN {cs} OR linked_by IN {us} OR organization_id IN {org}'),
+        ('organizations', f'created_by IN {us}'),
+        ('notification_preferences', f'user_id IN {us}'), ('sms_outbox', f'user_id IN {us}'),
+        ('auth_otps', f'user_id IN {us}'), ('privacy_requests', f'user_id IN {us}'),
         ('chama_payments', f'chama_id IN {cs}'), ('chama_pay_config', f'chama_id IN {cs}'), ('meeting_joins', f'chama_id IN {cs}'),
         ('attendance', f'chama_id IN {cs}'), ('meetings', f'chama_id IN {cs}'), ('announcements', f'chama_id IN {cs}'),
         ('notifications', f'chama_id IN {cs} OR user_id IN {us}'), ('message_reads', f'chama_id IN {cs} OR user_id IN {us}'),

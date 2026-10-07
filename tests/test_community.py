@@ -194,7 +194,7 @@ class CommWeb(unittest.TestCase):
         self.team()
         self.add_contrib('m1', 1000)
         page = self.m1.get('/dashboard').get_data(as_text=True)
-        self.assertRegex(page, r'Alerts\s*<span class="dot">1</span>')
+        self.assertRegex(page, r'Alerts \(1\)')
         nid = self.db.val('SELECT id FROM notifications WHERE user_id=?', (self.uid['m1'],))
         r = self.post(self.m1, f'/notifications/{nid}/open')
         self.assertEqual(r.status_code, 302)

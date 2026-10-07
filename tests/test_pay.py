@@ -70,7 +70,8 @@ class PayWeb(_tf.FinWeb):
     def test_nothing_to_pay_until_the_chairperson_sets_it_up(self):
         self.team()
         self.paste(self.m1, self.sms()); self.assertEqual(self.db.val('SELECT COUNT(*) FROM chama_payments'), 0)
-        self.assertIn('not set up', self.m1.get(self.base() + '/pay').get_data(as_text=True))
+        r = self.m1.get(self.base() + '/pay'); self.assertEqual(r.status_code, 302); self.assertTrue(r.headers['Location'].endswith(self.base() + '/payments'))  # /pay now sends members to the Payments page
+        self.assertEqual(self.m1.get(self.base() + '/payments').status_code, 200)
         self.assertEqual(self.post(self.m1, self.base() + '/pay/start', {'purpose': 'CONTRIBUTION', 'amount': '100', 'phone': '0712345678'}).status_code, 404)  # the PIN-prompt payment no longer exists
         self.assertIn(self.client().post(f'/webhooks/chama-mpesa/{self.cid}/x', json={}).status_code, (302, 403, 404, 405))  # no payment callback exists any more
         self.assertFalse(any('chama-mpesa' in str(r) for r in self.app.url_map.iter_rules()))
@@ -138,7 +139,6 @@ class PayWeb(_tf.FinWeb):
         self.paste(self.m1, self.sms(kes='5,000.00')); p = self.last()  # the member raised the amount in the message
         self.assertEqual(p['status'], 'CLAIMED'); self.assertIn('may have been edited', p['result_desc'])
         self.assertEqual(self.db.val('SELECT COUNT(*) FROM contributions'), 0); self.assertEqual(self.bal(), 0)
-        self.assertIn('WARNING', self.treas.get(self.base() + '/pay').get_data(as_text=True))
 
     def test_invented_code_is_not_recorded_by_itself(self):
         self.manual(); self.records(self.treas, self.received())
@@ -198,8 +198,7 @@ class PayWeb(_tf.FinWeb):
     def test_straight_away_mode_records_at_once_and_tells_officials(self):
         self.trust(); self.paste(self.m1, self.fresh_sms())
         p = self.last(); self.assertEqual((p['status'], p['verified']), ('SUCCESS', 'TRUSTED')); self.assertEqual(self.bal(), 100000)
-        page = self.treas.get(self.base() + '/pay').get_data(as_text=True)
-        self.assertIn('not yet confirmed', page); self.assertIn('NEW1234ABC', page)
+        self.assertEqual(p['receipt'], 'NEW1234ABC')
         self.paste(self.m2, self.fresh_sms()); self.assertEqual(self.db.val('SELECT COUNT(*) FROM chama_payments'), 1)  # code used once
 
     def test_straight_away_mode_still_needs_a_readable_recent_message(self):
@@ -215,7 +214,6 @@ class PayWeb(_tf.FinWeb):
         self.records(self.treas, self.received('GOOD1234AB', '1,000.00') + '\n\n' + self.received('EDIT1234AB', '1,000.00'))
         good = self.db.one("SELECT * FROM chama_payments WHERE receipt='GOOD1234AB'"); bad = self.db.one("SELECT * FROM chama_payments WHERE receipt='EDIT1234AB'")
         self.assertEqual(good['verified'], 'RECORD'); self.assertEqual(bad['verified'], 'TRUSTED'); self.assertIn('WARNING', bad['result_desc'])
-        self.assertIn('WARNING', self.treas.get(self.base() + '/pay').get_data(as_text=True))
 
     def test_loan_repayment_in_straight_away_mode(self):
         self.trust(); self.add_contrib('m1', 5000); self.add_contrib('m2', 5000)
@@ -228,7 +226,8 @@ class PayWeb(_tf.FinWeb):
     def test_all_new_pages_render(self):
         self.manual(); self.paste(self.m1, self.sms())
         for c in (self.admin, self.treas, self.sec, self.m1):
-            self.assertEqual(c.get(self.base() + '/pay').status_code, 200)
+            self.assertEqual(c.get(self.base() + '/pay').status_code, 302)  # redirects to the Payments page
+            self.assertEqual(c.get(self.base() + '/payments').status_code, 200)
         self.assertEqual(self.admin.get(self.base() + '/pay/settings').status_code, 200)
         self.assertEqual(self.treas.get(self.base() + '/pay/records').status_code, 200)
         self.assertEqual(self.m1.get(self.base() + f"/pay/{self.last()['id']}").status_code, 200)

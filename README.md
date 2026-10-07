@@ -1,8 +1,6 @@
-# ChamaPay Kenya — V22 Trust, Intelligence & Polish Release
+# ChamaPay Kenya (V23)
 
-# ChamaPay Kenya (stage 5: online meetings + in-app chama payments)
-
-A multi-tenant SaaS for Kenyan chamas. **Stage 1 (billing, security, Control Center, 3D interface), stage 2 (contributions, ledger, loans, fines, statements, chat) and stage 3 (meetings, attendance, announcements, notifications, reports, owner two-factor login, test-data commands) are built.** See "What is and is not built" below. Please read it.
+A multi-tenant SaaS for Kenyan chamas. Billing, security, the Control Center, contributions, the ledger, loans, fines, statements, chat, meetings, announcements, notifications, reports, merry-go-round, owner two-factor login and the test-data commands are built (V22 added the trust, privacy and polish features below; V23 added payment setup, member joining codes and the new logo). See "What is and is not built" below. Please read it.
 
 
 ## V22 additions
@@ -35,8 +33,8 @@ Financial actions remain server-authorized and M-Pesa integration is not expande
 | Multi-tenant isolation | Built, tested | Chama A user gets 403 on Chama B pages and actions |
 | Chama create, members add/remove | Built, tested | Add by name + phone number. New people get an 8-digit join code to claim their account. Removal keeps history |
 | Invitations by link | NOT built | Join codes work today (admin adds a phone number, gives the person an 8-digit code) |
-| Plans Starter 500/15, Growth 1,500/70, Business 2,000/100 | Built, tested | In the database, editable by the owner. Per chama, never per member |
-| Member limit (16th, 71st, 101st rejected) | Built, tested | Enforced in the backend, race-safe on PostgreSQL |
+| Plans Starter 500/20, Growth 1,500/70, Pro 2,000/100 (KES per month) | Built, tested | In the database, editable by the owner. Per chama, never per member |
+| Member limit (21st, 71st, 101st rejected) | Built, tested | Enforced in the backend, race-safe on PostgreSQL |
 | Upgrade / downgrade | Built, tested | Upgrade = pay. Downgrade blocked if members do not fit. Nobody is auto-removed |
 | Subscription states TRIAL, ACTIVE, PAST_DUE, GRACE_PERIOD, SUSPENDED, CANCELLED | Built, tested | 7-day trial and 3-day grace, both editable |
 | Suspension keeps all data, payment auto-reactivates | Built, tested | |
@@ -56,9 +54,12 @@ Financial actions remain server-authorized and M-Pesa integration is not expande
 | Announcements (notice board) | Built, tested | Chairperson/secretary post and pin. Members read. Removed notices are kept in the database |
 | In-app notifications (the Alerts bell) | Built, tested | Contributions, loans, fines, notices and meetings alert the right people. Nobody is alerted about their own action. Stays inside the app |
 | Reports and CSV export | Built, tested | Officials only: cash, savings, loans out, fines owed, who has not paid, collections by month, attendance. CSV for members, contributions, loans, fines, attendance (plus the ledger). Cells are spreadsheet-formula safe |
-| Email and SMS | SMS built | Africa's Talking SMS is used for account-security OTPs and existing in-app notification SMS. Email is not required for security flows. |
+| Email and SMS | SMS built, but SMS sign-in codes are OFF | Africa's Talking SMS is used for account-security OTPs and existing in-app notification SMS. Email is not required for security flows. |
 | Test-data commands (seed/reset/validate) | Built, tested | `flask --app app seed`, `reset-test-data`, `validate`. See "Test-data commands" below |
 | Two-factor login for owner | Built, tested | Authenticator app (TOTP) plus 8 one-time recovery codes. Optional `REQUIRE_OWNER_2FA=1`. See "Owner two-factor login" below |
+| Privacy Policy and Terms of Use | Built (starting text) | Public pages at `/privacy-policy` and `/terms`, linked from the home and sign-up pages. Plain-language starting text: **have a Kenyan lawyer review it before launch**. Set `SUPPORT_CONTACT` on Render to show a contact line |
+| Account deletion | Built, tested | A member asks under Security & Privacy; the owner reviews it at Owner > Privacy requests and presses *Delete account (anonymise)*. Name, phone, email, password, 2FA and sessions are erased and the person leaves their chamas, but the group's entries stay (shown as "Deleted member") so the books still balance. Refused while the person has an open loan, an unpaid fine, a loan guarantee, or is a chairperson |
+| Old "paste an M-Pesa message" page | Not shown | `/pay` now goes to the Payments page. The paste-a-message routes and the officials' warning page still exist in the code but nothing links to them |
 
 
 ### SMS security OTP
@@ -100,7 +101,7 @@ Message layouts differ between send money, paybill and till, and Safaricom can c
 
 Upgrading: chamas that used the old automatic (Daraja) setting keep their payment instructions and move to the default check. Stored Daraja keys are no longer used. `CHAMA_SECRETS_KEY` is no longer needed.
 
-## Tests (207 automated, all passing on SQLite; the web-level ones (including the new payment and online-meeting tests) also pass on PostgreSQL)
+## Tests (229 automated, all passing on SQLite; the web-level ones up to V22 also passed on PostgreSQL, but the newest tests (SMS switch, account deletion, legal pages) have only been run on SQLite)
 
     python -m unittest discover -s tests -v
 

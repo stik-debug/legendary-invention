@@ -48,7 +48,7 @@ class PlanLimits(Base):
             S.add_member(self.db, cid, self.user(), 'MEMBER', None, self.t0)
         self.assertEqual(S.active_member_count(self.db, cid), limit)
 
-    def test_starter_15_ok_16_rejected(self): self.check('starter', 15)
+    def test_starter_20_ok_21_rejected(self): self.check('starter', 20)
     def test_growth_70_ok_71_rejected(self): self.check('growth', 70)
     def test_business_100_ok_101_rejected(self): self.check('business', 100)
 
@@ -60,7 +60,7 @@ class PlanLimits(Base):
             S.add_member(self.db, cid, self.user(), 'MEMBER', None, self.t0)
 
     def test_removed_member_frees_a_slot_and_history_kept(self):
-        owner, cid = self.chama(); self.fill(cid, 15)
+        owner, cid = self.chama(); self.fill(cid, 20)
         u = self.db.val("SELECT user_id FROM chama_members WHERE chama_id=? AND role='MEMBER' LIMIT 1", (cid,))
         S.remove_member(self.db, cid, u, owner, self.t0)
         self.assertEqual(self.db.val('SELECT status FROM chama_members WHERE chama_id=? AND user_id=?', (cid, u)), 'REMOVED')
@@ -73,10 +73,10 @@ class PlanLimits(Base):
         with self.assertRaises(S.BusinessError): S.remove_member(self.db, cid, owner, owner, self.t0)
 
     def test_downgrade_blocked_when_too_many_members_and_nobody_removed(self):
-        owner, cid = self.chama('growth'); self.fill(cid, 20)
+        owner, cid = self.chama('growth'); self.fill(cid, 21)
         with self.assertRaises(S.PlanLimitError):
             S.downgrade_plan(self.db, cid, S.get_plan(self.db, code='starter')['id'], owner, self.t0)
-        self.assertEqual(S.active_member_count(self.db, cid), 20)
+        self.assertEqual(S.active_member_count(self.db, cid), 21)
 
     def test_downgrade_ok_when_fits_and_upgrade_needs_payment(self):
         owner, cid = self.chama('growth'); self.fill(cid, 10)
@@ -201,14 +201,14 @@ class Payments(Base):
         self.assertEqual(self.sub(c2)['status'], 'TRIAL')
 
     def test_cannot_pay_for_plan_smaller_than_membership(self):
-        _, cid = self.chama('growth'); self.fill(cid, 20)
+        _, cid = self.chama('growth'); self.fill(cid, 21)
         with self.assertRaises(S.PlanLimitError): self.pay(cid, 'starter')
 
     def test_upgrade_by_payment_raises_limit_and_keeps_members(self):
-        _, cid = self.chama('starter'); self.fill(cid, 15)
+        _, cid = self.chama('starter'); self.fill(cid, 20)
         pid, chk, amt = self.pay(cid, 'growth')
         S.process_webhook(self.db, 'TEST', self.ev(chk, amt))
-        self.assertEqual(S.chama_limit(self.db, cid), 70); self.assertEqual(S.active_member_count(self.db, cid), 15)
+        self.assertEqual(S.chama_limit(self.db, cid), 70); self.assertEqual(S.active_member_count(self.db, cid), 20)
         S.add_member(self.db, cid, self.user(), 'MEMBER', None, self.t0)
 
     def test_manual_payment_owner_flow_and_audit(self):

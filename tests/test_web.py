@@ -68,7 +68,7 @@ class Web(unittest.TestCase):
     def test_public_pages_and_landing_content(self):
         c = self.client()
         html = c.get('/').get_data(as_text=True)
-        for s in ('Manage Your Chama', 'Save Together. Grow Together.', 'KES 500', 'KES 1,500', 'KES 2,000', 'Up to 15 members', 'Up to 70 members', 'Up to 100 members', 'not per member'):
+        for s in ('Manage Your Chama', 'One Digital Headquarters.', 'KES 500', 'KES 1,500', 'KES 2,000', 'Up to 20 members', 'Up to 70 members', 'Up to 100 members', 'not per member'):
             self.assertIn(s, html)
         self.assertEqual(c.get('/healthz').json, {'status': 'ok'})
         self.assertEqual(c.get('/login').status_code, 200); self.assertEqual(c.get('/register').status_code, 200)
@@ -143,16 +143,16 @@ class Web(unittest.TestCase):
         self.assertEqual(h['X-Frame-Options'], 'DENY'); self.assertIn("script-src 'self'", h['Content-Security-Policy'])
 
     # ---------- plan limits over HTTP ----------
-    def test_member_16_rejected_through_the_app(self):
+    def test_member_21_rejected_through_the_app(self):
         c, _ = self.signup(); cid = self.make_chama(c)
-        for i in range(14):
+        for i in range(19):
             _, email = self.signup(f'Member {i}')
             self.post(c, f'/chamas/{cid}/members', {'phone': self.phone_of(email), 'role': 'MEMBER'})
-        self.assertEqual(S.active_member_count(self.db, cid), 15)
-        _, extra = self.signup('Member Sixteen')
+        self.assertEqual(S.active_member_count(self.db, cid), 20)
+        _, extra = self.signup('Member Twenty-One')
         r = self.post(c, f'/chamas/{cid}/members', {'phone': self.phone_of(extra), 'role': 'MEMBER'}, follow=True)
-        self.assertIn('allows 15 members', r.get_data(as_text=True))
-        self.assertEqual(S.active_member_count(self.db, cid), 15)
+        self.assertIn('allows 20 members', r.get_data(as_text=True))
+        self.assertEqual(S.active_member_count(self.db, cid), 20)
 
     # ---------- subscription lifecycle over HTTP ----------
     def test_suspended_chama_blocked_data_kept_then_payment_restores(self):
@@ -263,7 +263,7 @@ class Web(unittest.TestCase):
         c, _ = self.signup(); cid = self.make_chama(c)
         r = self.post(c, f'/chamas/{cid}/members', {'name': 'Wanjiru Kamau', 'phone': '0733111222', 'role': 'MEMBER'}, follow=True)
         html = r.get_data(as_text=True)
-        code = re.search(r'register: (\d{8})', html).group(1)
+        code = re.search(r'(?i)register: (\d{8})', html).group(1)
         u = self.db.one("SELECT * FROM users WHERE phone='254733111222'")
         self.assertEqual((u['claimed'], u['password_hash']), (0, '')); self.assertNotEqual(u['claim_code_hash'], code)
         self.assertEqual(S.active_member_count(self.db, cid), 2)
@@ -276,7 +276,7 @@ class Web(unittest.TestCase):
     def test_new_person_claims_account_with_code_and_sees_chama(self):
         c, _ = self.signup(); cid = self.make_chama(c)
         html = self.post(c, f'/chamas/{cid}/members', {'name': 'Wanjiru Kamau', 'phone': '0733111222', 'role': 'TREASURER'}, follow=True).get_data(as_text=True)
-        code = re.search(r'register: (\d{8})', html).group(1)
+        code = re.search(r'(?i)register: (\d{8})', html).group(1)
         w = self.client()
         r = self.post(w, '/register', {'name': 'Wanjiru Kamau', 'email': 'wanjiru@example.test', 'phone': '0733111222', 'password': 'Password123',
                                         'confirm': 'Password123', 'join_code': code})
@@ -290,7 +290,7 @@ class Web(unittest.TestCase):
     def test_cannot_claim_without_or_with_wrong_code_and_locks_after_5(self):
         c, _ = self.signup(); cid = self.make_chama(c)
         html = self.post(c, f'/chamas/{cid}/members', {'name': 'Target Person', 'phone': '0733555666'}, follow=True).get_data(as_text=True)
-        code = re.search(r'register: (\d{8})', html).group(1)
+        code = re.search(r'(?i)register: (\d{8})', html).group(1)
         atk = self.client()
         form = {'name': 'Attacker', 'email': 'atk@example.test', 'phone': '0733555666', 'password': 'Password123', 'confirm': 'Password123'}
         self.assertEqual(self.post(atk, '/register', dict(form)).status_code, 200)
@@ -307,13 +307,13 @@ class Web(unittest.TestCase):
         self.assertIn('already log in', html); self.assertNotIn('join code', html.lower().split('flash')[0] if False else 'x')
         self.assertEqual(S.active_member_count(self.db, cid), 2)
 
-    def test_phone_member_16_rejected_and_no_placeholder_left_behind(self):
+    def test_phone_member_21_rejected_and_no_placeholder_left_behind(self):
         c, _ = self.signup(); cid = self.make_chama(c)
-        for i in range(14):
+        for i in range(19):
             self.post(c, f'/chamas/{cid}/members', {'name': f'Member {i}', 'phone': f'07331000{i:02d}'})
-        self.assertEqual(S.active_member_count(self.db, cid), 15)
-        r = self.post(c, f'/chamas/{cid}/members', {'name': 'Sixteenth', 'phone': '0733999999'}, follow=True)
-        self.assertIn('allows 15 members', r.get_data(as_text=True))
+        self.assertEqual(S.active_member_count(self.db, cid), 20)
+        r = self.post(c, f'/chamas/{cid}/members', {'name': 'TwentyFirst', 'phone': '0733999999'}, follow=True)
+        self.assertIn('allows 20 members', r.get_data(as_text=True))
         self.assertEqual(self.db.val("SELECT COUNT(*) FROM users WHERE phone='254733999999'"), 0)
 
     def test_bad_phone_or_missing_name_rejected(self):
