@@ -335,9 +335,7 @@ def create_app(overrides=None):
                 flash(str(e), 'danger')
         return render_template('chama_new.html', plans=plans, trial=S.setting(db(), 'trial_days', 7))
 
-    @app.route('/chamas/<int:chama_id>')
-    @login_required
-    def chama_home(chama_id):
+    def render_chama_home(chama_id, invite_code=None, invite_name=None):
         chama, me, sub = ctx(chama_id)
         members = db().all("""SELECT u.id, u.name, u.phone, u.claimed, m.role, m.joined_at FROM chama_members m JOIN users u ON u.id=m.user_id
             WHERE m.chama_id=? AND m.status='ACTIVE' ORDER BY m.joined_at LIMIT 200""", (chama_id,))
@@ -346,7 +344,13 @@ def create_app(overrides=None):
         month_paid = sum(1 for r in F.month_status(db(), chama_id, period) if r['status'] == 'PAID')
         return render_template('chama_home.html', chama=chama, me=me, sub=sub, plan=plan, members=members, roles=S.ROLES,
                                is_admin=me['role'] == 'CHAMA_ADMIN', balance=F.cash_balance(db(), chama_id), my_savings=F.savings(db(), chama_id, g.user['id']),
-                               st=F.member_statement(db(), chama_id, g.user['id']), month_paid=month_paid, can_view_statements=me['role'] in F.VIEW_ROLES)
+                               st=F.member_statement(db(), chama_id, g.user['id']), month_paid=month_paid, can_view_statements=me['role'] in F.VIEW_ROLES,
+                               invite_code=invite_code, invite_name=invite_name)
+
+    @app.route('/chamas/<int:chama_id>')
+    @login_required
+    def chama_home(chama_id):
+        return render_chama_home(chama_id)
 
     @app.route('/chamas/<int:chama_id>/members', methods=['POST'])
     @login_required
@@ -356,9 +360,10 @@ def create_app(overrides=None):
             uid, code = S.add_member_by_phone(db(), chama_id, request.form.get('phone'), request.form.get('name'),
                                               request.form.get('role', 'MEMBER'), g.user['id'], generate_password_hash)
             if code:
-                flash('Member added. Give them this join code to register: ' + code + ' (shown only once).', 'success')
-            else:
-                flash('Member added. They can already log in.', 'success')
+                # Render the code directly in the authenticated admin's response.
+                # It is never stored in plaintext and never placed in a URL/session cookie.
+                return render_chama_home(chama_id, invite_code=code, invite_name=request.form.get('name') or 'New member')
+            flash('Member added. They can already log in.', 'success')
         except S.BusinessError as e:
             flash(str(e), 'warning')
         return redirect(url_for('chama_home', chama_id=chama_id))
@@ -369,7 +374,8 @@ def create_app(overrides=None):
         ctx(chama_id, roles=('CHAMA_ADMIN',))
         try:
             code = S.reset_join_code(db(), chama_id, user_id, generate_password_hash)
-            flash('New join code: ' + code + '. The old code no longer works.', 'success')
+            member = db().one('SELECT name FROM users WHERE id=?', (user_id,))
+            return render_chama_home(chama_id, invite_code=code, invite_name=member['name'] if member else 'Member')
         except S.BusinessError as e:
             flash(str(e), 'warning')
         return redirect(url_for('chama_home', chama_id=chama_id))

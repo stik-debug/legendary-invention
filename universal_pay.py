@@ -10,6 +10,7 @@ from datetime import date
 from flask import abort, flash, g, redirect, render_template, request, url_for
 
 import finance as F
+import chama_pay as CP
 import mgr as M
 from db import audit, IntegrityError
 from notify import notify, notify_roles
@@ -178,7 +179,8 @@ def register(app, db, ctx, login_required):
     def universal_pay_page(chama_id):
         chama, me, sub = ctx(chama_id)
         t = targets(db(), chama_id, g.user['id'])
-        return render_template('universal_pay.html', chama=chama, me=me, data=t,
+        pay_config = CP.get_config(db(), chama_id)
+        return render_template('universal_pay.html', chama=chama, me=me, data=t, pay_config=pay_config,
                                requests=mine(db(), chama_id, g.user['id']), pending=pending(db(), chama_id) if me['role'] in F.FINANCE_ROLES else [],
                                staff=me['role'] in F.FINANCE_ROLES, methods=METHODS, purposes=PURPOSES)
 

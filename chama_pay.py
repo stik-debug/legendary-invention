@@ -21,6 +21,14 @@ from services import BusinessError, iso, now_utc
 PURPOSES = {'CONTRIBUTION': 'Contribution', 'FINE': 'Fine', 'LOAN': 'Loan repayment'}
 MAX_CENTS = 250_000 * 100  # M-Pesa's own limit per transaction
 CHECK_MODES = ('RECORDS', 'TRUST')
+PAYMENT_METHODS = {
+    'MPESA_PAYBILL': 'M-Pesa PayBill',
+    'MPESA_TILL': 'M-Pesa Till / Buy Goods',
+    'MPESA_SEND': 'M-Pesa Send Money',
+    'BANK': 'Bank transfer',
+    'CASH': 'Cash',
+    'OTHER': 'Other',
+}
 TRUST_MAX_AGE_DAYS = 7  # in TRUST mode an older message is left for an official
 
 
@@ -43,18 +51,30 @@ def check_mode(db, chama_id):
 def save_config(db, chama_id, f, actor, now=None):
     now = now or now_utc()
     instr = (f.get('instructions') or '').strip()[:500]
+    raw_method = (f.get('payment_method') or '').strip().upper()
+    shortcode = (f.get('shortcode') or '').strip()[:80] or None
+    method = raw_method or ('MPESA_PAYBILL' if shortcode else 'OTHER')
+    account = (f.get('payment_account_name') or '').strip()[:120] or None
+    if method not in PAYMENT_METHODS:
+        raise BusinessError('Choose a valid payment method.')
+    if method in ('MPESA_PAYBILL', 'MPESA_TILL', 'MPESA_SEND', 'BANK') and not shortcode:
+        raise BusinessError('Enter the PayBill, Till, phone number or bank account members should use.')
+    if method in ('MPESA_PAYBILL', 'MPESA_TILL') and not account:
+        raise BusinessError('Enter the account/business name members should use when paying.')
     if len(instr) < 5:
-        raise BusinessError('Tell members how to pay: your paybill or till number and the account name.')
+        raise BusinessError('Add clear payment instructions members can follow.')
     mode = f.get('check_mode') or 'RECORDS'
     if mode not in CHECK_MODES:
         raise BusinessError('Choose how pasted M-Pesa messages are checked.')
-    vals = {'mode': 'MANUAL', 'instructions': instr, 'check_mode': mode, 'updated_by': actor, 'updated_at': iso(now)}
+    vals = {'mode': 'MANUAL', 'shortcode': shortcode, 'payment_method': method, 'payment_account_name': account,
+            'instructions': instr, 'check_mode': mode, 'updated_by': actor, 'updated_at': iso(now)}
     with db.tx():
         if get_config(db, chama_id):
             db.execute('UPDATE chama_pay_config SET ' + ','.join(f'{k}=?' for k in vals) + ' WHERE chama_id=?', list(vals.values()) + [chama_id])
         else:
             db.insert('chama_pay_config', chama_id=chama_id, **vals)
-        audit(db, actor, 'PAY_CONFIG_SAVED', 'chama', chama_id, chama_id, {'check_mode': mode})
+        audit(db, actor, 'PAY_CONFIG_SAVED', 'chama', chama_id, chama_id,
+              {'check_mode': mode, 'payment_method': method, 'payment_account': shortcode})
 
 
 # ---------- what is being paid ----------

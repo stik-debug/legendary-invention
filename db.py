@@ -193,6 +193,7 @@ CREATE INDEX IF NOT EXISTS ix_meetings_chama ON meetings(chama_id, held_at);
 CREATE INDEX IF NOT EXISTS ix_announce_chama ON announcements(chama_id, id);
 CREATE TABLE IF NOT EXISTS chama_pay_config(
   id {PK}, chama_id INTEGER NOT NULL UNIQUE REFERENCES chamas(id), mode TEXT NOT NULL DEFAULT 'MANUAL', shortcode TEXT, instructions TEXT,
+  payment_method TEXT NOT NULL DEFAULT 'MPESA_PAYBILL', payment_account_name TEXT,
   env TEXT NOT NULL DEFAULT 'sandbox', key_enc TEXT, secret_enc TEXT, passkey_enc TEXT, updated_by INTEGER, updated_at TEXT,
   check_mode TEXT NOT NULL DEFAULT 'RECORDS');
 CREATE TABLE IF NOT EXISTS payment_requests(
@@ -408,6 +409,8 @@ def init_db(db):
         ensure_column(db, 'chamas', 'loan_rate_bps', 'INTEGER NOT NULL DEFAULT 1000')
         ensure_column(db, 'chamas', 'loan_multiplier', 'INTEGER NOT NULL DEFAULT 3')
         ensure_column(db, 'loans', 'due_date', 'TEXT')
+        ensure_column(db, 'chama_pay_config', 'payment_method', "TEXT NOT NULL DEFAULT 'MPESA_PAYBILL'")
+        ensure_column(db, 'chama_pay_config', 'payment_account_name', 'TEXT')
         if not db.val('SELECT COUNT(*) FROM subscription_plans'):
             for code, name, price, mx, order in DEFAULT_PLANS:
                 db.insert('subscription_plans', code=code, name=name, price_cents=price, max_members=mx, sort_order=order)

@@ -95,4 +95,4 @@ def register(app, db, ctx, login_required):
                 return back(chama_id)
             except S.BusinessError as e:
                 flash(str(e), 'warning')
-        return render_template('pay_settings.html', chama=chama, me=me, cfg=P.get_config(db(), chama_id), mode=P.check_mode(db(), chama_id))
+        return render_template('pay_settings.html', chama=chama, me=me, cfg=P.get_config(db(), chama_id), mode=P.check_mode(db(), chama_id), payment_methods=P.PAYMENT_METHODS)
