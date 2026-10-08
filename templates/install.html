@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% block title %}Install ChamaPay{% endblock %}
+{% block content %}
+<div class="head"><div><h2>Install ChamaPay on your phone</h2><p>It opens like an app, with no app store needed.</p></div></div>
+<div class="card" style="line-height:1.6">
+<h3>Android (Chrome)</h3>
+<ol><li>Open ChamaPay in Chrome.</li><li>Tap the <b>three dots</b> menu at the top right.</li><li>Tap <b>Install app</b> (or <b>Add to Home screen</b>) and confirm.</li></ol>
+<h3>iPhone (Safari)</h3>
+<ol><li>Open ChamaPay in Safari.</li><li>Tap the <b>Share</b> button.</li><li>Tap <b>Add to Home Screen</b>, then <b>Add</b>.</li></ol>
+<h3>Computer</h3>
+<p>In Chrome or Edge, click the install icon at the right end of the address bar.</p>
+</div>
+<p style="text-align:center"><a class="btn pri" href="{{ url_for('index') }}">Back to home</a></p>
+{% endblock %}

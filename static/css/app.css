@@ -64,6 +64,7 @@ table{width:100%;border-collapse:collapse}th,td{padding:12px 16px;text-align:lef
 .float{position:absolute;background:var(--card);backdrop-filter:blur(16px);border:1px solid var(--line);border-radius:18px;padding:12px 16px;box-shadow:var(--sh);font-weight:700;animation:bob 6s ease-in-out infinite}
 .float small{display:block;font-weight:500}.float.a{top:24px;left:0;transform:rotate(-5deg)}.float.b{bottom:34px;right:0;animation-delay:-3s;transform:rotate(4deg)}.float.c{top:120px;right:-6px;animation-delay:-1.5s}
 @keyframes float{50%{transform:rotateX(58deg) rotateZ(-14deg) translateZ(14px)}}@keyframes bob{50%{translate:0 -12px}}
+.features a.card{display:block;color:inherit;text-decoration:none;cursor:pointer}.features a.card:hover,.features a.card:focus-visible{box-shadow:0 14px 34px rgba(16,110,80,.22)}.features a.card:focus-visible{outline:3px solid var(--gold,#E8B13A);outline-offset:2px}
 .section{padding:44px 0}.features{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin-top:26px;perspective:1200px}
 .ico{width:52px;height:52px;border-radius:16px;display:grid;place-items:center;margin-bottom:14px;background:linear-gradient(135deg,#14A374,var(--em-d));box-shadow:0 5px 0 var(--em-x);color:#fff}.ico svg{width:26px;height:26px}
 .plans{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin-top:26px;perspective:1200px}
