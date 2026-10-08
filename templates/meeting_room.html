@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Live meeting — {{ m.title }} | ChamaPay{% endblock %}
+{% block head %}
+<meta name="referrer" content="no-referrer">
+<style>
+.live-meeting{display:flex;flex-direction:column;gap:12px;margin:12px 0 28px}
+.live-meeting-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.live-meeting-frame{width:100%;height:min(74vh,820px);min-height:480px;border:0;border-radius:18px;background:#101827;box-shadow:0 14px 40px rgba(0,0,0,.18)}
+.live-meeting-help{font-size:.92rem;color:var(--muted,#64748b)}
+@media(max-width:600px){.live-meeting-frame{height:68vh;min-height:440px;border-radius:12px}.live-meeting{margin-left:-4px;margin-right:-4px}}
+</style>
+{% endblock %}
+{% block content %}
+<div class="live-meeting">
+  <div class="live-meeting-bar">
+    <div><h2 style="margin:0">{{ m.title }}</h2><p class="live-meeting-help" style="margin:6px 0 0">{{ chama.name }} · Live meeting room</p></div>
+    <a class="btn" href="{{ url_for('meeting_view', chama_id=chama.id, mid=m.id) }}">Back to meeting details</a>
+  </div>
+  <div class="card tight"><p style="margin:0">Allow camera and microphone access when prompted. For privacy, only share the room link with members of this chama. Video calls use internet data.</p></div>
+  <iframe class="live-meeting-frame" src="{{ room_url }}" title="ChamaPay live meeting: {{ m.title }}" allow="camera; microphone; fullscreen; display-capture; autoplay; clipboard-write" allowfullscreen referrerpolicy="no-referrer"></iframe>
+  <p class="live-meeting-help">If the video room does not load in your browser, use the meeting details page and contact your chama secretary. Attendance, agenda and minutes remain available in ChamaPay.</p>
+</div>
+{% endblock %}
