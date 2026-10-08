@@ -23,6 +23,7 @@
 <p class="mute">You can borrow up to <b>KES {{ limit|kes }}</b> ({{ chama.loan_multiplier }} times your savings). Interest is {{ (chama.loan_rate_bps/100)|round(1) }}%.</p>
 <div class="field"><label>Amount (KES)</label><input name="amount" inputmode="decimal" required></div>
 <div class="field"><label>What is it for?</label><input name="purpose" maxlength="200"></div>
+<div class="field"><label>Guarantors (optional, up to 5)</label><select name="guarantor_id" multiple size="4">{% for m in guarantor_members %}<option value="{{ m.id }}">{{ m.name }}</option>{% endfor %}</select><small>Select members who should receive a guarantee request. They must accept before they are recorded as guarantors.</small></div>
 <div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn pri">Send request</button></div></form></dialog>{% endif %}
 {% if staff %}
 <dialog id="repay"><form method="POST" action="">{{ csrf_input() }}<h3>Record a repayment</h3><p class="mute" data-text-slot></p>
