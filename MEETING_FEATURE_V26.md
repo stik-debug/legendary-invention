@@ -1,17 +1,11 @@
-# ChamaPay V26 — In-app meetings
+# ChamaPay V26 - Jitsi and SMS OTP removed
 
 ## Changes
-- Jitsi meetings now open in an embedded meeting room page within ChamaPay after the existing membership, meeting-time and join checks.
-- The embedded room requests browser camera, microphone, fullscreen and screen-sharing permissions through the iframe `allow` attribute.
-- Meeting details now direct members to join inside ChamaPay.
-- Existing scheduling, agenda, attendance, action items and minutes are preserved.
-- User-provided Zoom/Google Meet/Teams links continue to redirect to their provider; those services do not support reliable embedding in every browser.
-- No meeting recording is added. No SMS OTP or M-Pesa integration is required by this change.
-
-## Important limitation
-The video service is hosted by Jitsi (`meet.jit.si` by default), not by ChamaPay. Browser policies, service availability, network restrictions or Jitsi's embedding rules can affect whether the embedded room loads. A live deployment/browser test is still required; static checks cannot prove real-time audio/video works on every device.
+- The Jitsi video room is removed: no Jitsi option when scheduling, no embedded meeting page, no `JITSI_BASE` setting.
+- Online meetings now use the chama's own link only (Zoom, Google Meet, Teams; https only). Join button timing and the "Joined online" attendance hint are unchanged.
+- Meetings already created with a Jitsi room stay in the list but show no Join button.
+- SMS OTP is off by default and no longer forced on in production. Signup, login, forgotten password (chairperson/owner code), password change and phone change all work without an SMS. Set `SMS_OTP_ENABLED=1` to switch it back on later.
+- Scheduling, agenda, attendance, action items and minutes are preserved.
 
 ## Checks performed
-- Python source compilation
-- Jinja template syntax parsing (if Jinja2 is available in the build environment)
-- ZIP archive integrity check
+- Full test suite: 250 tests pass.

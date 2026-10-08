@@ -15,22 +15,27 @@ class PayWeb(_tf.FinWeb):
     def last(self): return self.db.one('SELECT * FROM chama_payments ORDER BY id DESC LIMIT 1')
 
     # ---------- online meetings ----------
-    def meeting(self, mode='jitsi', link='', when=None, c=None):
+    def meeting(self, mode='link', link='https://meet.google.com/abc-defg-hij', when=None, c=None):
         when = when or (datetime.utcnow() + timedelta(hours=3)).strftime('%Y-%m-%dT%H:%M')
         self.post(c or self.sec, self.base() + '/meetings/add', {'title': 'Monthly meeting', 'when': when, 'venue': '', 'agenda': '', 'fine': '', 'online': mode, 'link': link})
         return self.db.one('SELECT * FROM meetings ORDER BY id DESC LIMIT 1')
 
-    def test_jitsi_room_join_and_attendance_hint(self):
+    def test_link_join_and_attendance_hint(self):
         self.team(); m = self.meeting()
-        self.assertEqual(m['online_provider'], 'JITSI'); self.assertTrue(m['online_room'].startswith('ChamaPay-')); self.assertGreaterEqual(len(m['online_room']), 25)
+        self.assertEqual(m['online_provider'], 'LINK'); self.assertEqual(m['online_url'], 'https://meet.google.com/abc-defg-hij')
         page = self.m1.get(self.base() + f"/meetings/{m['id']}").get_data(as_text=True)
         self.assertIn('Join the online meeting', page)
         r = self.m1.get(self.base() + f"/meetings/{m['id']}/join")
-        self.assertEqual(r.status_code, 302); self.assertIn(m['online_room'], r.headers['Location']); self.assertIn('userInfo.displayName', r.headers['Location'])
+        self.assertEqual(r.status_code, 302); self.assertEqual(r.headers['Location'], 'https://meet.google.com/abc-defg-hij')
         self.m1.get(self.base() + f"/meetings/{m['id']}/join")  # clicking twice is harmless
         self.assertEqual(self.db.val('SELECT COUNT(*) FROM meeting_joins WHERE meeting_id=?', (m['id'],)), 1)
         self.assertIn('Joined online', self.sec.get(self.base() + f"/meetings/{m['id']}").get_data(as_text=True))
         self.assertEqual(self.db.val('SELECT COUNT(*) FROM attendance'), 0)  # a join is only a hint: nobody is marked present automatically
+
+    def test_jitsi_is_gone(self):
+        self.team(); n = self.db.val('SELECT COUNT(*) FROM meetings'); self.meeting('jitsi')
+        self.assertEqual(self.db.val('SELECT COUNT(*) FROM meetings'), n)  # no longer an option
+        self.assertNotIn('jitsi', self.sec.get(self.base() + '/meetings').get_data(as_text=True).lower())
 
     def test_join_button_opens_only_near_the_start(self):
         self.team()

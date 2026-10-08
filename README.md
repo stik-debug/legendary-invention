@@ -27,7 +27,7 @@ Financial actions remain server-authorized and M-Pesa integration is not expande
 | Registration, login, logout | Built, tested | Hashed passwords, CSRF, rate limiting, secure cookies |
 | SMS security OTP | Built; **required in production** | Ordinary login does **not** require SMS OTP. SMS OTP is used for signup phone verification, Forgot Password, changing the phone number (current phone + new phone verification), and changing a password from Security & Privacy. Codes are 6 digits, expire after 5 minutes, are single-use, hashed, attempt-limited and resend/rate limited. |
 | Merry-go-round (rotating savings) | Built, tested | Each round has an order (random draw or typed), an amount and weekly/monthly turns. Everyone except that turn's recipient pays in; when all have paid, an official pays the pot to the recipient (never to themselves). **The pot is a separate money account** (`MGR` in the ledger): loans, expenses and "cash in hand" only look at the main account, so the pot can never be lent or spent. "Your turn to pay" alerts, reminders (max one per 12 hours), cancel, reports and CSV. See the section below |
-| Online meetings | Built, tested | When scheduling, choose *In person*, *Online with a free video room* (Jitsi, an unguessable room name is made for you) or *Online with my own link* (Zoom, Google Meet, Teams: https only). Members of that chama only see a **Join** button from 30 minutes before the start until 4 hours after. Opening it marks the member **Joined online** on the attendance sheet as a hint: nobody is marked present automatically, an official still confirms (so absence fines stay fair) |
+| Online meetings | Built, tested | When scheduling, choose *In person*, *Online with my own link* (Zoom, Google Meet, Teams: https only). Members of that chama only see a **Join** button from 30 minutes before the start until 4 hours after. Opening it marks the member **Joined online** on the attendance sheet as a hint: nobody is marked present automatically, an official still confirms (so absence fines stay fair) |
 | Paying the chama (contributions, fines, loan repayments) | Built, tested | Members pay the chama's **own** paybill, till or phone as they always do, then paste the M-Pesa message in the app. The code and amount are read from it and the payment is recorded with the same finance rules and ledger as a treasurer entry. ChamaPay never holds chama money and sends no payment prompts. See "Paying the chama" below |
 | Roles (SUPER_ADMIN, CHAMA_ADMIN, TREASURER, SECRETARY, MEMBER) | Built, tested | Enforced on the server for every route |
 | Multi-tenant isolation | Built, tested | Chama A user gets 403 on Chama B pages and actions |
@@ -66,7 +66,7 @@ Financial actions remain server-authorized and M-Pesa integration is not expande
 
 ### SMS security OTP
 
-In production, SMS phone verification is **enabled by default and cannot be silently disabled by a stale `SMS_OTP_ENABLED=0` setting**. Signup, forgotten-password recovery, phone changes and password changes use SMS OTP. If Africa's Talking is missing or rejects a message, ChamaPay must show a failure and must not silently skip verification. Live SMS delivery still requires the correct Africa's Talking Live username/API key and any approved sender ID.
+SMS verification (OTP) is **switched off** (`SMS_OTP_ENABLED=0`). Signup logs the person straight in. A forgotten password is reset with the one-time code a chairperson or the owner issues. Changing the password or phone number asks for the current password instead of an SMS code. The SMS code stays in the project, so setting `SMS_OTP_ENABLED=1` turns it back on once Africa's Talking delivery works.
 
 
 ChamaPay deliberately does **not** ask for an SMS code on every login. Normal login remains email/phone + password (with the existing owner authenticator-app 2FA when enabled). SMS OTP is reserved for sensitive actions:
@@ -80,7 +80,7 @@ Each OTP is 6 digits, expires in 5 minutes, is stored only as a hash, becomes in
 
 ## Online meetings
 
-Officials schedule a meeting and pick how it is held. Jitsi needs no keys: the app creates `https://meet.jit.si/ChamaPay-<random>` (set `JITSI_BASE` to use your own Jitsi server). The room opens in a new tab, because public Jitsi limits embedding it inside other sites. On meet.jit.si the first person to start the room may need to sign in as moderator, so an official should open it first. For chamas that already use Zoom or Google Meet, paste that link instead. The link is only shown to active members of that chama, and only near the meeting time.
+Officials schedule a meeting and pick how it is held: *In person only*, or *Online: my own link* (Zoom, Google Meet or Teams; https only). The built-in Jitsi video room has been removed. The link is only shown to active members of that chama, from 30 minutes before the start until 4 hours after, and opening it marks the member *Joined online* as a hint (an official still confirms attendance).
 
 ## Paying the chama
 

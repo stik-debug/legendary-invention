@@ -33,12 +33,10 @@ def parse_when(raw):
 
 # ---------- meetings ----------
 def _online(mode, link):
-    """('none' | 'jitsi' | 'link') -> (provider, room, url). Jitsi rooms get an unguessable name; links must be plain https."""
+    """('none' | 'link') -> (provider, room, url). Links must be plain https."""
     mode = (mode or 'none').strip().lower()
     if mode == 'none':
         return None, None, None
-    if mode == 'jitsi':
-        return 'JITSI', 'ChamaPay-' + secrets.token_hex(8), None
     if mode == 'link':
         u = (link or '').strip()
         p = urlparse(u)
@@ -49,14 +47,12 @@ def _online(mode, link):
 
 
 def online_url(m):
-    if m.get('online_provider') == 'JITSI' and m.get('online_room'):
-        return os.environ.get('JITSI_BASE', 'https://meet.jit.si').rstrip('/') + '/' + m['online_room']
     return m.get('online_url') if m.get('online_provider') == 'LINK' else None
 
 
 def join_open(m, now=None):
     """Join button shows 30 minutes before the start until 4 hours after (meeting times are East Africa time, UTC+3)."""
-    if not m.get('online_provider') or m['status'] == 'CANCELLED':
+    if not online_url(m) or m['status'] == 'CANCELLED':
         return False
     eat = (now or now_utc()) + timedelta(hours=3)
     start = datetime.strptime(m['held_at'], '%Y-%m-%d %H:%M')
@@ -73,8 +69,6 @@ def join_target(db, chama_id, meeting_id, user, now=None):
     with db.tx():
         if not db.val('SELECT COUNT(*) FROM meeting_joins WHERE meeting_id=? AND user_id=?', (meeting_id, user['id']), 0):
             db.insert('meeting_joins', meeting_id=meeting_id, chama_id=chama_id, user_id=user['id'], joined_at=iso(now))
-    if m['online_provider'] == 'JITSI':
-        url += '#userInfo.displayName=%22' + quote(user['name'] or 'Member') + '%22'
     return url
 
 

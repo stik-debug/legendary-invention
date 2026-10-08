@@ -45,9 +45,8 @@ def create_app(overrides=None):
         SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax', SESSION_COOKIE_SECURE=production,
         PERMANENT_SESSION_LIFETIME=timedelta(days=14), MAX_CONTENT_LENGTH=10 * 1024 * 1024,
         REQUIRE_OWNER_2FA=os.environ.get('REQUIRE_OWNER_2FA') == '1',
-        # In production, phone verification must fail closed: never let a missing or stale
-        # environment variable silently bypass SMS verification. Local tests/dev may opt in.
-        SMS_OTP_ENABLED=production or os.environ.get('SMS_OTP_ENABLED') == '1',
+        # SMS OTP is OFF unless SMS_OTP_ENABLED=1 is set explicitly (it is not forced on in production).
+        SMS_OTP_ENABLED=os.environ.get('SMS_OTP_ENABLED') == '1',
         SUPPORT_CONTACT=os.environ.get('SUPPORT_CONTACT', ''))
     app.config.update(overrides or {})
     if len(app.config['SECRET_KEY']) < 32:
