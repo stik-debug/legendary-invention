@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% from "_macros.html" import pill %}{% block title %}Statement - {{ who.name }}{% endblock %}
 {% block content %}
-<div class="head"><div><h2>{{ who.name }}</h2><p>Member statement · {{ chama.name }}</p></div><a class="btn" href="{{ url_for('statement_csv', chama_id=chama.id, user_id=who.id) }}">Download CSV</a></div>
+<div class="head"><div><h2>{{ who.name }}</h2><p>Member statement · {{ chama.name }}</p></div><a class="btn" href="{{ url_for('statement_csv', chama_id=chama.id, user_id=who.id) }}">Download CSV</a><a class="btn pri" href="{{ url_for('statement_pdf', chama_id=chama.id, user_id=who.id) }}">PDF statement</a></div>
 {% include '_chama_nav.html' %}
 <div class="stats"><div class="stat gold tilt"><small>Total saved</small><b>KES {{ st.saved|kes }}</b></div><div class="stat"><small>Loan balance</small><b>KES {{ st.loan_balance|kes }}</b></div><div class="stat"><small>Fines owed</small><b>KES {{ st.fine_balance|kes }}</b></div><div class="stat"><small>Can borrow up to</small><b>KES {{ st.max_loan|kes }}</b></div></div>
 <div class="card tight"><h3 style="padding:18px 20px 0">Contributions</h3><ul class="list">{% for c in st.contributions %}<li><span class="grow">KES {{ c.amount_cents|kes }}<br><small>{{ c.paid_on|date }} · {{ c.method }}{% if c.reference %} · {{ c.reference }}{% endif %}</small></span>{{ pill('PAID' if c.status=='PAID' else 'CANCELLED') }}</li>{% else %}<li class="empty grow">No contributions yet.</li>{% endfor %}</ul></div>

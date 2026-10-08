@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% block title %}Create account - ChamaPay{% endblock %}
-{% block content %}<div class="auth card"><h1>Create your account</h1><p class="mute">Use the phone number you use for M-Pesa.</p>
+{% block content %}<div class="auth card"><h1>Create your account</h1><p class="mute">Use an email you can access. ChamaPay sends verification codes by email instead of SMS.</p>
 <form method="POST">{{ csrf_input() }}
 <div class="field"><label for="n">Full name</label><input id="n" name="name" autocomplete="name" required></div>
 <div class="field"><label for="e">Email</label><input id="e" type="email" name="email" autocomplete="email" required></div>

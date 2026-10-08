@@ -14,6 +14,7 @@
   <a href="{{ url_for('assets', chama_id=chama.id) }}" {% if ep=='assets' %}aria-current="page"{% endif %}>🏠 Assets</a>
   <a href="{{ url_for('chama_votes', chama_id=chama.id) }}" {% if ep in ('chama_votes','vote') %}aria-current="page"{% endif %}>Voting</a>
   <a href="{{ url_for('constitution', chama_id=chama.id) }}" {% if ep=='constitution' %}aria-current="page"{% endif %}>Constitution</a>
+  {% if me is defined and me and me.role in ('CHAMA_ADMIN','TREASURER','SECRETARY','AUDITOR') %}<a href="{{ url_for('dividends',chama_id=chama.id) }}">Dividends</a><a href="{{ url_for('chama_audit_log',chama_id=chama.id) }}">Audit log</a>{% endif %}
   <a href="{{ url_for('meetings', chama_id=chama.id) }}" {% if ep in ('meetings','meeting_view') %}aria-current="page"{% endif %}>Meetings</a>
   <a href="{{ url_for('notices', chama_id=chama.id) }}" {% if ep=='notices' %}aria-current="page"{% endif %}>Notices</a>
   <a href="{{ url_for('chat', chama_id=chama.id) }}" {% if ep=='chat' %}aria-current="page"{% endif %}>Chat{% if unread %} <span class="dot">{{ unread if unread<100 else '99+' }}</span>{% endif %}</a>

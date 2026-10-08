@@ -5,7 +5,7 @@
 <div class="card tight"><ul class="list">
 {% for m in rows %}<li><span class="grow"><a href="{{ url_for('meeting_view', chama_id=chama.id, mid=m.id) }}"><b>{{ m.title }}</b></a><br><small>{{ m.held_at|datetime }}{% if m.venue %} · {{ m.venue }}{% endif %}{% if m.absent_fine_cents %} · absence fine KES {{ m.absent_fine_cents|kes }}{% endif %}</small></span>
 {% if mine.get(m.id) %}<span class="pill {{ {'PRESENT':'ok','ABSENT':'bad','APOLOGY':'warn'}[mine[m.id]] }}">You: {{ mine[m.id]|title }}</span>{% endif %}
-{% if m.online_provider=='LINK' %}<span class="pill info">Online</span>{% endif %}<span class="pill {{ {'SCHEDULED':'info','HELD':'ok','CANCELLED':'bad'}[m.status] }}">{{ m.status|title }}</span></li>
+{% if m.online_provider=='LINK' %}<span class="pill info">Online</span>{% endif %}<span class="pill {{ {'SCHEDULED':'info','HELD':'ok','CANCELLED':'bad'}[m.status] }}">{{ m.status|title }}</span> {% if m.status=='SCHEDULED' %}<a class="btn sm" href="{{ url_for('meeting_share',chama_id=chama.id,mid=m.id) }}">WhatsApp</a>{% endif %}</li>
 {% else %}<li class="empty grow">No meetings yet.</li>{% endfor %}</ul></div>
 {% if can %}<dialog id="add"><form method="POST" action="{{ url_for('meeting_add', chama_id=chama.id) }}">{{ csrf_input() }}<h3>Schedule a meeting</h3>
 <div class="field"><label for="mt">Title</label><input id="mt" name="title" maxlength="100" required placeholder="Monthly meeting"></div>

@@ -1,0 +1,7 @@
+{% extends "base.html" %}{% block title %}Year-end dividends - {{ chama.name }}{% endblock %}{% block content %}
+<div class="head"><div><h2>Year-end dividend calculation</h2><p>Distributable interest and paid fines are shared in proportion to recorded contributions.</p></div></div>{% include '_chama_nav.html' %}
+<form method="GET" class="card" style="display:flex;gap:10px;align-items:end"><div><label>Year</label><input type="number" name="year" value="{{ calc.year }}" min="2000" max="{{ calc.year+1 }}"></div><button class="btn">Calculate</button></form>
+<div class="stats"><div class="stat"><small>Interest earned</small><b>KES {{ calc.interest_pool|kes }}</b></div><div class="stat"><small>Paid fines</small><b>KES {{ calc.fine_pool|kes }}</b></div><div class="stat gold"><small>Dividend pool</small><b>KES {{ calc.pool|kes }}</b></div><div class="stat dark"><small>Allocated</small><b>KES {{ calc.allocated|kes }}</b></div></div>
+<div class="card tight"><h3 style="padding:18px 20px 0">Member shares · {{ calc.year }}</h3><ul class="list">{% for r in calc.rows %}<li><span class="av">{{ r.name[:1] }}</span><span class="grow"><b>{{ r.name }}</b><br><small>Contributions: KES {{ r.contribution_cents|kes }}</small></span><strong>KES {{ r.dividend_cents|kes }}</strong></li>{% else %}<li class="empty">No members found.</li>{% endfor %}</ul></div>
+<div class="card trust-note"><b>This is a calculation, not a payout.</b><span>Officials should approve the result and record actual payouts through the chama's normal financial controls.</span></div>
+{% endblock %}

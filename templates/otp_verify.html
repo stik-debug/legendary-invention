@@ -1,8 +1,4 @@
-{% extends "base.html" %}{% block title %}Verify phone - ChamaPay{% endblock %}
-{% block content %}<div class="auth card"><h1>Verify your phone</h1>
-<p class="mute">Enter the 6-digit code sent to <b>{{ ('+' ~ flow.phone[-9:]) if flow.phone else 'your phone' }}</b>. The code expires in 5 minutes.</p>
-<form method="POST">{{ csrf_input() }}
-<div class="field"><label for="otp">Verification code</label><input id="otp" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required autofocus></div>
-<button class="btn pri block">Verify code</button></form>
-<form method="POST" action="{{ url_for('otp_resend') }}" style="margin-top:10px">{{ csrf_input() }}<button class="btn block" type="submit">Resend code</button></form>
-<p class="mute" style="text-align:center;margin-bottom:0"><a href="{{ url_for('login') }}">Cancel</a></p></div>{% endblock %}
+{% extends "base.html" %}{% block title %}Verify email - ChamaPay{% endblock %}
+{% block content %}<div class="auth card"><h1>Verify your email</h1><p class="mute">Enter the 6-digit code sent to <b>{{ flow.email }}</b>. The code expires in 5 minutes.</p>
+<form method="POST">{{ csrf_input() }}<div class="field"><label for="otp">Verification code</label><input id="otp" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required autofocus></div><button class="btn pri block">Verify code</button></form>
+<form method="POST" action="{{ url_for('otp_resend') }}" style="margin-top:10px">{{ csrf_input() }}<button class="btn block" type="submit">Resend code</button></form><p class="mute" style="text-align:center;margin-bottom:0"><a href="{{ url_for('login') }}">Cancel</a></p></div>{% endblock %}
