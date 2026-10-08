@@ -132,12 +132,26 @@ def register_upgrade_routes(app, db, login_required, ctx):
                 opens_at=S.iso(S.now_utc()),closes_at=f.get('closes_at') or None,status='OPEN',created_by=me['user_id'],created_at=S.iso(S.now_utc()))
             audit(db(),me['user_id'],'VOTE_CREATED','vote',vid,chama_id); db().commit(); flash('Vote opened.','success')
             return redirect(url_for('chama_votes',chama_id=chama_id))
+        now=S.iso(S.now_utc())
+        db().execute("UPDATE chama_votes SET status='CLOSED' WHERE chama_id=? AND status='OPEN' AND closes_at IS NOT NULL AND closes_at<=?",(chama_id,now))
+        db().commit()
         rows=db().all("""SELECT v.*,u.name creator,(SELECT COUNT(*) FROM chama_vote_responses r WHERE r.vote_id=v.id AND r.choice='YES') yes_count,
                         (SELECT COUNT(*) FROM chama_vote_responses r WHERE r.vote_id=v.id AND r.choice='NO') no_count,
                         (SELECT COUNT(*) FROM chama_vote_responses r WHERE r.vote_id=v.id AND r.choice='ABSTAIN') abstain_count,
                         (SELECT choice FROM chama_vote_responses r WHERE r.vote_id=v.id AND r.user_id=?) my_choice
                         FROM chama_votes v LEFT JOIN users u ON u.id=v.created_by WHERE v.chama_id=? ORDER BY v.id DESC""",(me['user_id'],chama_id))
         return render_template('votes.html',chama=chama,me=me,rows=rows)
+
+    @app.route('/chamas/<int:chama_id>/votes/<int:vote_id>/close', methods=['POST'])
+    @login_required
+    def close_vote(chama_id,vote_id):
+        chama,me,sub=ctx(chama_id,roles=('CHAMA_ADMIN','TREASURER','SECRETARY'))
+        v=db().one('SELECT * FROM chama_votes WHERE id=? AND chama_id=?',(vote_id,chama_id)) or abort(404)
+        if v['status']=='OPEN':
+            db().execute("UPDATE chama_votes SET status='CLOSED' WHERE id=?",(vote_id,))
+            audit(db(),me['user_id'],'VOTE_CLOSED','vote',vote_id,chama_id)
+            db().commit(); flash('Vote closed and the result is now final in the decision record.','success')
+        return redirect(url_for('chama_votes',chama_id=chama_id))
 
     @app.route('/chamas/<int:chama_id>/votes/<int:vote_id>', methods=['POST'])
     @login_required

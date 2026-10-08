@@ -176,7 +176,7 @@ def max_loan(db, chama_id, user_id):
     return savings(db, chama_id, user_id) * mult
 
 
-def apply_loan(db, chama_id, user_id, cents, purpose, now=None):
+def apply_loan(db, chama_id, user_id, cents, purpose, now=None, guarantor_ids=None):
     now = now or now_utc()
     with db.tx():
         db.lock('chamas', chama_id)
@@ -192,7 +192,22 @@ def apply_loan(db, chama_id, user_id, cents, purpose, now=None):
         due = (now.date() + timedelta(days=30*months)).isoformat()
         lid = db.insert('loans', chama_id=chama_id, user_id=user_id, principal_cents=cents, interest_cents=interest, total_due_cents=cents + interest,
                         rate_bps=bps, purpose=(purpose or '').strip()[:200], status='PENDING', applied_at=iso(now), due_date=due)
-        audit(db, user_id, 'LOAN_APPLIED', 'loan', lid, chama_id, {'principal_cents': cents})
+        # Guarantors are requested at application time when the borrower selects them.
+        # We keep them pending until each guarantor explicitly accepts.
+        ids=[]
+        for raw in (guarantor_ids or []):
+            try: uid=int(raw)
+            except (TypeError, ValueError): continue
+            if uid==user_id or uid in ids: continue
+            if not db.val("SELECT COUNT(*) FROM chama_members WHERE chama_id=? AND user_id=? AND status='ACTIVE'", (chama_id,uid), 0):
+                raise BusinessError('Every guarantor must be an active member of this chama.')
+            ids.append(uid)
+        for uid in ids[:5]:
+            gid=db.insert('loan_guarantors', loan_id=lid, chama_id=chama_id, guarantor_user_id=uid, status='PENDING',
+                          requested_at=iso(now), note='Requested by borrower at loan application.')
+            notify(db, uid, chama_id, f'You were asked to guarantee a KES {cents / 100:,.0f} loan. Review and accept or decline.',
+                   f'/chamas/{chama_id}/loans/{lid}/details', user_id, now)
+        audit(db, user_id, 'LOAN_APPLIED', 'loan', lid, chama_id, {'principal_cents': cents, 'guarantors_requested': ids[:5]})
         who = db.val('SELECT name FROM users WHERE id=?', (user_id,), 'A member')
         notify_roles(db, chama_id, FINANCE_ROLES, f'{who} asked for a loan of KES {cents / 100:,.0f}.', f'/chamas/{chama_id}/loans', user_id, now)
     return lid

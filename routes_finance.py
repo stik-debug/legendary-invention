@@ -2,6 +2,7 @@ import re
 from datetime import date
 
 from flask import Response, abort, flash, g, jsonify, redirect, render_template, request, url_for
+from urllib.parse import quote
 
 import finance as F
 import services as S
@@ -84,14 +85,15 @@ def register(app, db, ctx, login_required):
         for r in db().all("SELECT r.* FROM loan_repayments r JOIN loans l ON l.id=r.loan_id WHERE r.chama_id=? AND r.status='PAID' ORDER BY r.id DESC LIMIT 300", (chama_id,)):
             reps.setdefault(r['loan_id'], []).append(r)
         open_loan = db().val("SELECT COUNT(*) FROM loans WHERE chama_id=? AND user_id=? AND status IN ('PENDING','APPROVED','ACTIVE')", (chama_id, g.user['id']), 0)
+        guarantor_members = db().all("SELECT u.id,u.name FROM chama_members m JOIN users u ON u.id=m.user_id WHERE m.chama_id=? AND m.status='ACTIVE' AND m.user_id<>? ORDER BY u.name", (chama_id,g.user['id']))
         return render_template('loans.html', chama=chama, me=me, loans=rows, reps=reps, staff=staff, methods=F.METHODS, today=date.today().isoformat(),
-                               limit=F.max_loan(db(), chama_id, g.user['id']), open_loan=open_loan, cash=F.cash_balance(db(), chama_id))
+                               limit=F.max_loan(db(), chama_id, g.user['id']), open_loan=open_loan, cash=F.cash_balance(db(), chama_id), guarantor_members=guarantor_members)
 
     @app.route('/chamas/<int:chama_id>/loans/apply', methods=['POST'])
     @login_required
     def loan_apply(chama_id):
         ctx(chama_id)
-        return done(chama_id, 'loans', lambda: F.apply_loan(db(), chama_id, g.user['id'], kes_field(minimum=10000), request.form.get('purpose')),
+        return done(chama_id, 'loans', lambda: F.apply_loan(db(), chama_id, g.user['id'], kes_field(minimum=10000), request.form.get('purpose'), guarantor_ids=request.form.getlist('guarantor_id')),
                     'Loan request sent to your officials.')
 
     @app.route('/chamas/<int:chama_id>/loans/<int:lid>/<action>', methods=['POST'])
@@ -197,7 +199,9 @@ def register(app, db, ctx, login_required):
     def statement(chama_id, user_id=None):
         chama, me, sub = ctx(chama_id)
         who = target(chama_id, me, user_id or g.user['id'])
-        return render_template('statement.html', chama=chama, me=me, who=who, st=F.member_statement(db(), chama_id, who['id']))
+        share_text = quote(f'ChamaPay statement for {who["name"]}: {request.url_root.rstrip("/")}{url_for("statement", chama_id=chama_id, user_id=who["id"])}')
+        whatsapp_share = 'https://wa.me/?text=' + share_text
+        return render_template('statement.html', chama=chama, me=me, who=who, st=F.member_statement(db(), chama_id, who['id']), whatsapp_share=whatsapp_share)
 
     @app.route('/chamas/<int:chama_id>/statement/<int:user_id>.csv')
     @login_required

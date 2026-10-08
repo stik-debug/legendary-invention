@@ -252,3 +252,12 @@ M-Pesa/STK/callback integration is deliberately not expanded in this release.
 - Member statements and financial receipts have direct PDF downloads.
 - Chama officials can view a chama-scoped audit log.
 - `scheduled.py` runs daily reminders/email delivery and a logical database export. For durable backups on Render, configure an S3-compatible bucket with `BACKUP_S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` and optionally `S3_ENDPOINT_URL`. The local `/tmp` fallback is not durable across redeploys.
+
+## V29 feature completion
+
+This build preserves existing ChamaPay features and adds only missing pieces from the requested roadmap:
+- Borrowers can request up to five guarantors when applying for a loan; guarantors explicitly accept or decline.
+- Member statements can be shared directly through WhatsApp.
+- Open votes automatically close when their configured closing time passes, and officials can close a vote manually to finalize the decision record.
+- Existing attendance, meeting minutes/action items, voting, dashboards, reconciliation, notifications, contribution schedules, PDF statements/receipts, audit logs, member exits/dividends, backups, and role controls are retained rather than duplicated.
+- No mobile-money API/STK integration was added.
