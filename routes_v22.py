@@ -224,5 +224,5 @@ def register_v22_routes(app, db, login_required, ctx, owner_required):
             monthly.append({'period': key, 'amount': amount})
         return render_template('owner_analytics_v22.html', rev_month=rev_month, expiring=expiring, suspended=suspended, failed=failed,
                                security_events=security_events, monthly=monthly,
-                               active_chamas=int(db().val("SELECT COUNT(*) FROM chamas WHERE status='ACTIVE'", (), 0) or 0),
+                               active_chamas=int(db().val("SELECT COUNT(*) FROM subscriptions WHERE status IN ('TRIAL','ACTIVE','PAST_DUE','GRACE_PERIOD')", (), 0) or 0),
                                active_members=int(db().val("SELECT COUNT(*) FROM chama_members WHERE status='ACTIVE'", (), 0) or 0))

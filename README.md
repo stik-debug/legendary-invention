@@ -60,6 +60,8 @@ Financial actions remain server-authorized and M-Pesa integration is not expande
 | Privacy Policy and Terms of Use | Built (starting text) | Public pages at `/privacy-policy` and `/terms`, linked from the home and sign-up pages. Plain-language starting text: **have a Kenyan lawyer review it before launch**. Set `SUPPORT_CONTACT` on Render to show a contact line |
 | Account deletion | Built, tested | A member asks under Security & Privacy; the owner reviews it at Owner > Privacy requests and presses *Delete account (anonymise)*. Name, phone, email, password, 2FA and sessions are erased and the person leaves their chamas, but the group's entries stay (shown as "Deleted member") so the books still balance. Refused while the person has an open loan, an unpaid fine, a loan guarantee, or is a chairperson |
 | Old "paste an M-Pesa message" page | Not shown | `/pay` now goes to the Payments page. The paste-a-message routes and the officials' warning page still exist in the code but nothing links to them |
+| Landing-page feature cards | Built, tested | Each card opens that feature. `/go/<feature>` sends a signed-out visitor to log in first, then straight to the feature in their chama (a small chooser if they belong to several). The **Command Center** card is shown only to the platform owner and to people who created a chama; it is never shown to ordinary members or visitors, and the page itself is creator-only |
+| Page safety net | Built | A test opens every page for a member, treasurer, admin and owner and fails if any page crashes or any button opens a pop-up that is missing |
 
 
 ### SMS security OTP
@@ -101,7 +103,7 @@ Message layouts differ between send money, paybill and till, and Safaricom can c
 
 Upgrading: chamas that used the old automatic (Daraja) setting keep their payment instructions and move to the default check. Stored Daraja keys are no longer used. `CHAMA_SECRETS_KEY` is no longer needed.
 
-## Tests (229 automated, all passing on SQLite; the web-level ones up to V22 also passed on PostgreSQL, but the newest tests (SMS switch, account deletion, legal pages) have only been run on SQLite)
+## Tests (244 automated, all passing on SQLite; the web-level ones up to V22 also passed on PostgreSQL, but the newest tests (SMS switch, account deletion, legal pages) have only been run on SQLite)
 
     python -m unittest discover -s tests -v
 

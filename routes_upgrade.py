@@ -1,6 +1,6 @@
 
 from datetime import date, datetime, timedelta
-from flask import render_template, request, redirect, url_for, flash, abort, jsonify
+from flask import render_template, request, redirect, url_for, flash, abort, jsonify, g
 import services as S
 from db import audit
 
@@ -22,7 +22,7 @@ def register_upgrade_routes(app, db, login_required, ctx):
         if int(chama['created_by']) != int(me['user_id']):
             abort(403)
         members = db().all("""SELECT u.id,u.name,u.phone,m.role,m.joined_at FROM chama_members m JOIN users u ON u.id=m.user_id
-                              WHERE m.chama_id=? AND m.status='ACTIVE' ORDER BY m.name""",(chama_id,))
+                              WHERE m.chama_id=? AND m.status='ACTIVE' ORDER BY u.name""",(chama_id,))
         total_members=len(members)
         cash = db().val("""SELECT COALESCE(SUM(CASE WHEN direction='IN' THEN amount_cents WHEN direction='OUT' THEN -amount_cents ELSE 0 END),0)
                            FROM ledger_transactions WHERE chama_id=?""",(chama_id,),0)

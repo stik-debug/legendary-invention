@@ -231,10 +231,45 @@ def create_app(overrides=None):
             " AND x.user_id=m.user_id AND x.period=? AND x.status='PAID')",
             (period,), 0) or 0
         plans = db().all('SELECT * FROM subscription_plans WHERE is_active=1 ORDER BY sort_order')
+        # The Command Center is the owner's private console: only the platform owner or the person who created a chama sees its card.
+        show_command = bool(g.user and (g.user['is_super_admin'] or db().val('SELECT COUNT(*) FROM chamas WHERE created_by=?', (g.user['id'],), 0)))
         return render_template(
-            'index.html', plans=plans, trial=S.setting(db(), 'trial_days', 7),
+            'index.html', plans=plans, trial=S.setting(db(), 'trial_days', 7), show_command=show_command,
             month_saved=month_saved, loans_approved=loans_approved,
             paid_members=paid_members, total_members=total_members)
+
+    # Landing-page feature cards: take the signed-in person straight to that feature in their chama.
+    GO_FEATURES = {'loans': ('loans', 'Loans'), 'goals': ('chama_goals', 'Goals & Wealth'), 'votes': ('chama_votes', 'Voting & Constitution'),
+                   'meetings': ('meetings', 'Meetings'), 'passport': ('member_passport', 'Member Passport'),
+                   'ai': ('chama_ai', 'ChamaPay AI'), 'command': ('command_center', 'Command Center')}
+
+    @app.route('/go/<feature>')
+    @login_required
+    def go_feature(feature):
+        if feature not in GO_FEATURES:
+            abort(404)
+        endpoint, label = GO_FEATURES[feature]
+        rows = db().all("SELECT c.id, c.name, c.created_by FROM chama_members m JOIN chamas c ON c.id=m.chama_id"
+                        " WHERE m.user_id=? AND m.status='ACTIVE' ORDER BY c.name", (g.user['id'],))
+        if feature == 'command':  # owner-only: only chamas this person created
+            rows = [r for r in rows if int(r['created_by']) == int(g.user['id'])]
+            if not rows:
+                flash('The Command Center is only available to the person who created the chama.', 'warning')
+                return redirect(url_for('dashboard'))
+        if not rows:
+            flash('Join or create a chama first, then you can open ' + label + '.', 'info')
+            return redirect(url_for('dashboard'))
+
+        def target(cid):
+            kw = {'user_id': g.user['id']} if feature == 'passport' else {}
+            return url_for(endpoint, chama_id=cid, **kw)
+        if len(rows) == 1:
+            return redirect(target(rows[0]['id']))
+        return render_template('go_choose.html', label=label, chamas=[{'name': r['name'], 'url': target(r['id'])} for r in rows])
+
+    @app.route('/install')
+    def install_app():
+        return render_template('install.html')
 
     @app.route('/privacy-policy')
     def privacy_policy():
