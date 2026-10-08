@@ -2,6 +2,8 @@
 SMS is queued, never sent inline with the user request, so notifications cannot slow or break Chama actions."""
 from services import iso, now_utc, normalize_phone
 import os
+import smtplib
+from email.message import EmailMessage
 
 
 def _queue_sms(db, user_id, text, now=None, dedupe_key=None):
@@ -80,6 +82,63 @@ def open_one(db, user_id, notification_id, now=None):
 def queue_sms(db, user_id, text, now=None, dedupe_key=None):
     """Public helper for SMS-only events such as account welcome messages."""
     return _queue_sms(db, user_id, text, now, dedupe_key)
+
+
+
+def send_email_now(to_email, subject, body):
+    """Send a transactional email using standard SMTP. No provider SDK is required."""
+    host=os.environ.get('SMTP_HOST')
+    if not host:
+        return False, 'SMTP service is not configured.'
+    try:
+        port=int(os.environ.get('SMTP_PORT','587'))
+        msg=EmailMessage()
+        msg['From']=os.environ.get('MAIL_FROM') or os.environ.get('SMTP_USERNAME') or 'no-reply@chamapay.app'
+        msg['To']=to_email
+        msg['Subject']=subject
+        msg.set_content(body)
+        if os.environ.get('SMTP_USE_TLS','1') != '0':
+            with smtplib.SMTP(host,port,timeout=20) as smtp:
+                smtp.starttls()
+                if os.environ.get('SMTP_USERNAME'):
+                    smtp.login(os.environ.get('SMTP_USERNAME'),os.environ.get('SMTP_PASSWORD',''))
+                smtp.send_message(msg)
+        else:
+            with smtplib.SMTP(host,port,timeout=20) as smtp:
+                if os.environ.get('SMTP_USERNAME'):
+                    smtp.login(os.environ.get('SMTP_USERNAME'),os.environ.get('SMTP_PASSWORD',''))
+                smtp.send_message(msg)
+        return True,'sent'
+    except Exception as exc:
+        return False,f'{type(exc).__name__}: {str(exc)[:450]}'
+
+def queue_email(db,user_id,to_email,subject,body,now=None,dedupe_key=None):
+    """Queue a normal email for scheduled/background delivery."""
+    try:
+        kwargs=dict(user_id=user_id,email=to_email,subject=(subject or '')[:180],body=(body or '')[:5000],created_at=iso(now or now_utc()),status='PENDING',attempts=0)
+        if dedupe_key: kwargs['dedupe_key']=dedupe_key[:180]
+        return db.insert('email_outbox',**kwargs)
+    except Exception:
+        return None
+
+def process_email_outbox(database_url,limit=10):
+    if not os.environ.get('SMTP_HOST'): return 0
+    from db import DB
+    db=DB(database_url); sent=0
+    try:
+        for _ in range(max(1,min(int(limit),25))):
+            row=db.one("SELECT * FROM email_outbox WHERE status='PENDING' AND attempts<5 ORDER BY id LIMIT 1")
+            if not row: break
+            claimed=db.execute("UPDATE email_outbox SET status='PROCESSING',attempts=attempts+1 WHERE id=? AND status='PENDING'",(row['id'],)).rowcount
+            if not claimed: continue
+            db.commit()
+            ok,detail=send_email_now(row['email'],row['subject'],row['body'])
+            if ok:
+                db.execute("UPDATE email_outbox SET status='SENT',sent_at=?,last_error=NULL WHERE id=?",(iso(now_utc()),row['id'])); db.commit(); sent+=1
+            else:
+                db.execute("UPDATE email_outbox SET status=?,last_error=? WHERE id=?",('FAILED' if row['attempts']>=4 else 'PENDING',str(detail)[:500],row['id'])); db.commit()
+    finally: db.close()
+    return sent
 
 
 def _sms_response_status(response):

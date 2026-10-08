@@ -50,6 +50,6 @@ def anonymise_user(db, actor_id, user_id, now=None):
                       totp_secret=NULL, totp_enabled=0, totp_recovery=NULL, session_epoch=session_epoch+1 WHERE id=?""",
                    (f'deleted-{user_id}@deleted.invalid', f'deleted-{user_id}', user_id))
         db.execute("UPDATE chama_members SET status='REMOVED', removed_at=? WHERE user_id=? AND status='ACTIVE'", (iso(now), user_id))
-        for table in ('notification_preferences', 'sms_outbox', 'auth_otps', 'notifications'):
+        for table in ('notification_preferences', 'sms_outbox', 'email_outbox', 'auth_otps', 'email_otps', 'notifications'):
             db.execute(f'DELETE FROM {table} WHERE user_id=?', (user_id,))
         audit(db, actor_id, 'ACCOUNT_ANONYMISED', 'user', user_id)

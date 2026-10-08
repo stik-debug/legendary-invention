@@ -295,7 +295,7 @@ def register_plus_routes(app, db, login_required, ctx, owner_required):
             vals['in_app']=1
             db().execute("INSERT INTO notification_preferences(user_id,in_app,email,sms,push,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET in_app=excluded.in_app,email=excluded.email,sms=excluded.sms,push=excluded.push,updated_at=excluded.updated_at",(g.user['id'],vals['in_app'],vals['email'],vals['sms'],vals['push'],_stamp()))
             db().commit(); flash('Notification preferences saved.','success')
-        pref=db().one('SELECT * FROM notification_preferences WHERE user_id=?',(g.user['id'],)) or {'in_app':1,'email':0,'sms':0,'push':1}
+        pref=db().one('SELECT * FROM notification_preferences WHERE user_id=?',(g.user['id'],)) or {'in_app':1,'email':1,'sms':0,'push':1}
         return render_template('notification_settings.html',pref=pref)
 
     # ---------- financial reconciliation ----------

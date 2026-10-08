@@ -25,7 +25,7 @@ Financial actions remain server-authorized and M-Pesa integration is not expande
 | Feature | Status | Notes |
 |---|---|---|
 | Registration, login, logout | Built, tested | Hashed passwords, CSRF, rate limiting, secure cookies |
-| SMS security OTP | Built; **required in production** | Ordinary login does **not** require SMS OTP. SMS OTP is used for signup phone verification, Forgot Password, changing the phone number (current phone + new phone verification), and changing a password from Security & Privacy. Codes are 6 digits, expire after 5 minutes, are single-use, hashed, attempt-limited and resend/rate limited. |
+| Email security OTP | Built; **enabled in production** | Signup/login verification, Forgot Password, changing the phone number and changing a password use a 6-digit email code. Codes expire after 5 minutes, are single-use, hashed, attempt-limited and resend/rate limited. SMTP configuration is required in production. |
 | Merry-go-round (rotating savings) | Built, tested | Each round has an order (random draw or typed), an amount and weekly/monthly turns. Everyone except that turn's recipient pays in; when all have paid, an official pays the pot to the recipient (never to themselves). **The pot is a separate money account** (`MGR` in the ledger): loans, expenses and "cash in hand" only look at the main account, so the pot can never be lent or spent. "Your turn to pay" alerts, reminders (max one per 12 hours), cancel, reports and CSV. See the section below |
 | Online meetings | Built, tested | When scheduling, choose *In person*, *Online with my own link* (Zoom, Google Meet, Teams: https only). Members of that chama only see a **Join** button from 30 minutes before the start until 4 hours after. Opening it marks the member **Joined online** on the attendance sheet as a hint: nobody is marked present automatically, an official still confirms (so absence fines stay fair) |
 | Paying the chama (contributions, fines, loan repayments) | Built, tested | Members pay the chama's **own** paybill, till or phone as they always do, then paste the M-Pesa message in the app. The code and amount are read from it and the payment is recorded with the same finance rules and ledger as a treasurer entry. ChamaPay never holds chama money and sends no payment prompts. See "Paying the chama" below |
@@ -54,7 +54,7 @@ Financial actions remain server-authorized and M-Pesa integration is not expande
 | Announcements (notice board) | Built, tested | Chairperson/secretary post and pin. Members read. Removed notices are kept in the database |
 | In-app notifications (the Alerts bell) | Built, tested | Contributions, loans, fines, notices and meetings alert the right people. Nobody is alerted about their own action. Stays inside the app |
 | Reports and CSV export | Built, tested | Officials only: cash, savings, loans out, fines owed, who has not paid, collections by month, attendance. CSV for members, contributions, loans, fines, attendance (plus the ledger). Cells are spreadsheet-formula safe |
-| Email and SMS | SMS provider integration built; live delivery requires valid Africa's Talking Live credentials and provider approval | Africa's Talking SMS is used for account-security OTPs and existing in-app notification SMS. Email is not required for security flows. |
+| Email and SMS | Email security + reminder delivery built; legacy SMS remains optional for normal alerts | Email is the OTP channel. Existing SMS notification support remains available if Africa's Talking is configured, but it is not required for OTP. |
 | Test-data commands (seed/reset/validate) | Built, tested | `flask --app app seed`, `reset-test-data`, `validate`. See "Test-data commands" below |
 | Two-factor login for owner | Built, tested | Authenticator app (TOTP) plus 8 one-time recovery codes. Optional `REQUIRE_OWNER_2FA=1`. See "Owner two-factor login" below |
 | Privacy Policy and Terms of Use | Built (starting text) | Public pages at `/privacy-policy` and `/terms`, linked from the home and sign-up pages. Plain-language starting text: **have a Kenyan lawyer review it before launch**. Set `SUPPORT_CONTACT` on Render to show a contact line |
@@ -64,19 +64,11 @@ Financial actions remain server-authorized and M-Pesa integration is not expande
 | Page safety net | Built | A test opens every page for a member, treasurer, admin and owner and fails if any page crashes or any button opens a pop-up that is missing |
 
 
-### SMS security OTP
+### Email security OTP
 
-SMS verification (OTP) is **switched off** (`SMS_OTP_ENABLED=0`). Signup logs the person straight in. A forgotten password is reset with the one-time code a chairperson or the owner issues. Changing the password or phone number asks for the current password instead of an SMS code. The SMS code stays in the project, so setting `SMS_OTP_ENABLED=1` turns it back on once Africa's Talking delivery works.
+Email verification is the default security channel in production (`EMAIL_OTP_ENABLED=1`). Signup, first login verification, password recovery, phone changes and password changes use a 6-digit code sent to the user's email. Normal login does not ask for an OTP after the email has been verified (owner TOTP 2FA remains available separately).
 
-
-ChamaPay deliberately does **not** ask for an SMS code on every login. Normal login remains email/phone + password (with the existing owner authenticator-app 2FA when enabled). SMS OTP is reserved for sensitive actions:
-
-- New-account phone verification during signup
-- Forgot password / password recovery
-- Changing the current phone number (verify the current number, then the new number)
-- Changing a password from Security & Privacy
-
-Each OTP is 6 digits, expires in 5 minutes, is stored only as a hash, becomes invalid after successful use, locks after 5 failed attempts, and has resend/request rate limits. OTP messages bypass ordinary SMS notification preferences because they are security messages. Keep `AT_USERNAME`, `AT_API_KEY` and optional `AT_SENDER_ID` in Render environment variables; never commit them to source control.
+Each OTP expires in 5 minutes, is stored only as a hash, becomes invalid after successful use, locks after 5 failed attempts, and has resend/request rate limits. Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` and `MAIL_FROM`.
 
 ## Online meetings
 
@@ -250,3 +242,13 @@ This build adds a broader production-oriented layer while intentionally leaving 
 - Platform owner analytics and support-ticket management
 
 M-Pesa/STK/callback integration is deliberately not expanded in this release.
+
+## V27 additions
+
+- Email OTP replaces SMS for signup/login verification, password reset and sensitive account checks. Configure `EMAIL_OTP_ENABLED=1`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` and `MAIL_FROM`.
+- Meeting reminders are prepared by the daily job; meeting pages include WhatsApp sharing.
+- Officials can calculate year-end dividends using contribution-weighted allocation of collected loan interest and paid fines.
+- Member exit records the share payout through the main ledger and keeps the member history.
+- Member statements and financial receipts have direct PDF downloads.
+- Chama officials can view a chama-scoped audit log.
+- `scheduled.py` runs daily reminders/email delivery and a logical database export. For durable backups on Render, configure an S3-compatible bucket with `BACKUP_S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` and optionally `S3_ENDPOINT_URL`. The local `/tmp` fallback is not durable across redeploys.

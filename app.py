@@ -24,6 +24,7 @@ import routes_upgrade
 import routes_v22
 import routes_plus
 import routes_otp
+import routes_features
 import services as S
 import auth_otp as OTP
 import twofactor as TF
@@ -46,7 +47,8 @@ def create_app(overrides=None):
         PERMANENT_SESSION_LIFETIME=timedelta(days=14), MAX_CONTENT_LENGTH=10 * 1024 * 1024,
         REQUIRE_OWNER_2FA=os.environ.get('REQUIRE_OWNER_2FA') == '1',
         # SMS OTP is OFF unless SMS_OTP_ENABLED=1 is set explicitly (it is not forced on in production).
-        SMS_OTP_ENABLED=os.environ.get('SMS_OTP_ENABLED') == '1',
+        SMS_OTP_ENABLED=False,
+        EMAIL_OTP_ENABLED=os.environ.get('EMAIL_OTP_ENABLED', '1' if production else '0') == '1',
         SUPPORT_CONTACT=os.environ.get('SUPPORT_CONTACT', ''))
     app.config.update(overrides or {})
     if len(app.config['SECRET_KEY']) < 32:
@@ -313,20 +315,20 @@ def create_app(overrides=None):
                         if uid is None:
                             uid = S.create_user(db(), f.get('name'), f.get('email'), f.get('phone'), generate_password_hash(f['password']))
                     db().commit()
-                    if not app.config['SMS_OTP_ENABLED']:
-                        # SMS verification is switched off: create the account and log the person in.
+                    if not app.config['EMAIL_OTP_ENABLED']:
+                        # Email verification is switched off only for local/test deployments: create the account and log the person in.
                         with db().tx():
                             audit(db(), uid, 'USER_REGISTERED', 'user', uid)
                         row = db().one('SELECT session_epoch FROM users WHERE id=?', (uid,))
                         session.clear(); session['uid'] = uid; session['ep'] = row['session_epoch']; session.permanent = True
                         return redirect(url_for('dashboard'))
                     # Signup is a sensitive action: verify ownership of the phone before creating a logged-in session.
-                    ok, msg, oid = OTP.request_otp(app, db(), uid, f.get('phone'), 'signup', request.remote_addr)
+                    ok, msg, oid = __import__('email_otp').request_otp(app, db(), uid, normalized_email, 'signup', request.remote_addr)
                     if not ok:
                         flash(msg, 'warning')
                         return render_template('register.html')
                     session.clear(); session['otp_flow'] = {'purpose':'signup', 'user_id':uid,
-                                                            'phone':S.normalize_phone(f.get('phone')), 'otp_id':oid}
+                                                            'email':normalized_email, 'otp_id':oid}
                     return redirect(url_for('otp_verify'))
                 except S.BusinessError as e:
                     flash(str(e), 'danger')
@@ -347,13 +349,13 @@ def create_app(overrides=None):
                 # New/unverified accounts must complete phone verification once before
                 # they can establish a normal password session. After verification,
                 # ordinary logins never require SMS OTP again.
-                if app.config['SMS_OTP_ENABLED'] and not u.get('phone_verified_at'):
-                    ok, msg, oid = OTP.request_otp(app, db(), u['id'], u['phone'], 'login_phone_verify', request.remote_addr)
+                if app.config['EMAIL_OTP_ENABLED'] and not u.get('email_verified_at'):
+                    ok, msg, oid = __import__('email_otp').request_otp(app, db(), u['id'], u['email'], 'login_email_verify', request.remote_addr)
                     if not ok:
                         flash(msg, 'warning')
                         return render_template('login.html')
-                    session.clear(); session['otp_flow'] = {'purpose':'login_phone_verify', 'user_id':u['id'],
-                                                            'phone':S.normalize_phone(u['phone']), 'otp_id':oid, 'next':nxt}
+                    session.clear(); session['otp_flow'] = {'purpose':'login_email_verify', 'user_id':u['id'],
+                                                            'email':u['email'], 'otp_id':oid, 'next':nxt}
                     return redirect(url_for('otp_verify'))
                 if u['is_super_admin'] and u['totp_enabled']:
                     session.clear(); session['pre2fa'] = u['id']; session['pre2fa_at'] = time.time(); session['pre2fa_next'] = nxt
@@ -549,6 +551,7 @@ def create_app(overrides=None):
     routes_security.register(app, db, owner_required, safe_next)
     routes_recovery.register(app, db, ctx, login_required, owner_required)
     routes_otp.register(app, db, login_required)
+    routes_features.register(app, db, ctx, login_required, owner_required)
     devtools.register(app)
 
     # ---------- owner control center ----------

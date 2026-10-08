@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS users(
   id {PK}, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE, phone TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL, is_super_admin INTEGER NOT NULL DEFAULT 0, is_active INTEGER NOT NULL DEFAULT 1,
   is_test_data INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL,
-  claimed INTEGER NOT NULL DEFAULT 1, claim_code_hash TEXT, claim_fails INTEGER NOT NULL DEFAULT 0, phone_verified_at TEXT);
+  claimed INTEGER NOT NULL DEFAULT 1, claim_code_hash TEXT, claim_fails INTEGER NOT NULL DEFAULT 0, phone_verified_at TEXT, email_verified_at TEXT);
 CREATE TABLE IF NOT EXISTS subscription_plans(
   id {PK}, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, price_cents INTEGER NOT NULL CHECK(price_cents>=0),
   max_members INTEGER NOT NULL CHECK(max_members>0), is_active INTEGER NOT NULL DEFAULT 1, sort_order INTEGER NOT NULL DEFAULT 0);
@@ -307,6 +307,22 @@ CREATE TABLE IF NOT EXISTS auth_otps(
   id {PK}, user_id INTEGER REFERENCES users(id), phone TEXT NOT NULL, purpose TEXT NOT NULL,
   code_hash TEXT NOT NULL, expires_at TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL, used_at TEXT, request_ip TEXT, status TEXT NOT NULL DEFAULT 'PENDING');
+CREATE TABLE IF NOT EXISTS email_otps(
+  id {PK}, user_id INTEGER REFERENCES users(id), email TEXT NOT NULL, purpose TEXT NOT NULL,
+  code_hash TEXT NOT NULL, expires_at TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL, used_at TEXT, request_ip TEXT, status TEXT NOT NULL DEFAULT 'PENDING');
+CREATE TABLE IF NOT EXISTS email_outbox(
+  id {PK}, user_id INTEGER REFERENCES users(id), email TEXT NOT NULL, subject TEXT NOT NULL, body TEXT NOT NULL,
+  created_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'PENDING', attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, sent_at TEXT, dedupe_key TEXT UNIQUE);
+CREATE INDEX IF NOT EXISTS idx_email_outbox_status ON email_outbox(status,id);
+CREATE INDEX IF NOT EXISTS idx_email_otps_email_purpose ON email_otps(email,purpose,status,created_at);
+CREATE TABLE IF NOT EXISTS member_exits(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), user_id INTEGER NOT NULL REFERENCES users(id), savings_cents BIGINT NOT NULL,
+  loan_balance_cents BIGINT NOT NULL, fine_balance_cents BIGINT NOT NULL, payout_cents BIGINT NOT NULL, method TEXT NOT NULL, reference TEXT,
+  status TEXT NOT NULL, approved_by INTEGER REFERENCES users(id), paid_at TEXT, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS meeting_reminders_sent(
+  id {PK}, meeting_id INTEGER NOT NULL REFERENCES meetings(id), reminder_type TEXT NOT NULL, sent_at TEXT NOT NULL, UNIQUE(meeting_id,reminder_type));
+CREATE INDEX IF NOT EXISTS idx_member_exits_chama ON member_exits(chama_id,user_id,id);
 CREATE INDEX IF NOT EXISTS idx_auth_otps_phone_purpose ON auth_otps(phone,purpose,status,created_at);
 CREATE INDEX IF NOT EXISTS idx_auth_otps_user_purpose ON auth_otps(user_id,purpose,status,created_at);
 CREATE INDEX IF NOT EXISTS idx_sms_outbox_status ON sms_outbox(status, id);
@@ -393,6 +409,7 @@ def init_db(db):
         ensure_column(db, 'users', 'claim_code_hash', 'TEXT')
         ensure_column(db, 'users', 'claim_fails', 'INTEGER NOT NULL DEFAULT 0')
         ensure_column(db, 'users', 'phone_verified_at', 'TEXT')
+        ensure_column(db, 'users', 'email_verified_at', 'TEXT')
         ensure_column(db, 'ledger_transactions', 'account', "TEXT NOT NULL DEFAULT 'MAIN'")
         ensure_column(db, 'users', 'reset_hash', 'TEXT')
         ensure_column(db, 'users', 'reset_expires', 'TEXT')

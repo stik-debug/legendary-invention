@@ -12,7 +12,7 @@ def register(app, db, ctx, login_required, owner_required):
         db().execute('DELETE FROM login_attempts WHERE at<?', (S.iso(S.now_utc() - timedelta(minutes=10)),)); db().commit()
         return db().val('SELECT COUNT(*) FROM login_attempts WHERE key=?', (key,), 0) >= 6
 
-    # Self-service /forgot is implemented by routes_otp using SMS verification.
+    # Self-service /forgot is implemented by routes_otp using email verification in production.
     @app.route('/chamas/<int:chama_id>/members/<int:user_id>/reset-code', methods=['POST'])
     @login_required
     def member_reset_code(chama_id, user_id):
