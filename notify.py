@@ -82,25 +82,53 @@ def queue_sms(db, user_id, text, now=None, dedupe_key=None):
     return _queue_sms(db, user_id, text, now, dedupe_key)
 
 
+def _sms_response_status(response):
+    """Return (accepted, detail) from Africa's Talking's per-recipient response.
+
+    HTTP/API success alone is insufficient: the provider can accept the API request
+    while rejecting an individual recipient. Status 101 is Africa's Talking's
+    documented successful recipient status.
+    """
+    if not isinstance(response, dict):
+        return False, "Africa's Talking returned an unexpected response."
+    data = response.get('SMSMessageData') or {}
+    recipients = data.get('Recipients') or []
+    if not recipients:
+        detail = data.get('Message') or response.get('message') or 'No recipient status was returned.'
+        return False, str(detail)[:500]
+    failures = []
+    for recipient in recipients:
+        code = str(recipient.get('statusCode', '')).strip()
+        status = str(recipient.get('status', '')).strip().lower()
+        if code == '101' or status in ('success', 'sent'):
+            continue
+        failures.append(f"{recipient.get('number', 'recipient')}: {recipient.get('status', 'Rejected')} (code {code or 'unknown'})")
+    if failures:
+        return False, '; '.join(failures)[:500]
+    return True, data.get('Message') or "Accepted by Africa's Talking."
+
+
 def send_sms_now(phone, message):
-    """Send a security SMS immediately and return (ok, error).
-    Used only for security-critical OTPs so the user is not told a code was sent
-    before Africa's Talking has accepted the request.
+    """Send a security SMS immediately and validate provider recipient status.
+    Never report success merely because the SDK call returned without an exception.
     """
     try:
         if not os.environ.get('AT_USERNAME') or not os.environ.get('AT_API_KEY'):
             return False, 'SMS service is not configured. Set AT_USERNAME and AT_API_KEY in Render.'
+        normalized = normalize_phone(phone)
+        if not normalized:
+            return False, 'Invalid Kenyan phone number. Use a valid +254 number.'
         import africastalking
         africastalking.initialize(os.environ['AT_USERNAME'], os.environ['AT_API_KEY'])
         sms = africastalking.SMS
         sender = os.environ.get('AT_SENDER_ID') or None
         if sender:
-            response = sms.send((message or '')[:1000], ['+' + normalize_phone(phone)], sender_id=sender, enqueue=False)
+            response = sms.send((message or '')[:1000], ['+' + normalized], sender_id=sender, enqueue=False)
         else:
-            response = sms.send((message or '')[:1000], ['+' + normalize_phone(phone)], enqueue=False)
-        return True, response
+            response = sms.send((message or '')[:1000], ['+' + normalized], enqueue=False)
+        return _sms_response_status(response)
     except Exception as exc:
-        return False, str(exc)[:500]
+        return False, f'{type(exc).__name__}: {str(exc)[:450]}'
 
 
 def process_sms_outbox(database_url, limit=8):
@@ -130,6 +158,11 @@ def process_sms_outbox(database_url, limit=8):
                         response = sms.send(row['message'], [row['phone']], sender_id=sender, enqueue=True)
                     else:
                         response = sms.send(row['message'], [row['phone']], enqueue=True)
+                    accepted, detail = _sms_response_status(response)
+                    if not accepted:
+                        db.execute("UPDATE sms_outbox SET status=?, last_error=? WHERE id=?", ('FAILED' if row['attempts'] >= 4 else 'PENDING', str(detail)[:500], row['id']))
+                        db.commit()
+                        continue
                     db.execute("UPDATE sms_outbox SET status='SENT', sent_at=?, last_error=NULL WHERE id=?", (iso(now_utc()), row['id']))
                     db.commit()
                     sent += 1

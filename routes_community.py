@@ -89,9 +89,14 @@ def register(app, db, ctx, login_required):
     @app.route('/chamas/<int:chama_id>/meetings/<int:mid>/join')
     @login_required
     def meeting_join(chama_id, mid):
-        ctx(chama_id)  # members of THIS chama only; the room link is never shown to anyone else
+        chama, me, sub = ctx(chama_id)  # membership in THIS chama is required
         try:
-            return redirect(C.join_target(db(), chama_id, mid, g.user))
+            target = C.join_target(db(), chama_id, mid, g.user)
+            meeting = C.get_meeting(db(), chama_id, mid)
+            if meeting.get('online_provider') == 'JITSI':
+                # Keep the Jitsi room embedded in ChamaPay instead of sending members away.
+                return render_template('meeting_room.html', chama=chama, me=me, m=meeting, room_url=target)
+            return redirect(target)
         except S.BusinessError as e:
             flash(str(e), 'warning')
             return redirect(url_for('meeting_view', chama_id=chama_id, mid=mid))

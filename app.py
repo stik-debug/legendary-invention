@@ -45,8 +45,9 @@ def create_app(overrides=None):
         SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax', SESSION_COOKIE_SECURE=production,
         PERMANENT_SESSION_LIFETIME=timedelta(days=14), MAX_CONTENT_LENGTH=10 * 1024 * 1024,
         REQUIRE_OWNER_2FA=os.environ.get('REQUIRE_OWNER_2FA') == '1',
-        # SMS one-time codes (signup, login gate, change phone/password, forgot password). OFF until SMS delivery works.
-        SMS_OTP_ENABLED=os.environ.get('SMS_OTP_ENABLED') == '1',
+        # In production, phone verification must fail closed: never let a missing or stale
+        # environment variable silently bypass SMS verification. Local tests/dev may opt in.
+        SMS_OTP_ENABLED=production or os.environ.get('SMS_OTP_ENABLED') == '1',
         SUPPORT_CONTACT=os.environ.get('SUPPORT_CONTACT', ''))
     app.config.update(overrides or {})
     if len(app.config['SECRET_KEY']) < 32:
@@ -294,10 +295,24 @@ def create_app(overrides=None):
                 flash('Passwords do not match.', 'danger')
             else:
                 try:
-                    uid = S.claim_account(db(), f.get('phone'), f.get('join_code'), f.get('name'), f.get('email'),
-                                          generate_password_hash(f['password']), check_password_hash)
-                    if uid is None:
-                        uid = S.create_user(db(), f.get('name'), f.get('email'), f.get('phone'), generate_password_hash(f['password']))
+                    normalized_phone = S.normalize_phone(f.get('phone'))
+                    normalized_email = (f.get('email') or '').strip().lower()
+                    # If OTP delivery failed after account creation, let the same person
+                    # safely retry signup with the same phone, email and password. This
+                    # must not bypass invitation codes for unclaimed placeholders.
+                    existing = db().one('SELECT * FROM users WHERE phone=? OR email=?',
+                                        (normalized_phone or '-', normalized_email))
+                    if (existing and existing.get('claimed') and not existing.get('phone_verified_at')
+                            and existing.get('phone') == normalized_phone
+                            and existing.get('email') == normalized_email
+                            and existing.get('password_hash')
+                            and check_password_hash(existing['password_hash'], f['password'])):
+                        uid = existing['id']
+                    else:
+                        uid = S.claim_account(db(), f.get('phone'), f.get('join_code'), f.get('name'), f.get('email'),
+                                              generate_password_hash(f['password']), check_password_hash)
+                        if uid is None:
+                            uid = S.create_user(db(), f.get('name'), f.get('email'), f.get('phone'), generate_password_hash(f['password']))
                     db().commit()
                     if not app.config['SMS_OTP_ENABLED']:
                         # SMS verification is switched off: create the account and log the person in.

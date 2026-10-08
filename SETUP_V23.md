@@ -33,7 +33,7 @@ The member must:
 
 1. Register using the same phone number the admin added.
 2. Enter the 8-digit join code.
-3. Complete SMS phone verification (only when `SMS_OTP_ENABLED=1`; while it is off, registration logs the member straight in).
+3. Complete SMS phone verification. Production registration must not create an authenticated session until the SMS code is verified.
 
 The join code is hashed in the database, shown in plaintext only to the admin at issuance, and destroyed after successful registration. Five incorrect attempts lock the code until the admin issues a new one.
 
@@ -67,3 +67,8 @@ The deployment configuration follows Render's Flask deployment model: install `r
 ## 5. Important security note
 
 Do not put `AUTH_SECRET`, `DATABASE_URL` credentials, owner passwords, or `AT_API_KEY` into source code or chat. Keep them in Render Environment Variables.
+
+
+## SMS security setup
+
+In Render, set `AT_USERNAME` and `AT_API_KEY` to credentials for the same **Live** Africa's Talking application. Set `AT_SENDER_ID` only if it is registered/approved for that account. Production OTP verification is fail-closed: if provider credentials or a valid provider recipient response are missing, registration does not bypass verification. After deployment, test signup with a real Kenyan handset and review the Render logs for provider failures; never put API keys in source control or chat.

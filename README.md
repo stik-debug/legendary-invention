@@ -25,7 +25,7 @@ Financial actions remain server-authorized and M-Pesa integration is not expande
 | Feature | Status | Notes |
 |---|---|---|
 | Registration, login, logout | Built, tested | Hashed passwords, CSRF, rate limiting, secure cookies |
-| SMS security OTP | Built, **switched OFF** (set `SMS_OTP_ENABLED=1` to turn on) | Ordinary login does **not** require SMS OTP. SMS OTP is used for signup phone verification, Forgot Password, changing the phone number (current phone + new phone verification), and changing a password from Security & Privacy. Codes are 6 digits, expire after 5 minutes, are single-use, hashed, attempt-limited and resend/rate limited. |
+| SMS security OTP | Built; **required in production** | Ordinary login does **not** require SMS OTP. SMS OTP is used for signup phone verification, Forgot Password, changing the phone number (current phone + new phone verification), and changing a password from Security & Privacy. Codes are 6 digits, expire after 5 minutes, are single-use, hashed, attempt-limited and resend/rate limited. |
 | Merry-go-round (rotating savings) | Built, tested | Each round has an order (random draw or typed), an amount and weekly/monthly turns. Everyone except that turn's recipient pays in; when all have paid, an official pays the pot to the recipient (never to themselves). **The pot is a separate money account** (`MGR` in the ledger): loans, expenses and "cash in hand" only look at the main account, so the pot can never be lent or spent. "Your turn to pay" alerts, reminders (max one per 12 hours), cancel, reports and CSV. See the section below |
 | Online meetings | Built, tested | When scheduling, choose *In person*, *Online with a free video room* (Jitsi, an unguessable room name is made for you) or *Online with my own link* (Zoom, Google Meet, Teams: https only). Members of that chama only see a **Join** button from 30 minutes before the start until 4 hours after. Opening it marks the member **Joined online** on the attendance sheet as a hint: nobody is marked present automatically, an official still confirms (so absence fines stay fair) |
 | Paying the chama (contributions, fines, loan repayments) | Built, tested | Members pay the chama's **own** paybill, till or phone as they always do, then paste the M-Pesa message in the app. The code and amount are read from it and the payment is recorded with the same finance rules and ledger as a treasurer entry. ChamaPay never holds chama money and sends no payment prompts. See "Paying the chama" below |
@@ -54,7 +54,7 @@ Financial actions remain server-authorized and M-Pesa integration is not expande
 | Announcements (notice board) | Built, tested | Chairperson/secretary post and pin. Members read. Removed notices are kept in the database |
 | In-app notifications (the Alerts bell) | Built, tested | Contributions, loans, fines, notices and meetings alert the right people. Nobody is alerted about their own action. Stays inside the app |
 | Reports and CSV export | Built, tested | Officials only: cash, savings, loans out, fines owed, who has not paid, collections by month, attendance. CSV for members, contributions, loans, fines, attendance (plus the ledger). Cells are spreadsheet-formula safe |
-| Email and SMS | SMS built, but SMS sign-in codes are OFF | Africa's Talking SMS is used for account-security OTPs and existing in-app notification SMS. Email is not required for security flows. |
+| Email and SMS | SMS provider integration built; live delivery requires valid Africa's Talking Live credentials and provider approval | Africa's Talking SMS is used for account-security OTPs and existing in-app notification SMS. Email is not required for security flows. |
 | Test-data commands (seed/reset/validate) | Built, tested | `flask --app app seed`, `reset-test-data`, `validate`. See "Test-data commands" below |
 | Two-factor login for owner | Built, tested | Authenticator app (TOTP) plus 8 one-time recovery codes. Optional `REQUIRE_OWNER_2FA=1`. See "Owner two-factor login" below |
 | Privacy Policy and Terms of Use | Built (starting text) | Public pages at `/privacy-policy` and `/terms`, linked from the home and sign-up pages. Plain-language starting text: **have a Kenyan lawyer review it before launch**. Set `SUPPORT_CONTACT` on Render to show a contact line |
@@ -66,7 +66,7 @@ Financial actions remain server-authorized and M-Pesa integration is not expande
 
 ### SMS security OTP
 
-**Currently switched off.** Until SMS delivery works, `SMS_OTP_ENABLED` is unset/`0` (the default, also set in `render.yaml`). With it off: signup logs the person straight in; login never asks for a phone code; Change password asks for the current password; Change phone asks for the current password (the new number is saved as unverified); and Forgot password uses the one-time code a chairperson or the owner issues. All the SMS code stays in place. When SMS is ready, set `SMS_OTP_ENABLED=1` on Render and redeploy: accounts created while it was off will be asked to verify their phone once at their next login.
+In production, SMS phone verification is **enabled by default and cannot be silently disabled by a stale `SMS_OTP_ENABLED=0` setting**. Signup, forgotten-password recovery, phone changes and password changes use SMS OTP. If Africa's Talking is missing or rejects a message, ChamaPay must show a failure and must not silently skip verification. Live SMS delivery still requires the correct Africa's Talking Live username/API key and any approved sender ID.
 
 
 ChamaPay deliberately does **not** ask for an SMS code on every login. Normal login remains email/phone + password (with the existing owner authenticator-app 2FA when enabled). SMS OTP is reserved for sensitive actions:
@@ -103,7 +103,9 @@ Message layouts differ between send money, paybill and till, and Safaricom can c
 
 Upgrading: chamas that used the old automatic (Daraja) setting keep their payment instructions and move to the default check. Stored Daraja keys are no longer used. `CHAMA_SECRETS_KEY` is no longer needed.
 
-## Tests (244 automated, all passing on SQLite; the web-level ones up to V22 also passed on PostgreSQL, but the newest tests (SMS switch, account deletion, legal pages) have only been run on SQLite)
+## Automated tests and audit notes
+
+Run the test suite with `python -m unittest discover -s tests -v` after installing `requirements.txt`. Do not interpret a syntax/template check as a full runtime test. The current audit environment does not have Flask/Werkzeug installed and cannot reach PyPI, so the full web test suite could not be executed here. The focused SMS provider-response tests and static checks are included with this build.
 
     python -m unittest discover -s tests -v
 

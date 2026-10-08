@@ -60,9 +60,10 @@ def request_otp(app, db, user_id, phone, purpose, ip=None, now=None, force=True)
                         code_hash=_hash(app, code), expires_at=S.iso(expires), attempts=0,
                         created_at=S.iso(now), request_ip=(ip or '')[:80], status='PENDING')
         # OTP delivery deliberately bypasses notification preferences: this is an
-        # account-security message, not a marketing/notification preference.
+        # account-security message, not a marketing/notification preference. Never
+        # persist the plaintext OTP in the general-purpose SMS outbox.
         db.insert('sms_outbox', user_id=user_id, phone='+' + phone,
-                  message=f'ChamaPay verification code: {code}. It expires in {OTP_MINUTES} minutes. Do not share this code with anyone.',
+                  message='[SECURITY OTP SENT IMMEDIATELY; MESSAGE REDACTED]',
                   created_at=S.iso(now), status='PENDING', attempts=0,
                   dedupe_key=f'otp:{oid}')
 
