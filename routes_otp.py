@@ -21,6 +21,10 @@ def register(app, db, login_required):
 
     @app.route('/otp/resend',methods=['POST'])
     def otp_resend():
+        if not email_on():
+            session.pop('otp_flow', None)
+            flash('Email verification is disabled. You can continue with your password.','info')
+            return redirect(url_for('login'))
         flow=session.get('otp_flow') or {}
         if not flow.get('purpose') or not flow.get('user_id') or not flow.get('email'):
             flash('There is no verification in progress.','warning'); return redirect(url_for('login'))
@@ -32,6 +36,10 @@ def register(app, db, login_required):
 
     @app.route('/otp/verify',methods=['GET','POST'])
     def otp_verify():
+        if not email_on():
+            session.pop('otp_flow', None)
+            flash('Email verification is disabled. Please sign in with your password.','info')
+            return redirect(url_for('login'))
         flow=session.get('otp_flow') or {}
         if not flow.get('purpose') or not flow.get('otp_id'): return redirect(url_for('login'))
         if request.method=='POST':

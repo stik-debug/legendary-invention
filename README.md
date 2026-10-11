@@ -66,7 +66,7 @@ Financial actions remain server-authorized and M-Pesa integration is not expande
 
 ### Email security OTP
 
-Email verification is the default security channel in production (`EMAIL_OTP_ENABLED=1`). Signup, first login verification, password recovery, phone changes and password changes use a 6-digit code sent to the user's email. Normal login does not ask for an OTP after the email has been verified (owner TOTP 2FA remains available separately).
+Email OTP is disabled in this release because delivery was unreliable. Signup and normal login use the account password and do not require an email code. Password recovery uses the app's existing recovery-code flow. Owner authenticator-app TOTP remains a separate optional security feature.
 
 Each OTP expires in 5 minutes, is stored only as a hash, becomes invalid after successful use, locks after 5 failed attempts, and has resend/request rate limits. Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` and `MAIL_FROM`.
 
@@ -245,7 +245,7 @@ M-Pesa/STK/callback integration is deliberately not expanded in this release.
 
 ## V27 additions
 
-- Email OTP replaces SMS for signup/login verification, password reset and sensitive account checks. Configure `EMAIL_OTP_ENABLED=1`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` and `MAIL_FROM`.
+- Email OTP is currently disabled; do not set `EMAIL_OTP_ENABLED=1`. SMTP settings may still be used for ordinary email notifications, but they are not required for signup or login.
 - Meeting reminders are prepared by the daily job; meeting pages include WhatsApp sharing.
 - Officials can calculate year-end dividends using contribution-weighted allocation of collected loan interest and paid fines.
 - Member exit records the share payout through the main ledger and keeps the member history.

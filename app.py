@@ -48,7 +48,9 @@ def create_app(overrides=None):
         REQUIRE_OWNER_2FA=os.environ.get('REQUIRE_OWNER_2FA') == '1',
         # SMS OTP is OFF unless SMS_OTP_ENABLED=1 is set explicitly (it is not forced on in production).
         SMS_OTP_ENABLED=False,
-        EMAIL_OTP_ENABLED=os.environ.get('EMAIL_OTP_ENABLED', '1' if production else '0') == '1',
+        # Email OTP is disabled for this release so signup/login never depend on email delivery.
+        # Re-enable only after a verified mail-provider integration and end-to-end tests.
+        EMAIL_OTP_ENABLED=False,
         SUPPORT_CONTACT=os.environ.get('SUPPORT_CONTACT', ''))
     app.config.update(overrides or {})
     if len(app.config['SECRET_KEY']) < 32:

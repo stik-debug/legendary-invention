@@ -33,8 +33,6 @@ services:
         value: "0"
       - key: SMS_OTP_ENABLED
         value: "0"
-      - key: EMAIL_OTP_ENABLED
-        value: "1"
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT
