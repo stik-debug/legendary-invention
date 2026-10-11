@@ -6,6 +6,8 @@ from urllib.parse import quote
 
 import finance as F
 import services as S
+import approvals as A
+import json
 
 PAGE = 25
 FIN, VIEW, FINE = F.FINANCE_ROLES, F.VIEW_ROLES, F.FINE_ROLES
@@ -71,7 +73,14 @@ def register(app, db, ctx, login_required):
     @login_required
     def savings_void(chama_id, cid):
         ctx(chama_id, roles=FIN)
-        return done(chama_id, 'savings', lambda: F.void_contribution(db(), chama_id, cid, request.form.get('reason'), g.user['id']), 'Contribution cancelled. The ledger was corrected.')
+        try:
+            rid = A.request_approval(db(), chama_id, 'VOID_CONTRIBUTION', 'contribution', cid, g.user['id'], request.form.get('reason'), {'action':'void_contribution','id':cid,'reason':request.form.get('reason')})
+            db().commit()
+            flash('Correction submitted for independent approval. The ledger has not been changed yet.', 'success')
+        except (A.ApprovalError, Exception) as e:
+            db().rollback()
+            flash(str(e) if isinstance(e, A.ApprovalError) else 'Could not submit approval request. Please try again.', 'warning')
+        return redirect(url_for('savings', chama_id=chama_id))
 
     # ---------- loans ----------
     @app.route('/chamas/<int:chama_id>/loans')
@@ -104,7 +113,14 @@ def register(app, db, ctx, login_required):
         if action in ('approve', 'reject'):
             return done(chama_id, 'loans', lambda: F.decide_loan(db(), chama_id, lid, action == 'approve', actor), 'Loan ' + ('approved.' if action == 'approve' else 'declined.'))
         if action == 'disburse':
-            return done(chama_id, 'loans', lambda: F.disburse_loan(db(), chama_id, lid, actor), 'Loan paid out and recorded in the ledger.')
+            try:
+                A.request_approval(db(), chama_id, 'LOAN_DISBURSEMENT', 'loan', lid, actor, request.form.get('reason') or 'Loan disbursement requested', {'action':'disburse_loan','id':lid})
+                db().commit()
+                flash('Loan disbursement submitted for second-official approval. No funds have been recorded as paid yet.', 'success')
+            except Exception:
+                db().rollback()
+                flash('Could not submit the disbursement for approval. Please try again.', 'warning')
+            return redirect(url_for('loans', chama_id=chama_id))
         if action == 'repay':
             return done(chama_id, 'loans', lambda: F.repay_loan(db(), chama_id, lid, kes_field(minimum=100), date_field(), request.form.get('method'),
                                                                   request.form.get('reference'), actor), 'Repayment recorded.')
@@ -114,7 +130,12 @@ def register(app, db, ctx, login_required):
     @login_required
     def repayment_void(chama_id, rid):
         ctx(chama_id, roles=FIN)
-        return done(chama_id, 'loans', lambda: F.void_repayment(db(), chama_id, rid, request.form.get('reason'), g.user['id']), 'Repayment cancelled.')
+        try:
+            A.request_approval(db(), chama_id, 'VOID_REPAYMENT', 'repayment', rid, g.user['id'], request.form.get('reason'), {'action':'void_repayment','id':rid,'reason':request.form.get('reason')})
+            db().commit(); flash('Repayment correction submitted for independent approval.', 'success')
+        except Exception:
+            db().rollback(); flash('Could not submit approval request. Include a reason and try again.', 'warning')
+        return redirect(url_for('loans', chama_id=chama_id))
 
     # ---------- fines ----------
     @app.route('/chamas/<int:chama_id>/fines')
@@ -155,7 +176,49 @@ def register(app, db, ctx, login_required):
     @login_required
     def fine_payment_void(chama_id, pid):
         ctx(chama_id, roles=FIN)
-        return done(chama_id, 'fines', lambda: F.void_fine_payment(db(), chama_id, pid, request.form.get('reason'), g.user['id']), 'Payment cancelled.')
+        try:
+            A.request_approval(db(), chama_id, 'VOID_FINE_PAYMENT', 'fine_payment', pid, g.user['id'], request.form.get('reason'), {'action':'void_fine_payment','id':pid,'reason':request.form.get('reason')})
+            db().commit(); flash('Fine-payment correction submitted for independent approval.', 'success')
+        except Exception:
+            db().rollback(); flash('Could not submit approval request. Include a reason and try again.', 'warning')
+        return redirect(url_for('fines', chama_id=chama_id))
+
+    # ---------- maker-checker approvals ----------
+    @app.route('/chamas/<int:chama_id>/approvals')
+    @login_required
+    def chama_approvals(chama_id):
+        chama, me, sub = ctx(chama_id, roles=FIN)
+        rows = db().all("SELECT a.*, u.name AS requester, v.name AS reviewer FROM maker_checker_requests a JOIN users u ON u.id=a.requested_by LEFT JOIN users v ON v.id=a.approved_by WHERE a.chama_id=? ORDER BY CASE WHEN a.status='PENDING' THEN 0 ELSE 1 END, a.id DESC LIMIT 100", (chama_id,))
+        for row in rows:
+            try: row['details'] = json.loads(row.get('payload') or '{}')
+            except (TypeError, ValueError): row['details'] = {}
+        return render_template('approvals.html', chama=chama, me=me, rows=rows)
+
+    @app.route('/chamas/<int:chama_id>/approvals/<int:request_id>/<decision>', methods=['POST'])
+    @login_required
+    def chama_approval_decide(chama_id, request_id, decision):
+        ctx(chama_id, roles=FIN)
+        if decision not in ('approve', 'reject'): abort(404)
+        try:
+            row = db().one('SELECT * FROM maker_checker_requests WHERE id=? AND chama_id=?', (request_id, chama_id))
+            if not row: raise A.ApprovalError('Approval request not found.')
+            status = A.decide_approval(db(), request_id, chama_id, g.user['id'], decision == 'approve')
+            if status == 'APPROVED':
+                payload = json.loads(row.get('payload') or '{}')
+                action, entity_id = payload.get('action'), int(payload.get('id') or 0)
+                # Revalidate through the business layer at execution time; no client-supplied amounts are trusted.
+                if action == 'void_contribution': F.void_contribution(db(), chama_id, entity_id, payload.get('reason'), row['requested_by'])
+                elif action == 'void_repayment': F.void_repayment(db(), chama_id, entity_id, payload.get('reason'), row['requested_by'])
+                elif action == 'void_fine_payment': F.void_fine_payment(db(), chama_id, entity_id, payload.get('reason'), row['requested_by'])
+                elif action == 'disburse_loan': F.disburse_loan(db(), chama_id, entity_id, row['requested_by'])
+                else: raise A.ApprovalError('Unsupported approval action; no financial change was made.')
+            db().commit()
+            flash('Approval recorded and action processed.' if status == 'APPROVED' else 'Request rejected; no financial change was made.', 'success')
+        except (A.ApprovalError, S.BusinessError, ValueError, TypeError) as e:
+            db().rollback(); flash(str(e), 'warning')
+        except Exception:
+            db().rollback(); flash('Approval could not be processed. No change was committed.', 'warning')
+        return redirect(url_for('chama_approvals', chama_id=chama_id))
 
     # ---------- ledger ----------
     @app.route('/chamas/<int:chama_id>/ledger')

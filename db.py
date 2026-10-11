@@ -315,6 +315,11 @@ CREATE TABLE IF NOT EXISTS email_outbox(
   id {PK}, user_id INTEGER REFERENCES users(id), email TEXT NOT NULL, subject TEXT NOT NULL, body TEXT NOT NULL,
   created_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'PENDING', attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, sent_at TEXT, dedupe_key TEXT UNIQUE);
 CREATE INDEX IF NOT EXISTS idx_email_outbox_status ON email_outbox(status,id);
+CREATE TABLE IF NOT EXISTS whatsapp_outbox(
+  id {PK}, user_id INTEGER REFERENCES users(id), phone TEXT NOT NULL, message TEXT NOT NULL,
+  created_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'PENDING', attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT, sent_at TEXT, dedupe_key TEXT UNIQUE);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_outbox_status ON whatsapp_outbox(status,id);
 CREATE INDEX IF NOT EXISTS idx_email_otps_email_purpose ON email_otps(email,purpose,status,created_at);
 CREATE TABLE IF NOT EXISTS member_exits(
   id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), user_id INTEGER NOT NULL REFERENCES users(id), savings_cents BIGINT NOT NULL,
@@ -343,6 +348,20 @@ CREATE TABLE IF NOT EXISTS privacy_requests(
   id {PK}, user_id INTEGER NOT NULL REFERENCES users(id), kind TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'OPEN',
   reason TEXT, created_at TEXT NOT NULL, resolved_at TEXT, resolution TEXT);
 CREATE INDEX IF NOT EXISTS ix_privacy_requests_user ON privacy_requests(user_id,status,id);
+CREATE TABLE IF NOT EXISTS maker_checker_requests(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), request_type TEXT NOT NULL,
+  entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, requested_by INTEGER NOT NULL REFERENCES users(id),
+  approved_by INTEGER REFERENCES users(id), status TEXT NOT NULL DEFAULT 'PENDING', reason TEXT NOT NULL,
+  payload TEXT, created_at TEXT NOT NULL, decided_at TEXT);
+CREATE INDEX IF NOT EXISTS ix_maker_checker_pending ON maker_checker_requests(chama_id,status,id);
+CREATE TABLE IF NOT EXISTS privacy_consents(
+  id {PK}, user_id INTEGER NOT NULL REFERENCES users(id), purpose TEXT NOT NULL,
+  policy_version TEXT NOT NULL, consented INTEGER NOT NULL, recorded_at TEXT NOT NULL, withdrawn_at TEXT,
+  source TEXT NOT NULL DEFAULT 'web');
+CREATE INDEX IF NOT EXISTS ix_privacy_consent_user ON privacy_consents(user_id,purpose,id);
+CREATE TABLE IF NOT EXISTS notification_delivery_log(
+  id {PK}, user_id INTEGER REFERENCES users(id), channel TEXT NOT NULL, provider TEXT,
+  status TEXT NOT NULL, detail TEXT, created_at TEXT NOT NULL);
 
 
 """

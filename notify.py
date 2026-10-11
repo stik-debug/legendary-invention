@@ -3,6 +3,8 @@ SMS is queued, never sent inline with the user request, so notifications cannot 
 from services import iso, now_utc, normalize_phone
 import os
 import smtplib
+import json
+import urllib.request
 from email.message import EmailMessage
 
 
@@ -87,9 +89,35 @@ def queue_sms(db, user_id, text, now=None, dedupe_key=None):
 
 def send_email_now(to_email, subject, body):
     """Send a transactional email using standard SMTP. No provider SDK is required."""
+    # Prefer a transactional provider when configured; SMTP remains a fallback.
+    resend_key = os.environ.get('RESEND_API_KEY')
+    brevo_key = os.environ.get('BREVO_API_KEY')
+    sender = os.environ.get('MAIL_FROM') or os.environ.get('SMTP_USERNAME') or 'ChamaPay <no-reply@chamapay.app>'
+    if resend_key or brevo_key:
+        try:
+            if resend_key:
+                endpoint = 'https://api.resend.com/emails'
+                headers = {'Authorization': 'Bearer ' + resend_key, 'Content-Type': 'application/json'}
+                payload = {'from': sender, 'to': [to_email], 'subject': subject, 'text': body}
+                provider = 'Resend'
+            else:
+                endpoint = 'https://api.brevo.com/v3/smtp/email'
+                headers = {'api-key': brevo_key, 'Content-Type': 'application/json', 'accept': 'application/json'}
+                from_name, from_email = ('ChamaPay', sender)
+                if '<' in sender and '>' in sender:
+                    from_name, from_email = sender.split('<', 1)[0].strip(), sender.split('<', 1)[1].split('>', 1)[0].strip()
+                payload = {'sender': {'name': from_name, 'email': from_email}, 'to': [{'email': to_email}], 'subject': subject, 'textContent': body}
+                provider = 'Brevo'
+            req = urllib.request.Request(endpoint, data=json.dumps(payload).encode(), headers=headers, method='POST')
+            with urllib.request.urlopen(req, timeout=20) as response:
+                if 200 <= response.status < 300:
+                    return True, provider + ' accepted message'
+                return False, provider + ' returned HTTP ' + str(response.status)
+        except Exception as exc:
+            return False, type(exc).__name__ + ': ' + str(exc)[:350]
     host=os.environ.get('SMTP_HOST')
     if not host:
-        return False, 'SMTP service is not configured.'
+        return False, 'Email service is not configured. Set RESEND_API_KEY, BREVO_API_KEY, or SMTP_HOST.'
     try:
         port=int(os.environ.get('SMTP_PORT','587'))
         msg=EmailMessage()
@@ -122,7 +150,7 @@ def queue_email(db,user_id,to_email,subject,body,now=None,dedupe_key=None):
         return None
 
 def process_email_outbox(database_url,limit=10):
-    if not os.environ.get('SMTP_HOST'): return 0
+    if not (os.environ.get('SMTP_HOST') or os.environ.get('RESEND_API_KEY') or os.environ.get('BREVO_API_KEY')): return 0
     from db import DB
     db=DB(database_url); sent=0
     try:
@@ -138,6 +166,73 @@ def process_email_outbox(database_url,limit=10):
             else:
                 db.execute("UPDATE email_outbox SET status=?,last_error=? WHERE id=?",('FAILED' if row['attempts']>=4 else 'PENDING',str(detail)[:500],row['id'])); db.commit()
     finally: db.close()
+    return sent
+
+
+
+def send_whatsapp_now(phone, message):
+    """Send a WhatsApp template/message via Meta Cloud API when configured.
+
+    Production messaging rules require an approved template for business-initiated
+    messages outside the customer-service window; callers should use template payloads
+    for reminders and obtain recipient opt-in first.
+    """
+    token = os.environ.get('WHATSAPP_ACCESS_TOKEN')
+    phone_id = os.environ.get('WHATSAPP_PHONE_NUMBER_ID')
+    if not token or not phone_id:
+        return False, 'WhatsApp Cloud API is not configured.'
+    try:
+        phone = normalize_phone(phone)
+        if not phone:
+            return False, 'Invalid Kenyan phone number.'
+        payload = {'messaging_product': 'whatsapp', 'to': phone, 'type': 'text',
+                   'text': {'preview_url': False, 'body': (message or '')[:4000]}}
+        version = os.environ.get('WHATSAPP_API_VERSION', 'v21.0')
+        req = urllib.request.Request('https://graph.facebook.com/' + version + '/' + phone_id + '/messages',
+            data=json.dumps(payload).encode(), headers={'Authorization': 'Bearer ' + token,
+            'Content-Type': 'application/json'}, method='POST')
+        with urllib.request.urlopen(req, timeout=20) as response:
+            if 200 <= response.status < 300:
+                return True, 'WhatsApp Cloud API accepted message'
+            return False, 'WhatsApp Cloud API HTTP ' + str(response.status)
+    except Exception as exc:
+        return False, type(exc).__name__ + ': ' + str(exc)[:350]
+
+
+def queue_whatsapp(db, user_id, phone, message, now=None, dedupe_key=None):
+    """Queue WhatsApp only when the app has the API configured; respect opt-in at call site."""
+    if not os.environ.get('WHATSAPP_ACCESS_TOKEN') or not os.environ.get('WHATSAPP_PHONE_NUMBER_ID'):
+        return None
+    try:
+        kwargs = dict(user_id=user_id, phone=phone, message=(message or '')[:4000],
+                      created_at=iso(now or now_utc()), status='PENDING', attempts=0)
+        if dedupe_key:
+            kwargs['dedupe_key'] = dedupe_key[:180]
+        return db.insert('whatsapp_outbox', **kwargs)
+    except Exception:
+        return None
+
+
+def process_whatsapp_outbox(database_url, limit=10):
+    if not os.environ.get('WHATSAPP_ACCESS_TOKEN') or not os.environ.get('WHATSAPP_PHONE_NUMBER_ID'):
+        return 0
+    from db import DB
+    db = DB(database_url); sent = 0
+    try:
+        for _ in range(max(1, min(int(limit), 25))):
+            row = db.one("SELECT * FROM whatsapp_outbox WHERE status='PENDING' AND attempts<5 ORDER BY id LIMIT 1")
+            if not row: break
+            claimed = db.execute("UPDATE whatsapp_outbox SET status='PROCESSING',attempts=attempts+1 WHERE id=? AND status='PENDING'", (row['id'],)).rowcount
+            if not claimed: continue
+            db.commit()
+            ok, detail = send_whatsapp_now(row['phone'], row['message'])
+            status = 'SENT' if ok else ('FAILED' if row['attempts'] >= 4 else 'PENDING')
+            db.execute("UPDATE whatsapp_outbox SET status=?,last_error=?,sent_at=? WHERE id=?",
+                (status, None if ok else str(detail)[:500], iso(now_utc()) if ok else None, row['id']))
+            db.commit()
+            if ok: sent += 1
+    finally:
+        db.close()
     return sent
 
 

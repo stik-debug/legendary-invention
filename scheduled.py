@@ -13,4 +13,5 @@ try:
 finally:
     db.close()
 print('email outbox:',notify.process_email_outbox(url,25))
+print('WhatsApp outbox:',notify.process_whatsapp_outbox(url,25))
 print('daily backup:',backup.save_backup(url))

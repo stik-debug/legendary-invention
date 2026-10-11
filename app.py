@@ -53,6 +53,16 @@ def create_app(overrides=None):
         EMAIL_OTP_ENABLED=False,
         SUPPORT_CONTACT=os.environ.get('SUPPORT_CONTACT', ''))
     app.config.update(overrides or {})
+    # Optional Sentry monitoring; app startup remains functional if monitoring is not configured.
+    if os.environ.get('SENTRY_DSN'):
+        try:
+            import sentry_sdk
+            sentry_sdk.init(dsn=os.environ['SENTRY_DSN'], traces_sample_rate=float(os.environ.get('SENTRY_TRACES_SAMPLE_RATE', '0.05')),
+                            send_default_pii=False, environment=os.environ.get('APP_ENV', 'production' if production else 'development'))
+        except ImportError:
+            app.logger.warning('SENTRY_DSN is set but sentry-sdk is not installed; error monitoring is inactive.')
+        except Exception:
+            app.logger.exception('Sentry initialization failed; continuing without remote error monitoring.')
     if len(app.config['SECRET_KEY']) < 32:
         if production:
             raise RuntimeError('Set AUTH_SECRET (or SECRET_KEY) to a random string of at least 32 characters.')
@@ -274,6 +284,15 @@ def create_app(overrides=None):
     @app.route('/install')
     def install_app():
         return render_template('install.html')
+
+    @app.route('/language', methods=['POST'])
+    def set_language():
+        language = request.form.get('language', 'en')
+        if language not in ('en', 'sw'):
+            language = 'en'
+        session['language'] = language
+        flash('Lugha imebadilishwa.' if language == 'sw' else 'Language preference updated.', 'success')
+        return redirect(request.referrer or url_for('dashboard'))
 
     @app.route('/privacy-policy')
     def privacy_policy():
