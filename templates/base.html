@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ session.get('language', 'en') }}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -28,8 +28,9 @@
     </div>
     <a class="menu-item menu-primary" data-menu-close href="{{ url_for('dashboard') }}"><span class="menu-icon">⌂</span><span><b>My Chamas</b><small>Open your Chama homepage</small></span></a>
     <a class="menu-item" data-menu-close href="{{ url_for('global_search') }}"><span class="menu-icon">⌕</span><span><b>Search</b><small>Find members and Chamas</small></span></a>
-    <a class="menu-item" data-menu-close href="{{ url_for('notifications') }}"><span class="menu-icon">🔔</span><span><b>Alerts</b><small>{% if notif_unread %}{{ notif_unread }} unread{% else %}No new alerts{% endif %}</small></span></a>
+    <a class="menu-item notification-menu-item" data-menu-close href="{{ url_for('notifications') }}"><span class="notification-bubble" aria-hidden="true"><svg viewBox="0 0 48 48" role="img"><path d="M24 5C13 5 5 12.5 5 22c0 5.2 2.5 9.8 6.7 12.8L9 42l10-3.2c1.6.5 3.3.7 5 .7 11 0 19-7.5 19-17.5S35 5 24 5Z"/></svg>{% if notif_unread %}<em>{{ notif_unread if notif_unread<100 else '99+' }}</em>{% endif %}</span><span><b>Alerts</b><small>{% if notif_unread %}{{ notif_unread }} unread{% else %}No new alerts{% endif %}</small></span></a>
     <a class="menu-item" data-menu-close href="{{ url_for('notification_settings') }}"><span class="menu-icon">⚙</span><span><b>Settings</b><small>Notifications and preferences</small></span></a>
+    <form class="menu-item language-switch" method="post" action="{{ url_for('set_language') }}">{{ csrf_input() }}<span class="menu-icon">文</span><label for="language-choice"><b>Language / Lugha</b><small>Choose English or Kiswahili</small></label><select id="language-choice" name="language" onchange="this.form.submit()"><option value="en" {{ 'selected' if session.get('language','en')=='en' else '' }}>English</option><option value="sw" {{ 'selected' if session.get('language')=='sw' else '' }}>Kiswahili</option></select></form>
     <a class="menu-item" data-menu-close href="{{ url_for('security_privacy') }}"><span class="menu-icon">🔐</span><span><b>Security & Privacy</b><small>Account security and data controls</small></span></a>
     <button class="menu-item data-saver-toggle" type="button" data-data-saver data-menu-close><span class="menu-icon">📶</span><span><b>Data Saver</b><small>Reduce animations and heavy effects</small></span></button>
     {% if user.is_super_admin %}
