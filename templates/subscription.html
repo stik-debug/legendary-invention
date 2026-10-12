@@ -9,20 +9,33 @@
 <div class="stat"><small>Members</small><b>{{ members }} / {{ plan.max_members }}</b></div>
 </div>
 {% if can_pay %}
+<div class="card"><h3>Choose the plan that fits your chama</h3><p class="mute">Compare all available plans below. Upgrades require payment confirmation; switching to a cheaper plan is allowed only when your active membership fits its limit. No members or records are ever removed automatically.</p>
+<div class="grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px">
+{% for p in plans %}
+<div class="card tight" style="border:2px solid {% if p.id==plan.id %}var(--pri,#1769d2){% else %}var(--line,#ddd){% endif %};margin:0;position:relative">
+{% if p.id==plan.id %}<span class="pill ok">Current plan</span>{% endif %}
+<h3 style="margin:10px 0 4px">{{ p.name }}</h3><div style="font-size:24px;font-weight:800">KES {{ p.price_cents|kes }}<small class="mute" style="font-size:12px"> / month</small></div>
+<p class="mute">Up to {{ p.max_members }} members</p>
+<ul><li>Chama financial records</li><li>Member access controls</li><li>Reports and statements</li></ul>
+{% if p.id != plan.id %}
+{% if p.max_members < members %}<p class="flash warning">Not available for your current {{ members }} members.</p>
+{% elif p.price_cents <= plan.price_cents %}
+<form method="POST" action="{{ url_for('subscription_downgrade', chama_id=chama.id) }}">{{ csrf_input() }}<input type="hidden" name="plan_id" value="{{ p.id }}"><button class="btn block">Choose {{ p.name }}</button></form>
+{% else %}<button class="btn pri block" type="button" onclick="document.getElementById('payment-plan-{{ p.id }}').checked=true;document.getElementById('payment-box').scrollIntoView({behavior:'smooth'});">Upgrade to {{ p.name }}</button>{% endif %}
+{% else %}<button class="btn block" disabled>Current plan</button>{% endif %}
+</div>
+{% endfor %}
+</div></div>
 {% if provider %}
-<form method="POST" action="{{ url_for('subscription_pay', chama_id=chama.id) }}" class="card">{{ csrf_input() }}<h3>Pay with {{ 'M-Pesa' if provider.name=='MPESA' else 'test payments' }}</h3>
-{% if provider.name=='TEST' %}<div class="flash warning">Development mode: no real money moves. Use the buttons under "Payments" to simulate the result.</div>{% endif %}
+<form id="payment-box" method="POST" action="{{ url_for('subscription_pay', chama_id=chama.id) }}" class="card">{{ csrf_input() }}<h3>Pay for your selected plan</h3>
+{% if provider.name=='TEST' %}<div class="flash warning">Development mode: no real money moves. Use the buttons under Payments to simulate the result.</div>{% endif %}
 <div class="field"><label>Plan (price is per chama, per month)</label>
-{% for p in plans %}<label class="radio"><input type="radio" name="plan_id" value="{{ p.id }}" {% if p.id==plan.id %}checked{% endif %}><span><b>{{ p.name }}</b>, KES {{ p.price_cents|kes }}/month<br><span class="mute">Up to {{ p.max_members }} members{% if p.max_members < members %} · too small for your {{ members }} members{% endif %}</span></span></label>{% endfor %}</div>
-<div class="field"><label for="mo">Months</label><select id="mo" name="months"><option value="1">1 month</option><option value="3">3 months</option><option value="6">6 months</option><option value="12">12 months</option></select></div>
+{% for p in plans %}<label class="radio"><input id="payment-plan-{{ p.id }}" type="radio" name="plan_id" value="{{ p.id }}" {% if p.id==plan.id %}checked{% endif %} {% if p.max_members < members %}disabled{% endif %}><span><b>{{ p.name }}</b>, KES {{ p.price_cents|kes }}/month<br><span class="mute">Up to {{ p.max_members }} members</span></span></label>{% endfor %}</div>
+<div class="field"><label for="mo">Billing period</label><select id="mo" name="months"><option value="1">1 month</option><option value="3">3 months</option><option value="6">6 months</option><option value="12">12 months</option></select></div>
 <div class="field"><label for="ph">M-Pesa phone number</label><input id="ph" type="tel" name="phone" value="{{ user.phone }}" required></div>
-<button class="btn pri block">Send payment request</button></form>
-{% else %}
-<div class="card"><h3>M-Pesa: CONFIGURATION REQUIRED</h3><p class="mute" style="margin:0">Online payment is not switched on yet. {{ config.PAY_INSTRUCTIONS }}</p></div>
-{% endif %}
-{% if active and plans|length > 1 %}<form method="POST" action="{{ url_for('subscription_downgrade', chama_id=chama.id) }}" class="card">{{ csrf_input() }}<h3>Move to a cheaper plan</h3>
-<div class="field"><select name="plan_id" aria-label="Plan">{% for p in plans %}{% if p.price_cents <= plan.price_cents and p.id!=plan.id %}<option value="{{ p.id }}">{{ p.name }}: KES {{ p.price_cents|kes }}/month, up to {{ p.max_members }} members</option>{% endif %}{% endfor %}</select><small>No members are ever removed automatically. It only works if your members fit the smaller plan.</small></div><button class="btn">Change plan</button></form>{% endif %}
-{% else %}<div class="card"><p class="mute" style="margin:0">Ask your chairperson or treasurer to pay the subscription.</p></div>{% endif %}
+<button class="btn pri block">Continue to payment</button><small class="mute">Your plan changes only after the payment provider confirms successful payment.</small></form>
+{% else %}<div class="card"><h3>Payment configuration required</h3><p class="mute">{{ config.PAY_INSTRUCTIONS }}</p><p>Choose a plan above, then contact support to arrange payment.</p></div>{% endif %}
+{% else %}<div class="card"><p class="mute" style="margin:0">Ask your chairperson or treasurer to manage the subscription.</p></div>{% endif %}
 <div class="card tight"><h3 style="padding:18px 20px 0">Payments</h3><ul class="list">
 {% for p in pays %}<li><span class="grow">KES {{ p.amount_cents|kes }} · {{ p.period_days }} days<br><small>{{ p.created_at|datetime }} · {{ p.method }}{% if p.provider_receipt %} · {{ p.provider_receipt }}{% endif %}</small></span>
 <span class="pill {{ {'SUCCESS':'ok','PENDING':'info'}.get(p.status,'bad') }}">{{ p.status }}</span>
