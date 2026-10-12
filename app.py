@@ -491,6 +491,41 @@ def create_app(overrides=None):
                                members=S.active_member_count(db(), chama_id), provider=app.config['PROVIDER'], dev=(app.config['PROVIDER'] and app.config['PROVIDER'].name == 'TEST'),
                                can_pay=me['role'] in ('CHAMA_ADMIN', 'TREASURER'), active=sub['status'] in S.ACCESS_OK)
 
+    @app.route('/chamas/<int:chama_id>/trust-and-planning', methods=['GET', 'POST'])
+    @login_required
+    def trust_and_planning(chama_id):
+        chama, me, sub = ctx(chama_id, allow_inactive=True)
+        if request.method == 'POST':
+            subject = (request.form.get('subject') or '').strip()[:120]
+            body = (request.form.get('body') or '').strip()[:4000]
+            if not subject or len(body) < 10:
+                flash('Enter a subject and at least 10 characters describing the issue.', 'warning')
+            else:
+                now = S.iso(S.now_utc())
+                db().insert('support_tickets', user_id=g.user['id'], chama_id=chama_id, subject=subject, body=body,
+                            status='OPEN', created_at=now, updated_at=now)
+                audit(db(), g.user['id'], 'SUPPORT_TICKET_CREATED', 'support_ticket', None, chama_id, meta={'subject': subject})
+                db().commit()
+                flash('Support request submitted.', 'success')
+            return redirect(url_for('trust_and_planning', chama_id=chama_id))
+        # Heuristic flags are prompts for human review, never proof of fraud.
+        recent = db().all("SELECT id,kind,direction,amount_cents,description,occurred_on,created_by FROM ledger_transactions WHERE chama_id=? AND occurred_on>=? ORDER BY id DESC LIMIT 100", (chama_id, (date.today()-timedelta(days=30)).isoformat()))
+        flags = []
+        for row in recent:
+            if int(row.get('amount_cents') or 0) >= 10000000:
+                flags.append({'when': row.get('occurred_on'), 'title': 'Large transaction for review', 'detail': f"{row.get('kind')} · {row.get('direction')} · KES {int(row.get('amount_cents'))/100:,.2f}", 'id': row.get('id')})
+        bursts = db().all("SELECT occurred_on,COUNT(*) n,SUM(amount_cents) total FROM ledger_transactions WHERE chama_id=? AND occurred_on>=? GROUP BY occurred_on HAVING COUNT(*)>=5 ORDER BY occurred_on DESC", (chama_id, (date.today()-timedelta(days=30)).isoformat()))
+        for row in bursts:
+            flags.append({'when': row.get('occurred_on'), 'title': 'High transaction volume', 'detail': f"{row.get('n')} ledger entries on one date; review if expected.", 'id': ''})
+        # Forecast uses observed recent average contribution inflow and known outstanding loan balances.
+        inflow = int(db().val("SELECT COALESCE(SUM(amount_cents),0) FROM contributions WHERE chama_id=? AND status='PAID' AND paid_on>=?", (chama_id, (date.today()-timedelta(days=90)).isoformat()), 0) or 0)
+        outstanding = int(db().val("SELECT COALESCE(SUM(total_due_cents-paid_cents),0) FROM loans WHERE chama_id=? AND status IN ('DISBURSED','ACTIVE','APPROVED')", (chama_id,), 0) or 0)
+        cash_in = int(db().val("SELECT COALESCE(SUM(CASE WHEN direction='IN' THEN amount_cents WHEN direction='OUT' THEN -amount_cents ELSE 0 END),0) FROM ledger_transactions WHERE chama_id=?", (chama_id,), 0) or 0)
+        forecast_month = round(inflow / 3)
+        tickets = db().all("SELECT id,subject,status,created_at,updated_at FROM support_tickets WHERE chama_id=? AND user_id=? ORDER BY id DESC LIMIT 10", (chama_id, g.user['id']))
+        return render_template('trust_planning.html', chama=chama, me=me, flags=flags[:30], cash_in=cash_in,
+                               forecast_month=forecast_month, forecast_3m=forecast_month*3, outstanding=outstanding, tickets=tickets)
+
     @app.route('/chamas/<int:chama_id>/subscription/pay', methods=['POST'])
     @login_required
     def subscription_pay(chama_id):
