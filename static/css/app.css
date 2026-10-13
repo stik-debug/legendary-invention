@@ -206,3 +206,27 @@ textarea{min-height:90px;resize:vertical}
 
 /* Standard alert bell with a clear red unread state; chat unread counts use the same red alert colour. */
 .notification-menu-item{gap:12px}.notification-bubble{width:42px;height:42px;display:inline-flex;position:relative;flex:0 0 42px;align-items:center;justify-content:center}.notification-bubble svg{width:34px;height:34px;fill:#087ff5}.notification-bubble.has-alert svg{fill:#dc2626}.notification-bubble em{position:absolute;right:-5px;top:-5px;min-width:21px;height:21px;padding:0 5px;border-radius:999px;background:#dc2626;border:2px solid #fff;color:#fff;font-style:normal;font-size:12px;font-weight:800;line-height:17px;text-align:center;box-shadow:0 1px 3px #0002}.dot{background:#dc2626;color:#fff;border-radius:99px;font-size:12px;padding:1px 7px;font-weight:800}.menu-badge,.mobile-nav-badge{background:#dc2626;color:#fff}
+
+
+/* Clear, high-contrast member overview; intentionally independent of the decorative hero layout. */
+.chama-glance{margin-bottom:16px;background:#fff;color:#14231D;border:1px solid #D7E2DB;padding:clamp(18px,3vw,28px);}
+.chama-glance-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px;}
+.chama-glance .eyebrow{margin:0 0 7px;color:#0A6647;font-size:11px;font-weight:800;letter-spacing:.11em;}
+.chama-glance h3{font-size:clamp(21px,2.5vw,27px);margin:0;color:#14231D;}
+.chama-glance .glance-intro{margin:7px 0 0;color:#52635A;font-size:14px;}
+.glance-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;}
+.glance-tile{min-width:0;display:flex;flex-direction:column;align-items:flex-start;background:#F7FAF8;border:1px solid #DCE7E0;border-radius:16px;padding:18px;}
+.glance-tile.contribution-tile{background:#F0F8F3;border-color:#A9D4BC;}
+.glance-label{display:flex;align-items:center;gap:9px;color:#34483D;font-size:13px;font-weight:750;line-height:1.35;}
+.glance-icon{display:inline-flex;align-items:center;justify-content:center;flex:none;min-width:31px;height:31px;padding:0 5px;border-radius:10px;background:#DCEFE4;color:#075C40;font-size:11px;font-weight:900;}
+.glance-value{display:block;margin:16px 0 4px;color:#102A20;font-size:clamp(23px,3vw,31px);font-weight:850;letter-spacing:-.035em;line-height:1.15;overflow-wrap:anywhere;}
+.glance-detail{margin:0 0 12px;color:#4D6055;font-size:13px;line-height:1.5;}
+.glance-detail strong{color:#263E32;}
+.glance-status{display:block;margin:0 0 15px;padding:7px 9px;border-radius:9px;font-size:12px;font-weight:750;line-height:1.4;}
+.status-good{background:#DDF3E5;color:#075C40;}.status-warn{background:#FFF0C7;color:#704900;}
+.glance-action{margin-top:auto;max-width:100%;white-space:normal;text-align:center;}
+.glance-next-actions{margin-top:20px;padding-top:17px;border-top:1px solid #DCE7E0;}
+.glance-next-actions h4{margin:0 0 9px;font-size:15px;color:#14231D;}
+.glance-next-actions ul{margin:0;padding-left:20px;color:#34483D;}.glance-next-actions li{padding:5px 0;}.glance-next-actions li span{display:inline-block;margin-left:8px;color:#52635A;font-size:12px;}
+@media(max-width:720px){.glance-grid{grid-template-columns:1fr 1fr;}.glance-tile:first-child{grid-column:1/-1;}}
+@media(max-width:460px){.chama-glance{padding:16px;}.glance-grid{grid-template-columns:1fr;}.glance-tile:first-child{grid-column:auto;}.glance-tile{padding:16px;}.glance-value{margin-top:12px;}.glance-action{width:100%;}}
