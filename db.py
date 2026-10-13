@@ -426,7 +426,7 @@ CREATE INDEX IF NOT EXISTS ix_collaboration_posts ON collaboration_posts(status,
 """
 
 DEFAULT_PLANS = [('starter', 'Starter', 50000, 20, 1), ('growth', 'Growth', 150000, 70, 2), ('business', 'Pro', 200000, 100, 3)]
-DEFAULT_SETTINGS = {'trial_days': '7', 'grace_days': '3', 'billing_period_days': '30'}
+DEFAULT_SETTINGS = {'trial_days': '30', 'grace_days': '7', 'billing_period_days': '30', 'price_per_member_cents': '2500'}
 
 
 def ensure_column(db, table, col, ddl):
@@ -526,6 +526,11 @@ def init_db(db):
         for k, v in DEFAULT_SETTINGS.items():
             if db.val('SELECT COUNT(*) FROM settings WHERE key=?', (k,)) == 0:
                 db.execute('INSERT INTO settings(key,value) VALUES(?,?)', (k, v))
+        # Move the old seven-day default to 30 days for new trials without touching
+        # any existing subscription's trial_ends_at or due_at timestamps.
+        db.execute("UPDATE settings SET value='30' WHERE key='trial_days' AND value='7'")
+        # Extend the legacy default grace period, without changing individual subscriptions.
+        db.execute("UPDATE settings SET value='7' WHERE key='grace_days' AND value='3'")
 
         # Hot-path indexes. These cover the most common member dashboard,
         # savings, loan, notification and activity lookups without changing

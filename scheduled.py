@@ -12,6 +12,8 @@ try:
     # Idempotent daily follow-ups plus 24-hour meeting reminders.
     print('obligation reminders:',daily_obligation_reminders(db))
     print('meeting reminders:',features.meeting_reminders(db))
+    import services
+    print('subscription nudges:',services.subscription_nudges(db))
 finally:
     db.close()
 print('email outbox:',notify.process_email_outbox(url,25))

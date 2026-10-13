@@ -30,7 +30,7 @@ class Base(unittest.TestCase):
         pid = S.create_payment(self.db, cid, plan['id'], months, 'MPESA', prov, '254712345678', None, now or self.t0)
         chk = f'CHK-{pid}'
         self.db.execute('UPDATE payments SET provider_txn_id=? WHERE id=?', (chk, pid)); self.db.commit()
-        return pid, chk, plan['price_cents'] * months
+        return pid, chk, S.setting(self.db, 'price_per_member_cents', S.DEFAULT_MEMBER_PRICE_CENTS) * S.active_member_count(self.db, cid) * months
 
     def ev(self, chk, amount, code=0, eid=None, receipt=None):
         return {'event_id': eid or chk, 'checkout_id': chk, 'result_code': code, 'amount_cents': amount, 'receipt': receipt or 'RCP' + chk}
@@ -92,16 +92,37 @@ class PlanLimits(Base):
 
 
 class Lifecycle(Base):
-    def test_new_chama_is_trial_for_7_days(self):
+    def test_new_chama_is_trial_for_30_days(self):
         _, cid = self.chama()
         self.assertEqual(self.sub(cid)['status'], 'TRIAL')
-        self.assertEqual(S.parse(self.sub(cid)['due_at']) - self.t0, timedelta(days=7))
+        self.assertEqual(S.parse(self.sub(cid)['due_at']) - self.t0, timedelta(days=30))
+
+    def test_subscription_cost_is_ksh25_per_active_member(self):
+        _, cid = self.chama(); self.fill(cid, 5)
+        plan = S.get_plan(self.db, code='starter')
+        pid = S.create_payment(self.db, cid, plan['id'], 3, 'MANUAL', 'TEST', '254712345678', None, self.t0)
+        self.assertEqual(self.db.val('SELECT amount_cents FROM payments WHERE id=?', (pid,)), 2500 * 5 * 3)
+
+    def test_subscription_value_report_uses_real_counts(self):
+        _, cid = self.chama(); self.fill(cid, 3)
+        report = S.subscription_value_report(self.db, cid, self.t0)
+        self.assertEqual(report['active_members'], 3)
+        self.assertEqual(report['monthly_cost_cents'], 7500)
+        self.assertEqual(report['contributions_recorded'], 0)
+
+    def test_trial_nudges_are_idempotent_and_in_app_only(self):
+        owner, cid = self.chama()
+        sub = self.sub(cid)
+        due = S.parse(sub['trial_ends_at'])
+        self.assertEqual(S.subscription_nudges(self.db, due - timedelta(days=3)), 1)
+        self.assertEqual(S.subscription_nudges(self.db, due - timedelta(days=3)), 0)
+        self.assertEqual(self.db.val('SELECT COUNT(*) FROM notifications WHERE chama_id=?', (cid,)), 1)
 
     def test_timeline_trial_pastdue_grace_suspended(self):
         _, cid = self.chama()
         due = S.parse(self.sub(cid)['due_at'])
         for offset, expect in [(timedelta(days=-1), 'TRIAL'), (timedelta(hours=1), 'PAST_DUE'), (timedelta(days=2), 'GRACE_PERIOD'),
-                               (timedelta(days=3, minutes=1), 'SUSPENDED')]:
+                               (timedelta(days=7, minutes=1), 'SUSPENDED')]:
             self.assertEqual(S.sync_subscription(self.db, cid, due + offset)['status'], expect, offset)
 
     def test_grace_is_configurable(self):
@@ -113,18 +134,18 @@ class Lifecycle(Base):
     def test_suspension_keeps_all_data_and_blocks_adding(self):
         owner, cid = self.chama(); self.fill(cid, 5)
         due = S.parse(self.sub(cid)['due_at'])
-        S.sweep_all(self.db, due + timedelta(days=5))
+        S.sweep_all(self.db, due + timedelta(days=9))
         self.assertEqual(self.sub(cid)['status'], 'SUSPENDED')
         self.assertEqual(S.active_member_count(self.db, cid), 5)
         self.assertEqual(self.db.val('SELECT COUNT(*) FROM chamas'), 1)
         with self.assertRaises(S.SubscriptionInactive):
-            S.add_member(self.db, cid, self.user(), 'MEMBER', None, due + timedelta(days=5))
+            S.add_member(self.db, cid, self.user(), 'MEMBER', None, due + timedelta(days=9))
 
     def test_payment_after_suspension_reactivates_automatically(self):
-        owner, cid = self.chama(); due = S.parse(self.sub(cid)['due_at']); late = due + timedelta(days=6)
+        owner, cid = self.chama(); due = S.parse(self.sub(cid)['due_at']); late = due + timedelta(days=9)
         S.sweep_all(self.db, late)
         pid, chk, amt = self.pay(cid, now=late)
-        self.assertEqual(S.process_webhook(self.db, 'TEST', self.ev(chk, amt)), 'SUCCESS')
+        self.assertEqual(S.process_webhook(self.db, 'TEST', self.ev(chk, amt), now=late), 'SUCCESS')
         s = self.sub(cid)
         self.assertEqual(s['status'], 'ACTIVE'); self.assertIsNone(s['suspended_at'])
         self.assertGreater(S.parse(s['due_at']), late)
@@ -145,7 +166,7 @@ class Lifecycle(Base):
 
 class Payments(Base):
     def test_verified_payments_for_each_plan(self):
-        for plan, cents in [('starter', 50000), ('growth', 150000), ('business', 200000)]:
+        for plan, cents in [('starter', 2500), ('growth', 2500), ('business', 2500)]:
             _, cid = self.chama(plan)
             pid, chk, amt = self.pay(cid, plan)
             self.assertEqual(amt, cents)
@@ -218,10 +239,10 @@ class Payments(Base):
         self.assertEqual(self.sub(cid)['status'], 'ACTIVE')
         self.assertEqual(self.db.val('SELECT method FROM payments WHERE id=?', (pid,)), 'MANUAL')
         self.assertEqual(self.db.val("SELECT COUNT(*) FROM audit_logs WHERE action='MANUAL_PAYMENT'"), 1)
-        self.assertEqual(S.owner_stats(self.db)['revenue_total'], 50000)
+        self.assertEqual(S.owner_stats(self.db)['revenue_total'], 2500)
 
     def test_revenue_ten_chamas_per_plan(self):
-        for plan, total in [('starter', 500000), ('growth', 1500000), ('business', 2000000)]:
+        for plan, total in [('starter', 25000), ('growth', 25000), ('business', 25000)]:
             db2 = dbm.DB('sqlite:///' + tempfile.mkdtemp() + '/r.db'); dbm.init_db(db2); self.db = db2
             for _ in range(10):
                 _, cid = self.chama(plan); pid, chk, amt = self.pay(cid, plan)

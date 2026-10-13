@@ -210,7 +210,13 @@ def create_app(overrides=None):
         if not m or (roles and m['role'] not in roles):
             abort(403)
         sub = S.sync_subscription(db(), chama_id)
-        if not allow_inactive and sub['status'] not in S.ACCESS_OK:
+        # Expired groups retain safe, read-only access to essential historical
+        # records. Mutating routes and all POST requests still require an active plan.
+        read_only_endpoints = {'chama_home', 'savings', 'statement', 'member_statement_alias',
+            'statement_pdf', 'statement_csv', 'reports', 'export_csv', 'chama_audit_log',
+            'dividends', 'activity', 'chama_ledger', 'ledger'}
+        read_only = request.method == 'GET' and request.endpoint in read_only_endpoints
+        if not allow_inactive and sub['status'] not in S.ACCESS_OK and not read_only:
             abort(redirect(url_for('subscription', chama_id=chama_id)))
         return db().one('SELECT * FROM chamas WHERE id=?', (chama_id,)), m, sub
 
@@ -634,9 +640,13 @@ def create_app(overrides=None):
         chama, me, sub = ctx(chama_id, allow_inactive=True)
         plans = db().all('SELECT * FROM subscription_plans WHERE is_active=1 ORDER BY sort_order')
         pays = db().all('SELECT * FROM payments WHERE chama_id=? ORDER BY id DESC LIMIT 20', (chama_id,))
+        members = S.active_member_count(db(), chama_id)
+        value_report = S.subscription_value_report(db(), chama_id)
         return render_template('subscription.html', chama=chama, me=me, sub=sub, plan=S.get_plan(db(), sub['plan_id']), plans=plans, pays=pays,
-                               members=S.active_member_count(db(), chama_id), provider=app.config['PROVIDER'], dev=(app.config['PROVIDER'] and app.config['PROVIDER'].name == 'TEST'),
-                               can_pay=me['role'] in ('CHAMA_ADMIN', 'TREASURER'), active=sub['status'] in S.ACCESS_OK)
+                               members=members, member_price=S.setting(db(), 'price_per_member_cents', S.DEFAULT_MEMBER_PRICE_CENTS),
+                               monthly_cost=members * S.setting(db(), 'price_per_member_cents', S.DEFAULT_MEMBER_PRICE_CENTS),
+                               value_report=value_report, provider=app.config['PROVIDER'], dev=(app.config['PROVIDER'] and app.config['PROVIDER'].name == 'TEST'),
+                               can_pay=me['role'] in ('CHAMA_ADMIN', 'TREASURER'), active=sub['status'] in S.ACCESS_OK, trial_days=S.setting(db(), 'trial_days', 30))
 
     @app.route('/chamas/<int:chama_id>/trust-and-planning', methods=['GET', 'POST'])
     @login_required
@@ -672,6 +682,22 @@ def create_app(overrides=None):
         tickets = db().all("SELECT id,subject,status,created_at,updated_at FROM support_tickets WHERE chama_id=? AND user_id=? ORDER BY id DESC LIMIT 10", (chama_id, g.user['id']))
         return render_template('trust_planning.html', chama=chama, me=me, flags=flags[:30], cash_in=cash_in,
                                forecast_month=forecast_month, forecast_3m=forecast_month*3, outstanding=outstanding, tickets=tickets)
+
+    @app.route('/chamas/<int:chama_id>/subscription/feedback', methods=['POST'])
+    @login_required
+    def subscription_feedback(chama_id):
+        chama, me, sub = ctx(chama_id, roles=('CHAMA_ADMIN', 'TREASURER'), allow_inactive=True)
+        reason = (request.form.get('reason') or '').strip()[:80]
+        detail = (request.form.get('detail') or '').strip()[:500]
+        allowed = {'PRICE', 'NOT_ENOUGH_VALUE', 'TOO_COMPLEX', 'PAYMENT_DIFFICULTY', 'GROUP_INACTIVE', 'OTHER'}
+        if reason not in allowed:
+            flash('Choose a reason so we can improve ChamaPro.', 'warning')
+        else:
+            audit(db(), g.user['id'], 'SUBSCRIPTION_FEEDBACK', 'subscription', sub['id'], chama_id,
+                  {'reason': reason, 'detail': detail})
+            db().commit()
+            flash('Thank you. Your feedback has been recorded.', 'success')
+        return redirect(url_for('subscription', chama_id=chama_id))
 
     @app.route('/chamas/<int:chama_id>/subscription/pay', methods=['POST'])
     @login_required
@@ -832,7 +858,11 @@ def create_app(overrides=None):
                 if f.get('kind') == 'settings':
                     S.update_settings(db(), f.get('trial_days'), f.get('grace_days'), f.get('billing_period_days'), g.user['id'])
                 else:
-                    S.update_plan(db(), int(f.get('plan_id')), f.get('name'), f.get('price'), f.get('max_members'), f.get('is_active') == '1', g.user['id'])
+                    current_plan = S.get_plan(db(), int(f.get('plan_id')))
+                    if not current_plan:
+                        raise S.BusinessError('Plan not found.')
+                    # Legacy price values preserve tier ordering only; actual billing is per active member.
+                    S.update_plan(db(), int(f.get('plan_id')), f.get('name'), current_plan['price_cents'] / 100, f.get('max_members'), f.get('is_active') == '1', g.user['id'])
                 flash('Saved.', 'success')
             except (S.BusinessError, ValueError, TypeError) as e:
                 flash(str(e) if isinstance(e, S.BusinessError) else 'Invalid values.', 'danger')
