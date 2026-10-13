@@ -64,6 +64,16 @@ def _ref(r):
     return (r or '').strip().upper()[:40] or None
 
 
+def _ensure_unique_payment_reference(db, chama_id, ref):
+    """Payment references are chama-wide identifiers, not unique only within one feature."""
+    if not ref:
+        return
+    for table in ('contributions', 'loan_repayments', 'fine_payments'):
+        hit = db.val(f"SELECT COUNT(*) FROM {table} WHERE chama_id=? AND upper(trim(COALESCE(reference,'')))=? AND status='PAID'", (chama_id, ref), 0)
+        if hit:
+            raise BusinessError(f'The reference {ref} has already been recorded for this chama.')
+
+
 # ---------- ledger ----------
 # Two separate money accounts per chama: 'MAIN' (savings, loans, fines, expenses) and 'MGR' (the merry-go-round pot).
 # Loans and expenses only ever look at MAIN, so the pot cannot be lent or spent: the separation is in the accounting, not a promise.
@@ -113,8 +123,7 @@ def record_contribution(db, chama_id, user_id, cents, paid_on, method, reference
         with db.tx():
             db.lock('chamas', chama_id)
             _member(db, chama_id, user_id)
-            if ref and _n(db, "SELECT COUNT(*) FROM contributions WHERE chama_id=? AND reference=? AND status='PAID'", (chama_id, ref)):
-                raise BusinessError(f'The reference {ref} has already been recorded.')
+            _ensure_unique_payment_reference(db, chama_id, ref)
             cid = db.insert('contributions', chama_id=chama_id, user_id=user_id, amount_cents=cents, paid_on=paid_on, period=paid_on[:7],
                             method=method, reference=ref, notes=(notes or '')[:200], created_by=actor, created_at=iso(now))
             _ledger(db, chama_id, 'CONTRIBUTION', 'IN', cents, user_id, 'contribution', cid, 'Contribution', paid_on, actor, now)
@@ -266,6 +275,7 @@ def repay_loan(db, chama_id, loan_id, cents, paid_on, method, reference, actor, 
     method, ref = _method(method), _ref(reference)
     with db.tx():
         db.lock('chamas', chama_id)
+        _ensure_unique_payment_reference(db, chama_id, ref)
         loan = _loan(db, chama_id, loan_id)
         if loan['status'] != 'ACTIVE':
             raise BusinessError('Only a loan that has been paid out can be repaid.')

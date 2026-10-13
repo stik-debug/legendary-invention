@@ -394,6 +394,12 @@ CREATE TABLE IF NOT EXISTS notification_delivery_log(
   status TEXT NOT NULL, detail TEXT, created_at TEXT NOT NULL);
 
 
+CREATE TABLE IF NOT EXISTS financial_import_staging(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), user_id INTEGER NOT NULL REFERENCES users(id),
+  payload TEXT NOT NULL, payload_sha256 TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'PREVIEW',
+  created_at TEXT NOT NULL, expires_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS ix_financial_import_staging ON financial_import_staging(chama_id,user_id,status,created_at);
+
 """
 
 DEFAULT_PLANS = [('starter', 'Starter', 50000, 20, 1), ('growth', 'Growth', 150000, 70, 2), ('business', 'Pro', 200000, 100, 3)]
@@ -483,8 +489,11 @@ def init_db(db):
         if not db.val('SELECT COUNT(*) FROM subscription_plans'):
             for code, name, price, mx, order in DEFAULT_PLANS:
                 db.insert('subscription_plans', code=code, name=name, price_cents=price, max_members=mx, sort_order=order)
-        db.execute("UPDATE subscription_plans SET max_members=20 WHERE code='starter' AND max_members<20")
-        db.execute("UPDATE subscription_plans SET name='Pro', max_members=100, price_cents=200000 WHERE code='business'")
+        # Enforce the published monthly prices/capacities on existing databases as
+        # well as fresh installs. Values are cents: KSh 500 = 50000 cents.
+        db.execute("UPDATE subscription_plans SET name='Starter', max_members=20, price_cents=50000, sort_order=1 WHERE code='starter'")
+        db.execute("UPDATE subscription_plans SET name='Growth', max_members=70, price_cents=150000, sort_order=2 WHERE code='growth'")
+        db.execute("UPDATE subscription_plans SET name='Pro', max_members=100, price_cents=200000, sort_order=3 WHERE code='business'")
         for c in db.all('SELECT id, contribution_cents, loan_rate_bps, loan_multiplier FROM chamas'):
             if db.val('SELECT COUNT(*) FROM chama_constitutions WHERE chama_id=?',(c['id'],),0)==0:
                 db.insert('chama_constitutions', chama_id=c['id'], monthly_contribution_cents=c['contribution_cents'],

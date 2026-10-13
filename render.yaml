@@ -34,7 +34,7 @@ services:
       - key: SMS_OTP_ENABLED
         value: "0"
       - key: EMAIL_OTP_ENABLED
-        value: auto
+        value: "0"
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT

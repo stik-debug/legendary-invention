@@ -68,7 +68,7 @@ Financial actions remain server-authorized and M-Pesa integration is not expande
 
 Email OTP is disabled in this release because delivery was unreliable. Signup and normal login use the account password and do not require an email code. Password recovery uses the app's existing recovery-code flow. Owner authenticator-app TOTP remains a separate optional security feature.
 
-Each OTP expires in 5 minutes, is stored only as a hash, becomes invalid after successful use, locks after 5 failed attempts, and has resend/request rate limits. Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` and `MAIL_FROM`.
+Legacy OTP code remains in the source but is not required for registration or normal login in this release. SMTP settings are not required for account access.
 
 ## Online meetings
 
@@ -268,3 +268,9 @@ See `CHANGELOG_V39.md` for member leave, self-service account anonymisation, and
 
 ## v40 Strategy & Continuity additions
 See `CHANGELOG_V40.md` for the What-if Simulator, saved scenario-to-vote links, Fairness & Consistency Review, Promise Tracker, verifiable Financial Passport, Continuity Vault and formal handover, constitution history, Copilot improvements and offline submission guard. These additions are read-only/planning-first where appropriate and do not add new mobile-money integration.
+
+## V43 trust workflows
+
+V43 adds a role-protected Trust & Reconciliation centre (`/chamas/<id>/trust`), in-app follow-up reminders, a member-facing at-a-glance summary, and a staged CSV importer for historical contributions, expenses, other income, and one verified opening cash balance. Import rows are previewed and committed atomically with audit logging. The importer deliberately does not invent loan repayment or payout history. See `CHANGELOG_V43.md` and `BACKUP_RESTORE_DRILL_V43.md`.
+
+For recovery, validate backups and run `python restore_drill.py <backup.json.gz> <new-staging.sqlite>` only against a new staging path. This utility is for SQLite staging drills; rehearse PostgreSQL production recovery separately on disposable PostgreSQL staging. Keep backup files private and encrypted.

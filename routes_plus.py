@@ -2,6 +2,8 @@
 backups, organizations, notifications preferences, and richer reporting/AI.
 M-Pesa integration is intentionally not changed by this module.
 """
+import csv
+import io
 import json
 import os
 import secrets
@@ -10,6 +12,7 @@ from pathlib import Path
 
 from flask import Response, abort, flash, g, jsonify, redirect, render_template, request, send_file, url_for
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash
 
 import finance as F
 import features as X
@@ -137,6 +140,81 @@ def _reconcile(db, chama_id):
 
 
 def register_plus_routes(app, db, login_required, ctx, owner_required):
+    # ---------- safe member-list migration ----------
+    @app.route('/chamas/<int:chama_id>/members/import', methods=['GET', 'POST'])
+    @login_required
+    def member_import(chama_id):
+        chama, me, sub = ctx(chama_id, roles=('CHAMA_ADMIN',))
+        raw_csv = ''
+        preview = []
+        results = None
+        if request.method == 'POST':
+            raw_csv = (request.form.get('csv_text') or '').strip()
+            uploaded = request.files.get('csv_file')
+            if uploaded and uploaded.filename:
+                raw_bytes = uploaded.read(256 * 1024 + 1)
+                if len(raw_bytes) > 256 * 1024:
+                    flash('CSV must be smaller than 256 KB.', 'warning')
+                    return render_template('member_import.html', chama=chama, me=me, preview=[], csv_text='')
+                try:
+                    raw_csv = raw_bytes.decode('utf-8-sig')
+                except UnicodeDecodeError:
+                    flash('Please save the CSV as UTF-8 and try again.', 'warning')
+                    return render_template('member_import.html', chama=chama, me=me, preview=[], csv_text='')
+            if not raw_csv or len(raw_csv.encode('utf-8')) > 256 * 1024:
+                flash('Upload a CSV or paste CSV rows first. Maximum size is 256 KB.', 'warning')
+            else:
+                try:
+                    reader = csv.DictReader(io.StringIO(raw_csv))
+                    headers = {str(h or '').strip().lower() for h in (reader.fieldnames or [])}
+                    if not {'name', 'phone'}.issubset(headers):
+                        raise ValueError('CSV needs headers named name and phone. Optional header: role.')
+                    for line, row in enumerate(reader, start=2):
+                        if len(preview) >= 100:
+                            raise ValueError('Import is limited to 100 rows at a time.')
+                        clean = {str(k or '').strip().lower(): str(v or '').strip() for k, v in row.items()}
+                        name, phone = clean.get('name', ''), clean.get('phone', '')
+                        role = (clean.get('role') or 'MEMBER').upper().replace(' ', '_')
+                        if not name and not phone:
+                            continue
+                        if len(name) < 2 or not phone:
+                            raise ValueError(f'Row {line}: both name and phone are required.')
+                        if role not in ('MEMBER', 'TREASURER', 'SECRETARY', 'AUDITOR'):
+                            raise ValueError(f'Row {line}: role must be MEMBER, TREASURER, SECRETARY, or AUDITOR. Assign CHAMA_ADMIN manually after import.')
+                        preview.append({'line': line, 'name': name[:80], 'phone': phone[:40], 'role': role})
+                    if not preview:
+                        raise ValueError('No member rows found in the CSV.')
+                    if request.form.get('confirm_import') == '1':
+                        results = {'added': [], 'errors': []}
+                        for row in preview:
+                            try:
+                                uid, code = S.add_member_by_phone(db(), chama_id, row['phone'], row['name'], row['role'], g.user['id'], generate_password_hash)
+                                results['added'].append({'name': row['name'], 'phone': row['phone'], 'role': row['role'], 'code': code, 'already_registered': not bool(code)})
+                            except S.BusinessError as exc:
+                                results['errors'].append({'name': row['name'], 'phone': row['phone'], 'error': str(exc)})
+                        audit(db(), g.user['id'], 'MEMBER_CSV_IMPORT', 'chama', chama_id, chama_id, {'rows': len(preview), 'added': len(results['added']), 'errors': len(results['errors'])})
+                        db().commit()
+                        raw_csv = ''
+                    else:
+                        return render_template('member_import.html', chama=chama, me=me, preview=preview, csv_text=raw_csv, results=None)
+                except (ValueError, csv.Error) as exc:
+                    flash(str(exc), 'warning')
+        return render_template('member_import.html', chama=chama, me=me, preview=preview, csv_text=raw_csv, results=results)
+
+    @app.route('/chamas/<int:chama_id>/members/export.csv')
+    @login_required
+    def member_export_csv(chama_id):
+        chama, me, sub = ctx(chama_id, roles=('CHAMA_ADMIN', 'TREASURER', 'SECRETARY', 'AUDITOR'))
+        rows = db().all("SELECT u.name,u.phone,m.role,m.status,m.joined_at FROM chama_members m JOIN users u ON u.id=m.user_id WHERE m.chama_id=? ORDER BY m.status,u.name", (chama_id,))
+        out = io.StringIO(newline='')
+        writer = csv.writer(out)
+        writer.writerow(['name', 'phone', 'role', 'status', 'joined_at'])
+        for row in rows:
+            writer.writerow([row.get('name') or '', row.get('phone') or '', row.get('role') or '', row.get('status') or '', row.get('joined_at') or ''])
+        audit(db(), g.user['id'], 'MEMBER_LIST_EXPORTED', 'chama', chama_id, chama_id, {'rows': len(rows)})
+        db().commit()
+        return Response(out.getvalue(), mimetype='text/csv; charset=utf-8', headers={'Content-Disposition': f'attachment; filename="chamapro-members-{chama_id}.csv"', 'Cache-Control': 'no-store'})
+
     # ---------- private member dashboard ----------
     @app.route('/chamas/<int:chama_id>/my-dashboard')
     @login_required

@@ -3,12 +3,14 @@ from db import DB, init_db
 import backup
 import features
 import notify
+from trust_jobs import daily_obligation_reminders
 
 url=os.environ.get('DATABASE_URL') or 'sqlite:///instance/chamapay.db'
 db=DB(url)
 try:
     init_db(db)
-    # 24-hour reminders are sent once per meeting; email delivery itself is retried from the outbox.
+    # Idempotent daily follow-ups plus 24-hour meeting reminders.
+    print('obligation reminders:',daily_obligation_reminders(db))
     print('meeting reminders:',features.meeting_reminders(db))
 finally:
     db.close()

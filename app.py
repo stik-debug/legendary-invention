@@ -51,16 +51,9 @@ def create_app(overrides=None):
         REQUIRE_OWNER_2FA=os.environ.get('REQUIRE_OWNER_2FA') == '1',
         # SMS OTP is OFF unless SMS_OTP_ENABLED=1 is set explicitly (it is not forced on in production).
         SMS_OTP_ENABLED=False,
-        # Email OTP activates automatically when a transactional mail provider is configured.
-        # EMAIL_OTP_ENABLED=0 explicitly disables it; =1 explicitly enables it. In 'auto'
-        # mode (the default), accounts are not blocked by an unconfigured email provider.
-        EMAIL_OTP_ENABLED=(
-            os.environ.get('EMAIL_OTP_ENABLED', 'auto').strip().lower() == '1'
-            or (
-                os.environ.get('EMAIL_OTP_ENABLED', 'auto').strip().lower() == 'auto'
-                and bool(os.environ.get('RESEND_API_KEY') or os.environ.get('BREVO_API_KEY') or os.environ.get('SMTP_HOST'))
-            )
-        ),
+        # Email OTP is intentionally disabled in this release. A stale Render
+        # variable must never strand members on a Gmail code screen.
+        EMAIL_OTP_ENABLED=False,
         SUPPORT_CONTACT=os.environ.get('SUPPORT_CONTACT', ''))
     app.config.update(overrides or {})
     # Optional Sentry monitoring; app startup remains functional if monitoring is not configured.
@@ -433,10 +426,13 @@ def create_app(overrides=None):
         plan = S.get_plan(db(), sub['plan_id'])
         period = date.today().isoformat()[:7]
         month_paid = sum(1 for r in F.month_status(db(), chama_id, period) if r['status'] == 'PAID')
+        my_status = next((r for r in F.month_status(db(), chama_id, period) if int(r['id']) == int(g.user['id'])), None)
+        my_actions = db().all("SELECT title,due_date,status FROM meeting_actions WHERE chama_id=? AND owner_user_id=? AND status='OPEN' ORDER BY CASE WHEN due_date IS NULL THEN 1 ELSE 0 END,due_date LIMIT 5", (chama_id, g.user['id']))
+        my_open_loans = db().all("SELECT id,total_due_cents,paid_cents FROM loans WHERE chama_id=? AND user_id=? AND status='ACTIVE' ORDER BY id DESC LIMIT 5", (chama_id,g.user['id']))
         return render_template('chama_home.html', chama=chama, me=me, sub=sub, plan=plan, members=members, roles=S.ROLES,
                                is_admin=me['role'] == 'CHAMA_ADMIN', balance=F.cash_balance(db(), chama_id), my_savings=F.savings(db(), chama_id, g.user['id']),
                                st=F.member_statement(db(), chama_id, g.user['id']), month_paid=month_paid, can_view_statements=me['role'] in F.VIEW_ROLES,
-                               invite_code=invite_code, invite_name=invite_name)
+                               my_status=my_status, my_actions=my_actions, my_open_loans=my_open_loans, invite_code=invite_code, invite_name=invite_name)
 
     @app.route('/chamas/<int:chama_id>')
     @login_required
@@ -759,6 +755,8 @@ def create_app(overrides=None):
     routes_otp.register(app, db, login_required)
     routes_features.register(app, db, ctx, login_required, owner_required)
     routes_strategy.register_strategy_routes(app, db, ctx, login_required)
+    import routes_trust
+    routes_trust.register(app, db, ctx, login_required)
     devtools.register(app)
 
     # ---------- owner control center ----------
