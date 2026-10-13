@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% block title %}Strategy & Continuity · {{ chama.name }}{% endblock %}{% block content %}
+<div class="head"><div><h2>Strategy & Continuity</h2><p>{{ chama.name }} · plan before committing, review fairly, preserve institutional memory.</p></div></div>
+{% include '_chama_nav.html' %}
+<div class="grid">
+  <a class="card" href="{{ url_for('chama_ai',chama_id=chama.id) }}" style="color:inherit;text-decoration:none"><h3>ChamaPro Copilot →</h3><p class="mute">Ask questions about recorded group data.</p></a>
+  <a class="card" href="{{ url_for('chama_promises',chama_id=chama.id) }}" style="color:inherit;text-decoration:none"><h3>Promise Tracker →</h3><p class="mute">Track meeting decisions, owners and deadlines.</p></a>
+  {% if me.role in ('CHAMA_ADMIN','TREASURER','SECRETARY','AUDITOR') %}<a class="card" href="{{ url_for('chama_financial_passport',chama_id=chama.id) }}" style="color:inherit;text-decoration:none"><h3>Financial Passport PDF →</h3><p class="mute">Export a concise, caveated financial record.</p></a>{% endif %}
+  {% if me.role in ('CHAMA_ADMIN','TREASURER','AUDITOR') %}<a class="card" href="{{ url_for('chama_continuity_vault',chama_id=chama.id) }}" style="color:inherit;text-decoration:none"><h3>Continuity Vault ZIP →</h3><p class="mute">Create a read-only handover snapshot.</p></a>{% endif %}
+  <a class="card" href="{{ url_for('chama_handover',chama_id=chama.id) }}" style="color:inherit;text-decoration:none"><h3>Formal handover →</h3><p class="mute">Record a proposed successor and acceptance.</p></a>
+</div>
+<div class="card"><h3>What-if simulator</h3><p class="mute">Stress-test a decision using the last 90 days of posted ledger activity. It does not reserve money or change the ledger.</p>
+{% if me.role in ('CHAMA_ADMIN','TREASURER','SECRETARY') %}
+<form method="post">{{ csrf_input() }}
+<div class="grid">
+<div class="field"><label>Contribution drop (%)</label><input type="number" name="contribution_drop_pct" min="0" max="100" value="{{ request.form.get('contribution_drop_pct','0') }}" required></div>
+<div class="field"><label>Stress default rate on outstanding loans (%)</label><input type="number" name="default_pct" min="0" max="100" value="{{ request.form.get('default_pct','0') }}" required></div>
+<div class="field"><label>Planned payout (KES)</label><input type="number" name="planned_payout" min="0" step="0.01" value="{{ request.form.get('planned_payout','0') }}" required></div>
+<div class="field"><label>Proposed new loan (KES)</label><input type="number" name="new_loan" min="0" step="0.01" value="{{ request.form.get('new_loan','0') }}" required></div>
+<div class="field"><label>Scenario name (to save)</label><input name="scenario_name" maxlength="120" placeholder="e.g. 15% contribution drop"></div>
+</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn pri" type="submit">Run simulation</button><button class="btn" name="save_scenario" value="1" type="submit">Run & save scenario</button></div>
+</form>{% else %}<p class="mute">Only authorised officials can run or save planning scenarios.</p>{% endif %}
+{% if simulation %}<div class="stats" style="margin-top:18px"><div class="stat"><small>Current ledger balance</small><b>KES {{ simulation.current_ledger_balance_cents|kes }}</b></div><div class="stat"><small>Estimated monthly inflow</small><b>KES {{ simulation.projected_monthly_inflow_cents|kes }}</b></div><div class="stat"><small>Stress loss allowance</small><b>KES {{ simulation.stress_default_loss_cents|kes }}</b></div><div class="stat gold"><small>Estimated balance after 30 days</small><b>KES {{ simulation.estimated_30_day_balance_cents|kes }}</b></div></div><div class="banner">{{ simulation.warning }}{% if simulation.estimated_30_day_balance_cents < 0 %}<br><b>Warning:</b> under these assumptions, the projected ledger position is negative. Review timing, records and the proposed decision before voting.{% endif %}</div>{% if saved %}<p class="pill ok">Scenario saved for future comparison.</p>{% endif %}{% endif %}
+</div>
+<div class="card"><h3>Fairness & consistency review</h3><p class="mute">These are explainable rule-based flags, not fraud findings. Review source records and the constitution before taking action.</p><ul class="list">{% for f in flags %}<li><span class="grow"><b>{{ f.title }}</b><br>{{ f.detail }}</span><span class="pill {% if f.level=='Clear' %}ok{% else %}warning{% endif %}">{{ f.level }}</span></li>{% endfor %}</ul></div>
+{% if saved_rows %}<div class="card"><h3>Saved scenarios</h3><ul class="list">{% for r in saved_rows %}<li><span class="grow"><b>{{ r.name }}</b><br><small>Saved {{ r.created_at }} by {{ r.creator or 'official' }} · contribution drop {{ r.assumptions_obj.contribution_drop_pct }}% · default stress {{ r.assumptions_obj.default_pct }}%</small><br>Estimated 30-day balance: KES {{ r.results_obj.estimated_30_day_balance_cents|kes }}</span></li>{% endfor %}</ul></div>{% endif %}
+{% endblock %}

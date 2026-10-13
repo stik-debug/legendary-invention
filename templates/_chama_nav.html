@@ -21,6 +21,7 @@
   <a href="{{ url_for('documents', chama_id=chama.id) }}" {% if ep=='documents' %}aria-current="page"{% endif %}>Documents</a>
   <a href="{{ url_for('activity', chama_id=chama.id) }}" {% if ep=='activity' %}aria-current="page"{% endif %}>Activity</a>
   <a href="{{ url_for('chama_ai', chama_id=chama.id) }}" {% if ep=='chama_ai' %}aria-current="page"{% endif %}>🧠 AI</a>
+  <a href="{{ url_for('chama_strategy', chama_id=chama.id) }}" {% if ep in ('chama_strategy','chama_promises','chama_handover') %}aria-current="page"{% endif %}>Strategy</a>
   <a href="{{ url_for('chama_health', chama_id=chama.id) }}" {% if ep=='chama_health' %}aria-current="page"{% endif %}>Health</a>
   <a href="{{ url_for('chama_trust', chama_id=chama.id) }}" {% if ep=='chama_trust' %}aria-current="page"{% endif %}>Trust</a>
   {% if me is defined and me and me.role in ('CHAMA_ADMIN','TREASURER','SECRETARY','AUDITOR') %}<a href="{{ url_for('financial_check', chama_id=chama.id) }}" {% if ep=='financial_check' %}aria-current="page"{% endif %}>Financial Check</a>{% endif %}

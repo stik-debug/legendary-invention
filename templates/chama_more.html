@@ -5,7 +5,7 @@
 {% include '_chama_nav.html' %}
 <div class="grid">
 {% for label, endpoint in [
-('My Dashboard','my_chama_dashboard'),('Home','chama_home'),('Savings','savings'),('Pay','pay'),('Loans','loans'),('Fines','fines'),('Ledger','ledger'),('Merry-go-round','mgr_list'),('Goals','chama_goals'),('Investments','investments'),('Assets','assets'),('Voting','chama_votes'),('Constitution','constitution'),('AI','chama_ai'),('Activity','activity'),('Documents','documents'),('Meetings','meetings'),('Notices','notices'),('Chat','chat')
+('My Dashboard','my_chama_dashboard'),('Home','chama_home'),('Savings','savings'),('Pay','pay'),('Loans','loans'),('Fines','fines'),('Ledger','ledger'),('Merry-go-round','mgr_list'),('Goals','chama_goals'),('Investments','investments'),('Assets','assets'),('Voting','chama_votes'),('Constitution','constitution'),('AI','chama_ai'),('Strategy & Continuity','chama_strategy'),('Promise Tracker','chama_promises'),('Formal Handover','chama_handover'),('Activity','activity'),('Documents','documents'),('Meetings','meetings'),('Notices','notices'),('Chat','chat')
 ] %}
 <a class="card" href="{{ url_for(endpoint, chama_id=chama.id) }}" style="text-decoration:none;color:inherit;margin:0"><h3>{{ label }} →</h3><p class="mute">Open {{ label|lower }}</p></a>
 {% endfor %}

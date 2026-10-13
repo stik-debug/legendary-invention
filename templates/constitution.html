@@ -10,4 +10,5 @@
 <div class="field"><label>Attendance requirement (%)</label><input name="attendance_requirement" type="number" min="0" max="100" value="{{ c.attendance_requirement }}"></div>
 <div class="field"><label>Voting requirement (%)</label><input name="voting_requirement" type="number" min="0" max="100" value="{{ c.voting_requirement }}"></div>
 </div>{% if me.role=='CHAMA_ADMIN' %}<button class="btn pri">Save constitution</button>{% else %}<p class="mute">Only the Chama administrator can change these rules.</p>{% endif %}</form></div>
+<div class="card"><h3>Constitution change history</h3><p class="mute">Before each update, the previous rule set is preserved. History is read-only and does not retroactively change past approvals.</p><ul class="list">{% for h in history %}<li><span class="grow"><b>Version {{ h.version_no }}</b><br><small>{{ h.changed_at }}</small><br><code>{{ h.snapshot_json }}</code></span></li>{% else %}<li class="empty">No prior constitution changes have been archived yet. New changes will preserve the previous version.</li>{% endfor %}</ul></div>
 {% endblock %}
