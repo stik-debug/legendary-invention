@@ -261,3 +261,7 @@ This build preserves existing ChamaPay features and adds only missing pieces fro
 - Open votes automatically close when their configured closing time passes, and officials can close a vote manually to finalize the decision record.
 - Existing attendance, meeting minutes/action items, voting, dashboards, reconciliation, notifications, contribution schedules, PDF statements/receipts, audit logs, member exits/dividends, backups, and role controls are retained rather than duplicated.
 - No mobile-money API/STK integration was added.
+
+
+## v39 account and chama closure
+See `CHANGELOG_V39.md` for member leave, self-service account anonymisation, and controlled chama closure. Chama closure intentionally preserves financial and audit records.

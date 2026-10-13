@@ -442,6 +442,69 @@ def create_app(overrides=None):
     def chama_home(chama_id):
         return render_chama_home(chama_id)
 
+    @app.route('/chamas/<int:chama_id>/leave', methods=['POST'])
+    @login_required
+    def chama_leave(chama_id):
+        # A member can leave voluntarily, but unresolved financial obligations or an
+        # untransferred administrator role must be settled first. Historical books stay intact.
+        chama, me, sub = ctx(chama_id, allow_inactive=True)
+        uid = g.user['id']
+        marks = "'PENDING','APPROVED','ACTIVE'"
+        blockers = []
+        if db().val(f"SELECT COUNT(*) FROM loans WHERE chama_id=? AND user_id=? AND status IN ({marks})", (chama_id, uid), 0):
+            blockers.append('Close your outstanding loans first.')
+        if db().val("SELECT COUNT(*) FROM fines WHERE chama_id=? AND user_id=? AND status NOT IN ('PAID','WAIVED','CANCELLED')", (chama_id, uid), 0):
+            blockers.append('Settle or waive your outstanding fines first.')
+        if db().val(f"SELECT COUNT(*) FROM loan_guarantors g JOIN loans l ON l.id=g.loan_id WHERE l.chama_id=? AND g.guarantor_user_id=? AND l.status IN ({marks})", (chama_id, uid), 0):
+            blockers.append('Arrange release or replacement for your active loan guarantees first.')
+        if me['role'] == 'CHAMA_ADMIN' and db().val("SELECT COUNT(*) FROM chama_members WHERE chama_id=? AND status='ACTIVE' AND role='CHAMA_ADMIN'", (chama_id,), 0) <= 1:
+            blockers.append('Transfer the Chama Admin role to another active member before leaving.')
+        if blockers:
+            flash(' '.join(blockers), 'warning')
+            return redirect(url_for('chama_home', chama_id=chama_id))
+        with db().tx():
+            db().execute("UPDATE chama_members SET status='REMOVED',removed_at=? WHERE chama_id=? AND user_id=? AND status='ACTIVE'", (S.iso(S.now_utc()), chama_id, uid))
+            audit(db(), uid, 'MEMBER_LEFT_CHAMA', 'chama_member', me['id'], chama_id, {'user_id': uid})
+        flash('You have left this chama. Your financial and audit history remains preserved.', 'success')
+        return redirect(url_for('dashboard'))
+
+    @app.route('/chamas/<int:chama_id>/delete', methods=['POST'])
+    @login_required
+    def chama_delete(chama_id):
+        # "Delete" is a controlled archive: never hard-delete a chama's financial books.
+        chama, me, sub = ctx(chama_id, roles=('CHAMA_ADMIN',), allow_inactive=True)
+        if int(chama['created_by']) != int(g.user['id']):
+            abort(403)
+        if (request.form.get('confirm_name') or '').strip() != chama['name']:
+            flash('Type the exact chama name to confirm closure.', 'warning')
+            return redirect(url_for('chama_home', chama_id=chama_id))
+        now = S.iso(S.now_utc())
+        with db().tx():
+            db().execute("DELETE FROM public_chama_listings WHERE chama_id=?", (chama_id,))
+            db().execute("UPDATE subscriptions SET status='CANCELLED',cancelled_at=?,updated_at=? WHERE chama_id=?", (now, now, chama_id))
+            db().execute("UPDATE chama_members SET status='REMOVED',removed_at=? WHERE chama_id=? AND status='ACTIVE'", (now, chama_id))
+            audit(db(), g.user['id'], 'CHAMA_CLOSED_BY_ADMIN', 'chama', chama_id, chama_id, {'name': chama['name'], 'records_preserved': True})
+        flash('Chama closed. Members can no longer access it, and financial/audit records have been preserved for accountability.', 'success')
+        return redirect(url_for('dashboard'))
+
+    @app.route('/account/delete', methods=['POST'])
+    @login_required
+    def account_delete_self():
+        import accounts as AC
+        from services import BusinessError
+        uid = g.user['id']
+        if (request.form.get('confirm') or '').strip().upper() != 'DELETE':
+            flash('Type DELETE to confirm account deletion.', 'warning')
+            return redirect(url_for('security_privacy'))
+        try:
+            AC.anonymise_user(db(), uid, uid)
+        except BusinessError as e:
+            flash(str(e), 'warning')
+            return redirect(url_for('security_privacy'))
+        session.clear()
+        flash('Your account has been deleted and personal details anonymised. Financial records required for group accountability are retained without your personal identity.', 'success')
+        return redirect(url_for('index'))
+
     @app.route('/chamas/<int:chama_id>/members', methods=['POST'])
     @login_required
     def member_add(chama_id):
