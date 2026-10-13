@@ -274,3 +274,7 @@ See `CHANGELOG_V40.md` for the What-if Simulator, saved scenario-to-vote links, 
 V43 adds a role-protected Trust & Reconciliation centre (`/chamas/<id>/trust`), in-app follow-up reminders, a member-facing at-a-glance summary, and a staged CSV importer for historical contributions, expenses, other income, and one verified opening cash balance. Import rows are previewed and committed atomically with audit logging. The importer deliberately does not invent loan repayment or payout history. See `CHANGELOG_V43.md` and `BACKUP_RESTORE_DRILL_V43.md`.
 
 For recovery, validate backups and run `python restore_drill.py <backup.json.gz> <new-staging.sqlite>` only against a new staging path. This utility is for SQLite staging drills; rehearse PostgreSQL production recovery separately on disposable PostgreSQL staging. Keep backup files private and encrypted.
+
+## v45 — Marketplace, welfare and collaboration
+
+See `CHANGELOG_V45.md` for the three new community modules and their safety boundaries. Provider submissions require review before public listing; welfare decisions do not move money; collaboration posts should contain no confidential member data.

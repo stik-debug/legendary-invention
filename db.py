@@ -400,6 +400,29 @@ CREATE TABLE IF NOT EXISTS financial_import_staging(
   created_at TEXT NOT NULL, expires_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS ix_financial_import_staging ON financial_import_staging(chama_id,user_id,status,created_at);
 
+
+CREATE TABLE IF NOT EXISTS marketplace_providers(
+ id {PK}, user_id BIGINT NOT NULL, name TEXT NOT NULL, category TEXT NOT NULL, description TEXT NOT NULL,
+ county TEXT, contact_email TEXT, contact_phone TEXT, website TEXT, credentials TEXT, status TEXT NOT NULL DEFAULT 'PENDING',
+ created_at TEXT NOT NULL, reviewed_at TEXT, reviewed_by BIGINT);
+CREATE INDEX IF NOT EXISTS ix_marketplace_status ON marketplace_providers(status, category);
+CREATE TABLE IF NOT EXISTS marketplace_interests(
+ id {PK}, provider_id BIGINT NOT NULL, user_id BIGINT NOT NULL, chama_id BIGINT, message TEXT, created_at TEXT NOT NULL,
+ UNIQUE(provider_id,user_id,chama_id));
+CREATE TABLE IF NOT EXISTS welfare_funds(
+ id {PK}, chama_id BIGINT NOT NULL, name TEXT NOT NULL, purpose TEXT NOT NULL, target_cents BIGINT NOT NULL DEFAULT 0,
+ budget_cents BIGINT NOT NULL DEFAULT 0, eligibility TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'OPEN', created_by BIGINT NOT NULL,
+ created_at TEXT NOT NULL, closed_at TEXT);
+CREATE INDEX IF NOT EXISTS ix_welfare_chama ON welfare_funds(chama_id,status);
+CREATE TABLE IF NOT EXISTS welfare_requests(
+ id {PK}, fund_id BIGINT NOT NULL, chama_id BIGINT NOT NULL, user_id BIGINT NOT NULL, amount_cents BIGINT NOT NULL,
+ reason TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'PENDING', decision_note TEXT, decided_by BIGINT, created_at TEXT NOT NULL, decided_at TEXT);
+CREATE INDEX IF NOT EXISTS ix_welfare_requests ON welfare_requests(chama_id,fund_id,status);
+CREATE TABLE IF NOT EXISTS collaboration_posts(
+ id {PK}, chama_id BIGINT, user_id BIGINT NOT NULL, kind TEXT NOT NULL DEFAULT 'DISCUSSION', title TEXT NOT NULL, body TEXT NOT NULL,
+ county TEXT, visibility TEXT NOT NULL DEFAULT 'COMMUNITY', status TEXT NOT NULL DEFAULT 'ACTIVE', created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS ix_collaboration_posts ON collaboration_posts(status,created_at);
+
 """
 
 DEFAULT_PLANS = [('starter', 'Starter', 50000, 20, 1), ('growth', 'Growth', 150000, 70, 2), ('business', 'Pro', 200000, 100, 3)]
