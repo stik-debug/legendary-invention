@@ -155,34 +155,24 @@ if(!still&&window.matchMedia('(hover:hover)').matches){
     });
   }
 
-  // Save a deliberately small snapshot. It contains only elements explicitly marked
-  // offline-safe; no authenticated pages or forms are cached by the service worker.
+  // Offline storage is deliberately metadata-only. Never persist financial amounts,
+  // loan balances, fines, dividends, member contact details or transaction records in localStorage.
   if (location.pathname === '/dashboard' || location.pathname.indexOf('/my-dashboard') !== -1) {
     try {
-      var cards = Array.prototype.slice.call(document.querySelectorAll('.dashboard-chama-card'));
-      if (!cards.length) cards = Array.prototype.slice.call(document.querySelectorAll('.my-chamas-hero + .grid .card'));
-      if (!cards.length) {
-        var safe = Array.prototype.slice.call(document.querySelectorAll('.offline-safe'));
-        if (safe.length) cards = [document.querySelector('.stats') || document.body];
-      }
-      var items = cards.map(function(card){
-        var nameEl = card.querySelector('h3');
-        var metaEl = card.querySelector('p');
-        var metrics = [];
-        card.querySelectorAll('.stat,.metric').forEach(function(node){
-          var label=node.querySelector('small,span'); var value=node.querySelector('b');
-          if(label && value) metrics.push({label:label.textContent.trim(),value:value.textContent.trim()});
-        });
-        return {name: nameEl ? nameEl.textContent.replace('→','').trim() : 'My Chama', meta: metaEl ? metaEl.textContent.trim() : 'Chama information', metrics:metrics.slice(0,4)};
-      }).filter(function(x){return x.name;});
+      var items=[];
       if (location.pathname.indexOf('/my-dashboard') !== -1) {
-        var safeItems = Array.prototype.slice.call(document.querySelectorAll('.offline-safe')).map(function(node){
-          var label=node.querySelector('small'); var value=node.querySelector('b');
-          return {name: label ? label.textContent.trim() : 'ChamaPay', meta:'Private offline snapshot', metrics: label && value ? [{label:label.textContent.trim(),value:value.textContent.trim()}] : []};
-        });
-        if (safeItems.length) items = [{name: document.title.replace('My Chama Dashboard - ','').trim() || 'My Chama',meta:'Private dashboard snapshot',metrics:safeItems.map(function(x){return x.metrics[0];}).filter(Boolean)}];
+        items=[{name:document.title.replace('My Chama Dashboard - ','').trim() || 'My Chama',meta:'Reconnect to view current private financial figures.',metrics:[]}];
+      } else {
+        var cards=Array.prototype.slice.call(document.querySelectorAll('.dashboard-chama-card'));
+        if (!cards.length) cards=Array.prototype.slice.call(document.querySelectorAll('.my-chamas-hero + .grid .card'));
+        items=cards.map(function(card){
+          var nameEl=card.querySelector('h3');
+          return {name:nameEl ? nameEl.textContent.replace('→','').trim() : '',meta:'Reconnect to view current private financial figures.',metrics:[]};
+        }).filter(function(x){return x.name;}).slice(0,10);
       }
-      if (items.length) localStorage.setItem('chamapay-offline-summary', JSON.stringify({savedAt:Date.now(),items:items.slice(0,10)}));
+      // Replace any older cached snapshot, which may have included financial totals.
+      localStorage.removeItem('chamapay-offline-summary');
+      if (items.length) localStorage.setItem('chamapay-offline-summary',JSON.stringify({savedAt:Date.now(),items:items}));
     } catch(e) {}
   }
 
@@ -210,4 +200,19 @@ if(!still&&window.matchMedia('(hover:hover)').matches){
       else copyText(text,s);
     }
   });
+})();
+
+
+// Low-connectivity guard: never pretend that a financial/governance POST was queued offline.
+(function(){
+  var banner=document.getElementById('network-status');
+  function refresh(){ if(banner) banner.hidden=!!navigator.onLine; }
+  window.addEventListener('online',refresh); window.addEventListener('offline',refresh); refresh();
+  document.addEventListener('submit',function(e){
+    if(!navigator.onLine && (e.target.method||'').toLowerCase()==='post'){
+      e.preventDefault();
+      if(banner){banner.hidden=false;banner.textContent='You are offline. This change was not submitted or queued. Reconnect, review the form, and submit again.';}
+      else window.alert('You are offline. This change was not submitted or queued. Reconnect and try again.');
+    }
+  },true);
 })();

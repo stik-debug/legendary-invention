@@ -265,3 +265,6 @@ This build preserves existing ChamaPay features and adds only missing pieces fro
 
 ## v39 account and chama closure
 See `CHANGELOG_V39.md` for member leave, self-service account anonymisation, and controlled chama closure. Chama closure intentionally preserves financial and audit records.
+
+## v40 Strategy & Continuity additions
+See `CHANGELOG_V40.md` for the What-if Simulator, saved scenario-to-vote links, Fairness & Consistency Review, Promise Tracker, verifiable Financial Passport, Continuity Vault and formal handover, constitution history, Copilot improvements and offline submission guard. These additions are read-only/planning-first where appropriate and do not add new mobile-money integration.

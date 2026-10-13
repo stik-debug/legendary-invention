@@ -258,7 +258,7 @@ CREATE TABLE IF NOT EXISTS chama_assets(
   purchase_date TEXT NOT NULL, location TEXT, ownership TEXT, notes TEXT, status TEXT NOT NULL DEFAULT 'ACTIVE',
   created_by INTEGER REFERENCES users(id), created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS chama_votes(
-  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), title TEXT NOT NULL, description TEXT,
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), title TEXT NOT NULL, description TEXT, scenario_id INTEGER,
   opens_at TEXT NOT NULL, closes_at TEXT, status TEXT NOT NULL DEFAULT 'OPEN',
   created_by INTEGER REFERENCES users(id), created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS chama_vote_responses(
@@ -280,6 +280,23 @@ CREATE TABLE IF NOT EXISTS chama_constitutions(
   loan_months INTEGER NOT NULL DEFAULT 6, late_fine_cents BIGINT NOT NULL DEFAULT 0,
   attendance_requirement INTEGER NOT NULL DEFAULT 80, voting_requirement INTEGER NOT NULL DEFAULT 50,
   updated_by INTEGER REFERENCES users(id), updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS chama_constitution_history(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), version_no INTEGER NOT NULL, snapshot_json TEXT NOT NULL,
+  changed_by INTEGER REFERENCES users(id), changed_at TEXT NOT NULL, UNIQUE(chama_id,version_no));
+CREATE TABLE IF NOT EXISTS chama_scenarios(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), name TEXT NOT NULL, assumptions_json TEXT NOT NULL,
+  results_json TEXT NOT NULL, created_by INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS chama_handovers(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), initiated_by INTEGER NOT NULL REFERENCES users(id),
+  proposed_successor INTEGER NOT NULL REFERENCES users(id), snapshot_sha256 TEXT NOT NULL, notes TEXT,
+  status TEXT NOT NULL DEFAULT 'PENDING_ACCEPTANCE', created_at TEXT NOT NULL, accepted_at TEXT);
+CREATE TABLE IF NOT EXISTS chama_financial_passports(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), report_ref TEXT NOT NULL UNIQUE, snapshot_json TEXT NOT NULL,
+  snapshot_sha256 TEXT NOT NULL, created_by INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS ix_handovers_chama ON chama_handovers(chama_id,id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_one_pending_handover_per_chama ON chama_handovers(chama_id) WHERE status='PENDING_ACCEPTANCE';
+CREATE INDEX IF NOT EXISTS ix_constitution_history ON chama_constitution_history(chama_id,version_no);
+CREATE INDEX IF NOT EXISTS ix_scenarios_chama ON chama_scenarios(chama_id,id);
 CREATE INDEX IF NOT EXISTS ix_goals_chama ON chama_goals(chama_id,status);
 CREATE INDEX IF NOT EXISTS ix_investments_chama ON chama_investments(chama_id,status);
 CREATE INDEX IF NOT EXISTS ix_assets_chama ON chama_assets(chama_id,status);

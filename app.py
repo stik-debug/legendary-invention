@@ -27,6 +27,7 @@ import routes_v22
 import routes_plus
 import routes_otp
 import routes_features
+import routes_strategy
 import services as S
 import auth_otp as OTP
 import twofactor as TF
@@ -264,7 +265,7 @@ def create_app(overrides=None):
     # Landing-page feature cards: take the signed-in person straight to that feature in their chama.
     GO_FEATURES = {'loans': ('loans', 'Loans'), 'goals': ('chama_goals', 'Goals & Wealth'), 'votes': ('chama_votes', 'Voting & Constitution'),
                    'meetings': ('meetings', 'Meetings'), 'passport': ('member_passport', 'Member Passport'),
-                   'ai': ('chama_ai', 'ChamaPay AI'), 'command': ('command_center', 'Command Center')}
+                   'ai': ('chama_ai', 'ChamaPay AI'), 'strategy': ('chama_strategy', 'Strategy & Continuity'), 'command': ('command_center', 'Command Center')}
 
     @app.route('/go/<feature>')
     @login_required
@@ -757,6 +758,7 @@ def create_app(overrides=None):
     routes_recovery.register(app, db, ctx, login_required, owner_required)
     routes_otp.register(app, db, login_required)
     routes_features.register(app, db, ctx, login_required, owner_required)
+    routes_strategy.register_strategy_routes(app, db, ctx, login_required)
     devtools.register(app)
 
     # ---------- owner control center ----------
