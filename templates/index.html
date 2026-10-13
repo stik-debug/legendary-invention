@@ -25,16 +25,16 @@
 <div class="card hero3d" style="margin-top:20px"><div><h3 style="color:#fff">Now built for the whole Chama</h3><p>Command Center · Chama Health · Goals · Investments · Assets · Voting · Constitution · Member Passport · AI · Strategy & Continuity</p></div><a class="btn gold" href="{{ url_for('register') }}">Build your Chama</a></div>
 </section>
 <section class="section" id="pricing">
-<h2>Simple pricing for your whole chama.</h2>
-<p class="mute" style="font-size:18px"><b>One price per chama, not per member.</b> Try any plan free for {{ trial }} days.</p>
+<h2>Simple pricing for every member.</h2>
+<p class="mute" style="font-size:18px"><b>KSh 25 per active member per month.</b> Try all features free for {{ trial }} days — no payment details needed to start.</p>
 <div class="plans">
 {% for p in plans %}
 <div class="card plan tilt {% if p.code=='growth' %}best{% endif %}">
 {% if p.code=='growth' %}<span class="badge">MOST POPULAR</span>{% endif %}
 <h3>{{ p.name|upper }}</h3>
-<div class="price">KES {{ p.price_cents|kes }}<small class="mute" style="font:500 16px 'DM Sans'">/month</small></div>
+<div class="price">KES 25<small class="mute" style="font:500 16px 'DM Sans'">/member/month</small></div>
 <p class="mute" style="margin:2px 0 0">Up to {{ p.max_members }} members</p>
-<ul><li>Whole chama, one price</li><li>Roles for your officials</li><li>Full history kept, always</li></ul>
+<ul><li>One fair price per active member</li><li>Roles for your officials</li><li>Statements, reports and audit history</li><li>Financial history kept, always</li></ul>
 <a class="btn block {{ 'gold' if p.code=='growth' else 'pri' }}" href="{{ url_for('register') }}">Start free trial</a>
 </div>
 {% endfor %}
