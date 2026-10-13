@@ -1,21 +1,42 @@
-{% extends "base.html" %}{% block title %}Subscription - {{ chama.name }}{% endblock %}
+{% extends "base.html" %}{% block title %}Subscription - {{ chama.name }}<script>
+(function(){
+  var months=document.getElementById('mo'), total=document.getElementById('billing-total'), label=document.getElementById('billing-month-label');
+  if(!months||!total||!label)return;
+  var monthly={{ monthly_cost|int }};
+  function update(){var m=parseInt(months.value||'1',10)||1; total.textContent='KES '+Math.round(monthly*m/100).toLocaleString('en-KE'); label.textContent=m+' month'+(m===1?'':'s');}
+  months.addEventListener('change',update); update();
+})();
+</script>
+{% endblock %}
 {% block content %}
 <div class="head"><div><h2>Subscription</h2><p>{{ chama.name }}</p></div><a class="btn" href="{{ url_for('dashboard') }}">My chamas</a></div>
-{% if not active %}<div class="banner bad"><h3>Access is suspended</h3><p>This chama's subscription needs payment. <b>All your members, records and history are safe.</b> Pay below and access returns automatically.{% if sub.suspend_reason %} <br><small>Reason: {{ sub.suspend_reason }}</small>{% endif %}</p></div>{% endif %}
+{% if not active %}<div class="banner bad"><h3>Full access needs renewal</h3><p>This chama's subscription needs attention. <b>Members, financial records and audit history are preserved.</b> Renew to restore full access.{% if sub.suspend_reason %} <br><small>Reason: {{ sub.suspend_reason }}</small>{% endif %}</p></div>{% endif %}
 <div class="stats">
 <div class="stat dark"><small>Status</small><b>{{ sub.status.replace('_',' ') }}</b></div>
 <div class="stat gold"><small>{{ 'Due since' if not active else 'Next payment due' }}</small><b style="font-size:22px">{{ sub.due_at|date }}</b></div>
 <div class="stat"><small>Plan</small><b style="font-size:22px">{{ plan.name }}</b></div>
 <div class="stat"><small>Members</small><b>{{ members }} / {{ plan.max_members }}</b></div>
+<div class="stat"><small>Monthly cost</small><b style="font-size:22px">KES {{ monthly_cost|kes }}</b></div>
 </div>
 {% if can_pay %}
-<div class="card"><h3>Choose the plan that fits your chama</h3><p class="mute">Compare all available plans below. Upgrades require payment confirmation; switching to a cheaper plan is allowed only when your active membership fits its limit. No members or records are ever removed automatically.</p>
+<div class="card"><h3>Your {{ trial_days }}-day guided trial</h3>
+{% if sub.status == 'TRIAL' %}<p class="mute">Your trial ends on <b>{{ (sub.trial_ends_at or sub.due_at)|date }}</b>. Explore the checklist below and decide before it ends. No payment is required to start.</p>{% else %}<p class="mute">KSh 25 per active member each 30-day billing period. Your current estimate is <b>KES {{ monthly_cost|kes }}/month</b> for {{ members }} active members.</p>{% endif %}
+<div class="grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:14px 0">
+<div class="card tight"><b>1. Invite your members</b><p class="mute">Build your active member list.</p><a href="{{ url_for('chama_home',chama_id=chama.id) }}">Open Chama home →</a></div>
+<div class="card tight"><b>2. Record activity</b><p class="mute">Record contributions and keep the ledger current.</p><a href="{{ url_for('savings',chama_id=chama.id) }}">Open savings →</a></div>
+<div class="card tight"><b>3. Review your records</b><p class="mute">Check your statements and monthly activity.</p><a href="{{ url_for('reports',chama_id=chama.id) }}">Open reports →</a></div>
+<div class="card tight"><b>4. Keep decisions clear</b><p class="mute">Use meetings, approvals and audit history.</p><a href="{{ url_for('chama_audit_log',chama_id=chama.id) }}">Open audit log →</a></div>
+</div></div>
+<div class="card"><h3>This month's Chama value report</h3><p class="mute">These figures come from records currently in ChamaPro; we do not estimate or invent activity.</p>
+<div class="stats"><div class="stat"><small>Active members</small><b>{{ value_report.active_members }}</b></div><div class="stat"><small>Contributions recorded</small><b>{{ value_report.contributions_recorded }}</b></div><div class="stat"><small>Ledger entries</small><b>{{ value_report.ledger_entries }}</b></div><div class="stat"><small>Meetings logged</small><b>{{ value_report.meetings_logged }}</b></div><div class="stat"><small>Loans tracked</small><b>{{ value_report.loans_tracked }}</b></div><div class="stat"><small>Contribution value recorded</small><b>KES {{ value_report.contribution_value_cents|kes }}</b></div></div>
+<p class="mute">Pricing: KSh 25 × {{ members }} active members = <b>KES {{ monthly_cost|kes }} per month</b>. If membership changes, the next subscription payment estimate changes with it.</p></div>
+<div class="card"><h3>Choose the capacity that fits your chama</h3><p class="mute">Every plan uses the same simple price: KSh 25 per active member per month. The plan sets the maximum number of members. Upgrades require payment confirmation; no members or records are ever removed automatically.</p>
 <div class="grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px">
 {% for p in plans %}
 <div class="card tight" style="border:2px solid {% if p.id==plan.id %}var(--pri,#1769d2){% else %}var(--line,#ddd){% endif %};margin:0;position:relative">
 {% if p.id==plan.id %}<span class="pill ok">Current plan</span>{% endif %}
-<h3 style="margin:10px 0 4px">{{ p.name }}</h3><div style="font-size:24px;font-weight:800">KES {{ p.price_cents|kes }}<small class="mute" style="font-size:12px"> / month</small></div>
-<p class="mute">Up to {{ p.max_members }} members</p>
+<h3 style="margin:10px 0 4px">{{ p.name }}</h3><div style="font-size:24px;font-weight:800">KES 25<small class="mute" style="font-size:12px"> / member / month</small></div>
+<p class="mute">Up to {{ p.max_members }} members · KES {{ (2500 * p.max_members)|kes }}/month at capacity</p>
 <ul><li>Chama financial records</li><li>Member access controls</li><li>Reports and statements</li></ul>
 {% if p.id != plan.id %}
 {% if p.max_members < members %}<p class="flash warning">Not available for your current {{ members }} members.</p>
@@ -29,17 +50,27 @@
 {% if provider %}
 <form id="payment-box" method="POST" action="{{ url_for('subscription_pay', chama_id=chama.id) }}" class="card">{{ csrf_input() }}<h3>Pay for your selected plan</h3>
 {% if provider.name=='TEST' %}<div class="flash warning">Development mode: no real money moves. Use the buttons under Payments to simulate the result.</div>{% endif %}
-<div class="field"><label>Plan (price is per chama, per month)</label>
-{% for p in plans %}<label class="radio"><input id="payment-plan-{{ p.id }}" type="radio" name="plan_id" value="{{ p.id }}" {% if p.id==plan.id %}checked{% endif %} {% if p.max_members < members %}disabled{% endif %}><span><b>{{ p.name }}</b>, KES {{ p.price_cents|kes }}/month<br><span class="mute">Up to {{ p.max_members }} members</span></span></label>{% endfor %}</div>
+<div class="field"><label>Capacity plan (subscription price is KSh 25 per active member/month)</label>
+{% for p in plans %}<label class="radio"><input id="payment-plan-{{ p.id }}" type="radio" name="plan_id" value="{{ p.id }}" {% if p.id==plan.id %}checked{% endif %} {% if p.max_members < members %}disabled{% endif %}><span><b>{{ p.name }}</b>, KSh 25 × {{ members }} members = KES {{ (2500 * members)|kes }}/month<br><span class="mute">Up to {{ p.max_members }} members · billed for the selected number of months</span></span></label>{% endfor %}</div>
 <div class="field"><label for="mo">Billing period</label><select id="mo" name="months"><option value="1">1 month</option><option value="3">3 months</option><option value="6">6 months</option><option value="12">12 months</option></select></div>
-<div class="field"><label for="ph">M-Pesa phone number</label><input id="ph" type="tel" name="phone" value="{{ user.phone }}" required></div>
-<button class="btn pri block">Continue to payment</button><small class="mute">Your plan changes only after the payment provider confirms successful payment.</small></form>
+<div class="field"><label for="ph">Payment phone number</label><input id="ph" type="tel" name="phone" value="{{ user.phone }}" required></div>
+<p class="mute">Estimated total for <span id="billing-month-label">1 month</span>: <b id="billing-total">KES {{ monthly_cost|kes }}</b>. The amount is calculated from the active member count when you submit.</p><button class="btn pri block">Continue to payment</button><small class="mute">Your plan changes only after the payment provider confirms successful payment.</small></form>
 {% else %}<div class="card"><h3>Payment configuration required</h3><p class="mute">{{ config.PAY_INSTRUCTIONS }}</p><p>Choose a plan above, then contact support to arrange payment.</p></div>{% endif %}
 {% else %}<div class="card"><p class="mute" style="margin:0">Ask your chairperson or treasurer to manage the subscription.</p></div>{% endif %}
+<div class="card"><h3>Help us improve</h3><p class="mute">If your group is considering leaving or not upgrading, tell us the main reason. This does not cancel your subscription.</p><form method="POST" action="{{ url_for('subscription_feedback',chama_id=chama.id) }}">{{ csrf_input() }}<div class="field"><label for="reason">Main reason</label><select id="reason" name="reason" required><option value="">Choose a reason</option><option value="PRICE">Price / affordability</option><option value="NOT_ENOUGH_VALUE">Not enough value yet</option><option value="TOO_COMPLEX">Too difficult to use</option><option value="PAYMENT_DIFFICULTY">Payment difficulty</option><option value="GROUP_INACTIVE">Our group is inactive</option><option value="OTHER">Other</option></select></div><div class="field"><label for="detail">Optional details</label><textarea id="detail" name="detail" rows="2" maxlength="500" placeholder="What would make ChamaPro more useful?"></textarea></div><button class="btn">Send feedback</button></form></div>
 <div class="card tight"><h3 style="padding:18px 20px 0">Payments</h3><ul class="list">
 {% for p in pays %}<li><span class="grow">KES {{ p.amount_cents|kes }} · {{ p.period_days }} days<br><small>{{ p.created_at|datetime }} · {{ p.method }}{% if p.provider_receipt %} · {{ p.provider_receipt }}{% endif %}</small></span>
 <span class="pill {{ {'SUCCESS':'ok','PENDING':'info'}.get(p.status,'bad') }}">{{ p.status }}</span>
 {% if dev and p.status=='PENDING' and p.provider=='TEST' and p.provider_txn_id and can_pay %}
 {% for o in ('success','failed','cancelled') %}<form method="POST" action="{{ url_for('dev_pay', checkout_id=p.provider_txn_id, outcome=o) }}" style="margin:0">{{ csrf_input() }}<button class="btn sm">{{ o|title }}</button></form>{% endfor %}{% endif %}</li>
 {% else %}<li class="empty grow">No payments yet.</li>{% endfor %}</ul></div>
+<script>
+(function(){
+  var months=document.getElementById('mo'), total=document.getElementById('billing-total'), label=document.getElementById('billing-month-label');
+  if(!months||!total||!label)return;
+  var monthly={{ monthly_cost|int }};
+  function update(){var m=parseInt(months.value||'1',10)||1; total.textContent='KES '+Math.round(monthly*m/100).toLocaleString('en-KE'); label.textContent=m+' month'+(m===1?'':'s');}
+  months.addEventListener('change',update); update();
+})();
+</script>
 {% endblock %}
