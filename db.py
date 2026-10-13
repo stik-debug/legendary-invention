@@ -276,6 +276,10 @@ CREATE INDEX IF NOT EXISTS ix_goals_chama ON chama_goals(chama_id,status);
 CREATE INDEX IF NOT EXISTS ix_investments_chama ON chama_investments(chama_id,status);
 CREATE INDEX IF NOT EXISTS ix_assets_chama ON chama_assets(chama_id,status);
 CREATE INDEX IF NOT EXISTS ix_votes_chama ON chama_votes(chama_id,status);
+CREATE TABLE IF NOT EXISTS public_chama_listings(
+  chama_id INTEGER PRIMARY KEY REFERENCES chamas(id), tagline TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS chama_discovery_requests(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), user_id INTEGER NOT NULL REFERENCES users(id), message TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'PENDING', created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(chama_id,user_id));
 CREATE TABLE IF NOT EXISTS support_tickets(
   id {PK}, user_id INTEGER NOT NULL REFERENCES users(id), chama_id INTEGER REFERENCES chamas(id),
   subject TEXT NOT NULL, body TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'OPEN',

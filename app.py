@@ -1,4 +1,6 @@
 import hmac
+import io
+import zipfile
 import os
 import secrets
 import time
@@ -480,6 +482,92 @@ def create_app(overrides=None):
         except S.BusinessError as e:
             flash(str(e), 'warning')
         return redirect(url_for('chama_home', chama_id=chama_id))
+
+    @app.route('/discover')
+    def discover_chamas():
+        # Only groups whose officials explicitly opted in are shown publicly.
+        rows = db().all("""SELECT c.id,c.name,c.description,l.tagline,l.updated_at,
+            (SELECT COUNT(*) FROM chama_members m WHERE m.chama_id=c.id AND m.status='ACTIVE') members
+            FROM public_chama_listings l JOIN chamas c ON c.id=l.chama_id ORDER BY l.updated_at DESC LIMIT 100""")
+        return render_template('discover.html', rows=rows)
+
+    @app.route('/chamas/<int:chama_id>/discoverability', methods=['GET','POST'])
+    @login_required
+    def chama_discoverability(chama_id):
+        chama, me, sub = ctx(chama_id, roles=('CHAMA_ADMIN',), allow_inactive=True)
+        listing = db().one('SELECT * FROM public_chama_listings WHERE chama_id=?', (chama_id,))
+        if request.method == 'POST':
+            action = request.form.get('action')
+            now = S.iso(S.now_utc())
+            if action == 'publish':
+                tagline = (request.form.get('tagline') or '').strip()[:180]
+                db().execute("INSERT INTO public_chama_listings(chama_id,tagline,created_at,updated_at) VALUES(?,?,?,?) ON CONFLICT(chama_id) DO UPDATE SET tagline=excluded.tagline,updated_at=excluded.updated_at", (chama_id,tagline,now,now))
+                audit(db(), g.user['id'], 'CHAMA_PUBLIC_LISTING_ENABLED', 'chama', chama_id, chama_id, {'tagline':tagline})
+                db().commit(); flash('Your chama is now listed publicly. Only its name, description, tagline and active-member count are shown.', 'success')
+            elif action == 'unpublish':
+                db().execute('DELETE FROM public_chama_listings WHERE chama_id=?', (chama_id,))
+                audit(db(), g.user['id'], 'CHAMA_PUBLIC_LISTING_DISABLED', 'chama', chama_id, chama_id)
+                db().commit(); flash('Your chama was removed from public discovery.', 'success')
+            else: abort(400)
+            return redirect(url_for('chama_discoverability', chama_id=chama_id))
+        requests = db().all("SELECT r.*,u.name user_name,u.email user_email FROM chama_discovery_requests r JOIN users u ON u.id=r.user_id WHERE r.chama_id=? ORDER BY r.id DESC LIMIT 100", (chama_id,))
+        return render_template('discoverability.html', chama=chama, me=me, listing=listing, requests=requests)
+
+    @app.route('/discover/<int:chama_id>/request', methods=['POST'])
+    @login_required
+    def request_to_join_discovered_chama(chama_id):
+        if not db().one('SELECT chama_id FROM public_chama_listings WHERE chama_id=?', (chama_id,)): abort(404)
+        if db().one("SELECT id FROM chama_members WHERE chama_id=? AND user_id=? AND status='ACTIVE'", (chama_id,g.user['id'])):
+            flash('You are already a member of this chama.', 'info'); return redirect(url_for('discover_chamas'))
+        msg = (request.form.get('message') or '').strip()[:500]
+        now = S.iso(S.now_utc())
+        db().execute("INSERT INTO chama_discovery_requests(chama_id,user_id,message,status,created_at,updated_at) VALUES(?,?,?,'PENDING',?,?) ON CONFLICT(chama_id,user_id) DO UPDATE SET message=excluded.message,status='PENDING',updated_at=excluded.updated_at", (chama_id,g.user['id'],msg,now,now))
+        db().commit(); flash('Your request was sent to the chama admin for review. You have not been added as a member yet.', 'success')
+        return redirect(url_for('discover_chamas'))
+
+    @app.route('/chamas/<int:chama_id>/discovery-requests/<int:request_id>', methods=['POST'])
+    @login_required
+    def review_discovery_request(chama_id, request_id):
+        ctx(chama_id, roles=('CHAMA_ADMIN',), allow_inactive=True)
+        action = request.form.get('action')
+        status = {'approve':'APPROVED','decline':'DECLINED'}.get(action)
+        if not status: abort(400)
+        req = db().one('SELECT * FROM chama_discovery_requests WHERE id=? AND chama_id=?', (request_id,chama_id))
+        if not req: abort(404)
+        db().execute('UPDATE chama_discovery_requests SET status=?,updated_at=? WHERE id=?', (status,S.iso(S.now_utc()),request_id))
+        audit(db(), g.user['id'], 'DISCOVERY_REQUEST_'+status, 'chama_discovery_request', request_id, chama_id)
+        db().commit()
+        flash('Request reviewed. Approving records interest only; add the person through normal membership management to grant access.', 'success')
+        return redirect(url_for('chama_discoverability', chama_id=chama_id))
+
+    @app.route('/chamas/<int:chama_id>/audit-pack.zip')
+    @login_required
+    def audit_pack(chama_id):
+        # A chama-scoped, read-only evidence pack for annual review. Uses existing records only.
+        chama, me, sub = ctx(chama_id, roles=('CHAMA_ADMIN', 'TREASURER', 'AUDITOR'))
+        import reports as AuditReports
+        from datetime import datetime, timezone
+        from flask import Response
+        buffer = io.BytesIO()
+        manifest = [f'ChamaPro financial audit pack', f'Chama: {chama["name"]}', f'Chama ID: {chama_id}',
+                    f'Generated UTC: {datetime.now(timezone.utc).isoformat()}',
+                    '', 'This pack is an export of application records, not an independent bank audit. Verify balances against external statements.']
+        with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr('README.txt', '\n'.join(manifest) + '\n')
+            for kind in AuditReports.EXPORTS:
+                try:
+                    header, rows = AuditReports.export(db(), chama_id, kind)
+                    archive.writestr(f'{kind}.csv', F.to_csv(header, rows))
+                except (KeyError, ValueError):
+                    continue
+            ledger = db().all("SELECT occurred_on,kind,direction,amount_cents,account,description,ref_type,ref_id,created_by,created_at FROM ledger_transactions WHERE chama_id=? ORDER BY id", (chama_id,))
+            archive.writestr('ledger.csv', F.to_csv(['Date','Kind','Direction','Amount cents','Account','Description','Reference type','Reference ID','Created by user ID','Created at'],
+                [[r.get('occurred_on'),r.get('kind'),r.get('direction'),r.get('amount_cents'),r.get('account'),r.get('description'),r.get('ref_type'),r.get('ref_id'),r.get('created_by'),r.get('created_at')] for r in ledger]))
+            logs = db().all("SELECT actor_id,action,entity_type,entity_id,metadata,created_at FROM audit_logs WHERE chama_id=? ORDER BY id", (chama_id,))
+            archive.writestr('audit-log.csv', F.to_csv(['Actor user ID','Action','Entity type','Entity ID','Metadata','Created at'],
+                [[r.get('actor_id'),r.get('action'),r.get('entity_type'),r.get('entity_id'),r.get('metadata'),r.get('created_at')] for r in logs]))
+        buffer.seek(0)
+        return Response(buffer.getvalue(), mimetype='application/zip', headers={'Content-Disposition': f'attachment; filename=chamapro-audit-pack-{chama_id}.zip', 'Cache-Control':'no-store'})
 
     @app.route('/chamas/<int:chama_id>/subscription')
     @login_required
