@@ -23,5 +23,5 @@
 <div class="card tight"><h3 style="padding:18px 20px 0">Attendance by member</h3><ul class="list">
 {% for a in r.attendance %}<li><span class="av">{{ a.name[:1] }}</span><span class="grow">{{ a.name }}</span><small>{{ a.present }} present · {{ a.apologies }} apologies · {{ a.marked }} marked</small></li>{% else %}<li class="empty grow">No attendance recorded yet.</li>{% endfor %}</ul></div>
 <div class="card"><h3>Download (CSV for Excel)</h3><div style="display:flex;gap:8px;flex-wrap:wrap">
-{% for k in kinds %}<a class="btn sm" href="{{ url_for('export_csv', chama_id=chama.id, kind=k) }}">{{ k|title }}</a>{% endfor %}<a class="btn sm" href="{{ url_for('ledger_csv', chama_id=chama.id) }}">Ledger</a></div></div>
+{% for k in kinds %}<a class="btn sm" href="{{ url_for('export_csv', chama_id=chama.id, kind=k) }}">{{ k|title }}</a>{% endfor %}<a class="btn sm" href="{{ url_for('ledger_csv', chama_id=chama.id) }}">Ledger</a><a class="btn sm pri" href="{{ url_for('audit_pack', chama_id=chama.id) }}">Download audit pack (ZIP)</a></div><p class="mute">The audit pack includes available member, contribution, loan, fine, attendance, merry-go-round, ledger and audit-log exports.</p></div>
 {% endblock %}
