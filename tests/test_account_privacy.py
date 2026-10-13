@@ -106,7 +106,11 @@ class LegalPagesAndBadge(Base):
     def test_chat_badge_shows_unread_count(self):
         self.team()
         self.post(self.m1, self.base() + '/chat/send', {'body': 'one'})
-        self.assertIn('class="dot">1<', self.m2.get(self.base()).get_data(as_text=True))
+        html = self.m2.get(self.base()).get_data(as_text=True)
+        self.assertIn('class="dot">1<', html)
+        self.assertIn('aria-label="Alerts"', html)
+        self.assertIn('M24 5a3 3 0 0 0-3 3v1.2', html)  # standard bell icon, not a chat bubble
+        self.assertIn('fill:#dc2626', open(os.path.join(os.path.dirname(__file__), '..', 'static', 'css', 'app.css'), encoding='utf-8').read())
 
 
 if __name__ == '__main__':
