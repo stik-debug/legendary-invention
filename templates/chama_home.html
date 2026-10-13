@@ -11,7 +11,33 @@
 </div>
 {% endif %}
 {% if sub.status in ('PAST_DUE','GRACE_PERIOD') %}<div class="banner"><h3>Payment overdue</h3><p>Pay before the grace period ends or access will be suspended. Nothing is deleted.</p><a class="btn gold" href="{{ url_for('subscription', chama_id=chama.id) }}">Pay now</a></div>{% endif %}
-<div class="card hero3d" style="margin-bottom:14px"><h3 style="margin-top:0">Your chama at a glance</h3><div class="stats"><div class="stat"><small>This month’s contribution</small><b>{% if my_status and my_status.status=='PAID' %}Recorded{% elif my_status and my_status.status=='PARTIAL' %}Partly paid{% else %}Not recorded{% endif %}</b><small>Expected KES {{ chama.contribution_cents|kes }}</small><a class="btn sm" href="{{ url_for('savings',chama_id=chama.id) }}">View contributions</a></div><div class="stat"><small>Outstanding loans</small><b>{{ my_open_loans|length }}</b><a class="btn sm" href="{{ url_for('loans',chama_id=chama.id) }}">View loans</a></div><div class="stat"><small>My open meeting actions</small><b>{{ my_actions|length }}</b><a class="btn sm" href="{{ url_for('chama_promises',chama_id=chama.id) }}">View commitments</a></div></div>{% if my_actions %}<h4>Next actions</h4><ul>{% for a in my_actions %}<li>{{ a.title }}{% if a.due_date %} — due {{ a.due_date }}{% endif %}</li>{% endfor %}</ul>{% endif %}</div>
+<section class="card chama-glance" aria-labelledby="chama-glance-title">
+  <div class="chama-glance-heading">
+    <div><p class="eyebrow">YOUR GROUP OVERVIEW</p><h3 id="chama-glance-title">Your chama at a glance</h3><p class="glance-intro">A quick look at your contribution, loans and next steps.</p></div>
+  </div>
+  <div class="glance-grid">
+    <article class="glance-tile contribution-tile">
+      <div class="glance-label"><span class="glance-icon" aria-hidden="true">KES</span><span>This month’s contribution</span></div>
+      <b class="glance-value">{% if my_status and my_status.status=='PAID' %}Recorded{% elif my_status and my_status.status=='PARTIAL' %}Partly paid{% else %}Not recorded{% endif %}</b>
+      <p class="glance-detail">Expected: <strong>KES {{ chama.contribution_cents|kes }}</strong></p>
+      {% if my_status and my_status.status=='PAID' %}<span class="glance-status status-good">✓ Payment recorded</span>{% elif my_status and my_status.status=='PARTIAL' %}<span class="glance-status status-warn">! Part payment recorded</span>{% else %}<span class="glance-status status-warn">Action needed · Check with your treasurer</span>{% endif %}
+      <a class="btn sm pri glance-action" href="{{ url_for('savings',chama_id=chama.id) }}">Check contributions <span aria-hidden="true">→</span></a>
+    </article>
+    <article class="glance-tile">
+      <div class="glance-label"><span class="glance-icon" aria-hidden="true">↗</span><span>My outstanding loans</span></div>
+      <b class="glance-value">{{ my_open_loans|length }}</b>
+      <p class="glance-detail">Open loan{{ '' if my_open_loans|length == 1 else 's' }} linked to your membership.</p>
+      <a class="btn sm glance-action" href="{{ url_for('loans',chama_id=chama.id) }}">View my loans <span aria-hidden="true">→</span></a>
+    </article>
+    <article class="glance-tile">
+      <div class="glance-label"><span class="glance-icon" aria-hidden="true">✓</span><span>My meeting commitments</span></div>
+      <b class="glance-value">{{ my_actions|length }}</b>
+      <p class="glance-detail">Open action{{ '' if my_actions|length == 1 else 's' }} assigned to you.</p>
+      <a class="btn sm glance-action" href="{{ url_for('chama_promises',chama_id=chama.id) }}">View commitments <span aria-hidden="true">→</span></a>
+    </article>
+  </div>
+  {% if my_actions %}<div class="glance-next-actions"><h4>What you need to do next</h4><ul>{% for a in my_actions %}<li>{{ a.title }}{% if a.due_date %}<span>Due {{ a.due_date }}</span>{% endif %}</li>{% endfor %}</ul></div>{% endif %}
+</section>
 <div class="stats">
 <div class="stat dark tilt"><small>Chama cash balance</small><b>KES {{ balance|kes }}</b><a class="explain-link" href="{{ url_for('explain_metric',chama_id=chama.id,metric='cash') }}">Explain</a></div>
 <div class="stat gold tilt"><small>My savings</small><b>KES {{ my_savings|kes }}</b><a class="explain-link" href="{{ url_for('money_timeline',chama_id=chama.id) }}">View proof trail</a></div>
