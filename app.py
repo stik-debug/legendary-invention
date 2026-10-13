@@ -294,15 +294,6 @@ def create_app(overrides=None):
     def install_app():
         return render_template('install.html')
 
-    @app.route('/language', methods=['POST'])
-    def set_language():
-        language = request.form.get('language', 'en')
-        if language not in ('en', 'sw'):
-            language = 'en'
-        session['language'] = language
-        flash('Lugha imebadilishwa.' if language == 'sw' else 'Language preference updated.', 'success')
-        return redirect(request.referrer or url_for('dashboard'))
-
     @app.route('/privacy-policy')
     def privacy_policy():
         return render_template('privacy_policy.html', support_contact=app.config.get('SUPPORT_CONTACT'))
