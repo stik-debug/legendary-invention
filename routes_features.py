@@ -9,6 +9,7 @@ from reportlab.pdfgen import canvas
 
 import features as X
 import finance as F
+import approvals as A
 import services as S
 from db import audit
 
@@ -29,14 +30,40 @@ def _pdf(title, lines):
 
 
 def register(app, db, ctx, login_required, owner_required):
-    @app.route('/chamas/<int:chama_id>/dividends')
+    @app.route('/chamas/<int:chama_id>/dividends',methods=['GET','POST'])
     @login_required
     def dividends(chama_id):
         chama,me,sub=ctx(chama_id,roles=VIEW)
-        year=request.args.get('year',type=int) or date.today().year
+        year=request.values.get('year',type=int) or date.today().year
         try: calc=X.dividend_calculation(db(),chama_id,year)
-        except S.BusinessError as e: flash(str(e),'warning'); calc=X.dividend_calculation(db(),chama_id,date.today().year)
-        return render_template('dividends.html',chama=chama,me=me,calc=calc)
+        except S.BusinessError as e: flash(str(e),'warning'); calc=X.dividend_calculation(db(),chama_id,date.today().year); year=calc['year']
+        if request.method=='POST':
+            if me['role'] not in ('CHAMA_ADMIN','TREASURER'):
+                abort(403)
+            try:
+                existing=db().one("SELECT * FROM chama_dividend_runs WHERE chama_id=? AND year=? AND status IN ('PENDING_REVIEW','FINALIZED') ORDER BY id DESC LIMIT 1",(chama_id,year))
+                if existing:
+                    raise S.BusinessError('This year already has a pending or finalized dividend run. Review that record before starting another.')
+                if calc['allocated'] != calc['pool']:
+                    raise S.BusinessError('Dividend allocations do not equal the pool. No finalization request was created.')
+                run_id=db().insert('chama_dividend_runs',chama_id=chama_id,year=year,interest_pool_cents=calc['interest_pool'],
+                    fine_pool_cents=calc['fine_pool'],pool_cents=calc['pool'],total_contributions_cents=calc['total_contributions'],
+                    status='PENDING_REVIEW',created_by=me['user_id'],created_at=S.iso(S.now_utc()))
+                for item in calc['rows']:
+                    db().insert('chama_dividend_items',run_id=run_id,user_id=item['user_id'],contribution_cents=item['contribution_cents'],dividend_cents=item['dividend_cents'])
+                A.request_approval(db(),chama_id,'DIVIDEND_FINALIZATION','dividend_run',run_id,me['user_id'],
+                    request.form.get('reason') or f'Finalize {year} dividend allocation',
+                    {'action':'finalize_dividend','id':run_id,'year':year})
+                audit(db(),me['user_id'],'DIVIDEND_RUN_SUBMITTED','dividend_run',run_id,chama_id,{'year':year,'pool_cents':calc['pool'],'members':len(calc['rows'])})
+                db().commit()
+                flash('Dividend run saved and submitted for independent approval. No dividend has been paid out.','success')
+                return redirect(url_for('dividends',chama_id=chama_id,year=year))
+            except (S.BusinessError,A.ApprovalError) as e:
+                db().rollback(); flash(str(e),'warning')
+            except Exception:
+                db().rollback(); flash('Dividend finalization request could not be saved. No dividend was finalized.','warning')
+        runs=db().all("SELECT r.*,u.name requester,v.name approver FROM chama_dividend_runs r JOIN users u ON u.id=r.created_by LEFT JOIN users v ON v.id=r.approved_by WHERE r.chama_id=? ORDER BY r.year DESC,r.id DESC LIMIT 30",(chama_id,))
+        return render_template('dividends.html',chama=chama,me=me,calc=calc,runs=runs)
 
     @app.route('/chamas/<int:chama_id>/member-exit/<int:user_id>',methods=['GET','POST'])
     @login_required
@@ -46,9 +73,22 @@ def register(app, db, ctx, login_required, owner_required):
         except S.BusinessError: abort(404)
         if request.method=='POST':
             try:
-                eid=X.exit_member(db(),chama_id,user_id,g.user['id'],request.form.get('method'),request.form.get('reference'))
-                flash('Member exited and their share payout was recorded.','success'); return redirect(url_for('chama_home',chama_id=chama_id))
-            except S.BusinessError as e: flash(str(e),'warning')
+                method=(request.form.get('method') or '').strip()
+                reference=(request.form.get('reference') or '').strip()[:80]
+                if method not in F.METHODS:
+                    raise S.BusinessError('Choose a valid payout method.')
+                pending=db().val("SELECT COUNT(*) FROM maker_checker_requests WHERE chama_id=? AND request_type='MEMBER_EXIT_PAYOUT' AND entity_id=? AND status='PENDING'",(chama_id,str(user_id)),0)
+                if pending:
+                    raise S.BusinessError('An exit/payout request is already awaiting a second official. Review the approvals page first.')
+                # Exit and payout are one financial action: queue them for independent review.
+                A.request_approval(db(),chama_id,'MEMBER_EXIT_PAYOUT','member_exit',user_id,g.user['id'],
+                    request.form.get('reason') or 'Member exit and share payout requested',
+                    {'action':'exit_member','id':user_id,'method':method,'reference':reference})
+                db().commit()
+                flash('Member exit and payout submitted for second-official approval. No payout or membership change has been made yet.','success')
+                return redirect(url_for('chama_home',chama_id=chama_id))
+            except (S.BusinessError,A.ApprovalError) as e:
+                db().rollback(); flash(str(e),'warning')
         return render_template('member_exit.html',chama=chama,me=me,q=q,methods=F.METHODS)
 
     @app.route('/chamas/<int:chama_id>/audit-log')

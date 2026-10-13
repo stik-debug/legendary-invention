@@ -50,9 +50,16 @@ def create_app(overrides=None):
         REQUIRE_OWNER_2FA=os.environ.get('REQUIRE_OWNER_2FA') == '1',
         # SMS OTP is OFF unless SMS_OTP_ENABLED=1 is set explicitly (it is not forced on in production).
         SMS_OTP_ENABLED=False,
-        # Email OTP is disabled for this release so signup/login never depend on email delivery.
-        # Re-enable only after a verified mail-provider integration and end-to-end tests.
-        EMAIL_OTP_ENABLED=False,
+        # Email OTP activates automatically when a transactional mail provider is configured.
+        # EMAIL_OTP_ENABLED=0 explicitly disables it; =1 explicitly enables it. In 'auto'
+        # mode (the default), accounts are not blocked by an unconfigured email provider.
+        EMAIL_OTP_ENABLED=(
+            os.environ.get('EMAIL_OTP_ENABLED', 'auto').strip().lower() == '1'
+            or (
+                os.environ.get('EMAIL_OTP_ENABLED', 'auto').strip().lower() == 'auto'
+                and bool(os.environ.get('RESEND_API_KEY') or os.environ.get('BREVO_API_KEY') or os.environ.get('SMTP_HOST'))
+            )
+        ),
         SUPPORT_CONTACT=os.environ.get('SUPPORT_CONTACT', ''))
     app.config.update(overrides or {})
     # Optional Sentry monitoring; app startup remains functional if monitoring is not configured.

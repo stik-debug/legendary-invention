@@ -265,6 +265,14 @@ CREATE TABLE IF NOT EXISTS chama_vote_responses(
   id {PK}, vote_id INTEGER NOT NULL REFERENCES chama_votes(id), user_id INTEGER NOT NULL REFERENCES users(id),
   choice TEXT NOT NULL CHECK(choice IN ('YES','NO','ABSTAIN')), created_at TEXT NOT NULL,
   UNIQUE(vote_id,user_id));
+CREATE TABLE IF NOT EXISTS chama_dividend_runs(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), year INTEGER NOT NULL, interest_pool_cents BIGINT NOT NULL,
+  fine_pool_cents BIGINT NOT NULL, pool_cents BIGINT NOT NULL, total_contributions_cents BIGINT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'PENDING_REVIEW', created_by INTEGER NOT NULL REFERENCES users(id),
+  approved_by INTEGER REFERENCES users(id), created_at TEXT NOT NULL, finalized_at TEXT);
+CREATE TABLE IF NOT EXISTS chama_dividend_items(
+  id {PK}, run_id INTEGER NOT NULL REFERENCES chama_dividend_runs(id), user_id INTEGER NOT NULL REFERENCES users(id),
+  contribution_cents BIGINT NOT NULL, dividend_cents BIGINT NOT NULL, UNIQUE(run_id,user_id));
 CREATE TABLE IF NOT EXISTS chama_constitutions(
   id {PK}, chama_id INTEGER NOT NULL UNIQUE REFERENCES chamas(id),
   monthly_contribution_cents BIGINT NOT NULL DEFAULT 0, joining_fee_cents BIGINT NOT NULL DEFAULT 0,
@@ -276,6 +284,7 @@ CREATE INDEX IF NOT EXISTS ix_goals_chama ON chama_goals(chama_id,status);
 CREATE INDEX IF NOT EXISTS ix_investments_chama ON chama_investments(chama_id,status);
 CREATE INDEX IF NOT EXISTS ix_assets_chama ON chama_assets(chama_id,status);
 CREATE INDEX IF NOT EXISTS ix_votes_chama ON chama_votes(chama_id,status);
+CREATE INDEX IF NOT EXISTS ix_dividend_runs_chama_year ON chama_dividend_runs(chama_id,year,status);
 CREATE TABLE IF NOT EXISTS public_chama_listings(
   chama_id INTEGER PRIMARY KEY REFERENCES chamas(id), tagline TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS chama_discovery_requests(
@@ -447,6 +456,9 @@ def init_db(db):
         ensure_column(db, 'meetings', 'online_url', 'TEXT')
         ensure_column(db, 'chamas', 'contribution_cents', 'BIGINT NOT NULL DEFAULT 100000')
         ensure_column(db, 'chamas', 'loan_rate_bps', 'INTEGER NOT NULL DEFAULT 1000')
+        ensure_column(db, 'chama_votes', 'quorum_pct', 'INTEGER NOT NULL DEFAULT 50')
+        ensure_column(db, 'chama_votes', 'approval_threshold_pct', 'INTEGER NOT NULL DEFAULT 50')
+        ensure_column(db, 'chama_votes', 'result', "TEXT NOT NULL DEFAULT 'PENDING'")
         ensure_column(db, 'chamas', 'loan_multiplier', 'INTEGER NOT NULL DEFAULT 3')
         ensure_column(db, 'loans', 'due_date', 'TEXT')
         ensure_column(db, 'chama_pay_config', 'payment_method', "TEXT NOT NULL DEFAULT 'MPESA_PAYBILL'")

@@ -12,6 +12,7 @@ from flask import Response, abort, flash, g, jsonify, redirect, render_template,
 from werkzeug.utils import secure_filename
 
 import finance as F
+import features as X
 import notify as N
 import reports as R
 import services as S
@@ -120,6 +121,18 @@ def _reconcile(db, chama_id):
         issues.append({'severity':'warning','title':'Loan disbursement reconciliation','detail':f'Ledger OUT is KES {ledger_out/100:,.2f}; active/repaid loan principals total KES {disbursed/100:,.2f}.'})
     orphan = db.val("SELECT COUNT(*) FROM ledger_transactions l LEFT JOIN users u ON u.id=l.user_id WHERE l.chama_id=? AND l.user_id IS NOT NULL AND u.id IS NULL",(chama_id,),0)
     if orphan: issues.append({'severity':'danger','title':'Orphan ledger records','detail':f'{orphan} ledger entries reference a missing user.'})
+    # Flag repeated external references within the same transaction family. This is a review
+    # signal, not an automatic fraud verdict; legitimate split payments can share a reference.
+    duplicate_specs = [
+        ('contributions', 'Contribution reference'),
+        ('loan_repayments', 'Loan repayment reference'),
+        ('fine_payments', 'Fine payment reference'),
+    ]
+    for table, label in duplicate_specs:
+        duplicates = db.all(f"SELECT MIN(reference) AS reference,amount_cents,COUNT(*) AS copies FROM {table} WHERE chama_id=? AND status='PAID' AND reference IS NOT NULL AND TRIM(reference)<>'' GROUP BY UPPER(TRIM(reference)),amount_cents HAVING COUNT(*)>1 ORDER BY copies DESC LIMIT 10",(chama_id,))
+        if duplicates:
+            examples = ', '.join(f"{r['reference']} ({r['copies']} records, KES {int(r['amount_cents'])/100:,.2f})" for r in duplicates[:3])
+            issues.append({'severity':'warning','title':f'Possible duplicate {label.lower()}s','detail':f'{len(duplicates)} repeated reference/amount group(s) found. Review before marking resolved. Examples: {examples}.'})
     return {'ledger_in':ledger_in,'ledger_out':ledger_out,'balance':ledger_in-ledger_out,'contributions':contrib,'repayments':loan_repay,'fines':fines,'loan_disbursed':disbursed,'issues':issues}
 
 
@@ -130,6 +143,18 @@ def register_plus_routes(app, db, login_required, ctx, owner_required):
     def my_chama_dashboard(chama_id):
         chama, me, sub = ctx(chama_id)
         st = F.member_statement(db(), chama_id, g.user['id'])
+        uid=g.user['id']
+        fine_paid=int(db().val("SELECT COALESCE(SUM(amount_cents),0) FROM fine_payments WHERE chama_id=? AND user_id=? AND status='PAID'",(chama_id,uid),0) or 0)
+        payouts_received=int(db().val("SELECT COALESCE(SUM(payout_cents),0) FROM member_exits WHERE chama_id=? AND user_id=? AND status='PAID'",(chama_id,uid),0) or 0)
+        try:
+            dividend_calc=X.dividend_calculation(db(),chama_id,date.today().year)
+            dividend_estimate=next((r['dividend_cents'] for r in dividend_calc['rows'] if int(r['user_id'])==int(uid)),0)
+        except Exception:
+            dividend_estimate=None
+        share_balance=st['saved']-st['loan_balance']-st['fine_balance']
+        net_position=None if dividend_estimate is None else share_balance+dividend_estimate
+        member_money={'fine_paid':fine_paid,'payouts_received':payouts_received,'dividend_estimate':dividend_estimate,
+                      'share_balance':share_balance,'net_position':net_position}
         upcoming = db().all("SELECT * FROM meetings WHERE chama_id=? AND status='SCHEDULED' AND held_at>=? ORDER BY held_at LIMIT 3",(chama_id,_stamp()))
         votes = db().all("""SELECT v.*, (SELECT choice FROM chama_vote_responses r WHERE r.vote_id=v.id AND r.user_id=?) my_choice,
                           (SELECT COUNT(*) FROM chama_vote_responses r WHERE r.vote_id=v.id) votes
@@ -153,7 +178,7 @@ def register_plus_routes(app, db, login_required, ctx, owner_required):
             elif streak == 0 and row['period'] == date.today().isoformat()[:7]: streak += 1
             else: break
         return render_template('my_dashboard.html',chama=chama,me=me,sub=sub,st=st,upcoming=upcoming,votes=votes,
-                               group_investments=group_investments,attendance=attendance,total_att=total_att,streak=streak,attention=attention)
+                               group_investments=group_investments,attendance=attendance,total_att=total_att,streak=streak,attention=attention,member_money=member_money)
 
     # ---------- documents ----------
     @app.route('/chamas/<int:chama_id>/documents')

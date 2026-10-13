@@ -7,6 +7,7 @@ from urllib.parse import quote
 import finance as F
 import services as S
 import approvals as A
+import features as X
 import json
 
 PAGE = 25
@@ -211,7 +212,19 @@ def register(app, db, ctx, login_required):
                 elif action == 'void_repayment': F.void_repayment(db(), chama_id, entity_id, payload.get('reason'), row['requested_by'])
                 elif action == 'void_fine_payment': F.void_fine_payment(db(), chama_id, entity_id, payload.get('reason'), row['requested_by'])
                 elif action == 'disburse_loan': F.disburse_loan(db(), chama_id, entity_id, row['requested_by'])
+                elif action == 'exit_member': X.exit_member(db(), chama_id, entity_id, row['requested_by'], payload.get('method'), payload.get('reference'))
+                elif action == 'finalize_dividend':
+                    run=db().one("SELECT * FROM chama_dividend_runs WHERE id=? AND chama_id=?",(entity_id,chama_id))
+                    if not run or run['status']!='PENDING_REVIEW': raise A.ApprovalError('Dividend run is missing or no longer awaiting review.')
+                    totals=db().one('SELECT COALESCE(SUM(dividend_cents),0) total,COUNT(*) members FROM chama_dividend_items WHERE run_id=?',(entity_id,))
+                    if int(totals['total']) != int(run['pool_cents']): raise A.ApprovalError('Dividend allocation total does not match the pool. No finalization was made.')
+                    db().execute("UPDATE chama_dividend_runs SET status='FINALIZED',approved_by=?,finalized_at=? WHERE id=? AND status='PENDING_REVIEW'",(g.user['id'],S.iso(S.now_utc()),entity_id))
+                    audit(db(),g.user['id'],'DIVIDEND_RUN_FINALIZED','dividend_run',entity_id,chama_id,{'year':run['year'],'pool_cents':run['pool_cents'],'member_count':totals['members']})
                 else: raise A.ApprovalError('Unsupported approval action; no financial change was made.')
+            elif status == 'REJECTED':
+                payload=json.loads(row.get('payload') or '{}')
+                if payload.get('action') == 'finalize_dividend':
+                    db().execute("UPDATE chama_dividend_runs SET status='REJECTED' WHERE id=? AND chama_id=? AND status='PENDING_REVIEW'",(int(payload.get('id') or 0),chama_id))
             db().commit()
             flash('Approval recorded and action processed.' if status == 'APPROVED' else 'Request rejected; no financial change was made.', 'success')
         except (A.ApprovalError, S.BusinessError, ValueError, TypeError) as e:

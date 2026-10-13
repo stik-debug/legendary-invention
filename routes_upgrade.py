@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta
 from flask import render_template, request, redirect, url_for, flash, abort, jsonify, g
 import services as S
 from db import audit
+from governance import calculate_vote_result
 
 STAFF = ('CHAMA_ADMIN','TREASURER','SECRETARY','AUDITOR')
 
@@ -128,18 +129,46 @@ def register_upgrade_routes(app, db, login_required, ctx):
         if request.method=='POST':
             if me['role'] not in STAFF: abort(403)
             f=request.form
-            vid=db().insert('chama_votes',chama_id=chama_id,title=f.get('title','')[:180],description=f.get('description','')[:2000],
-                opens_at=S.iso(S.now_utc()),closes_at=f.get('closes_at') or None,status='OPEN',created_by=me['user_id'],created_at=S.iso(S.now_utc()))
-            audit(db(),me['user_id'],'VOTE_CREATED','vote',vid,chama_id); db().commit(); flash('Vote opened.','success')
+            title=(f.get('title') or '').strip()
+            if not title:
+                flash('A proposal title is required.','warning')
+                return redirect(url_for('chama_votes',chama_id=chama_id))
+            try:
+                quorum=max(1,min(100,int(f.get('quorum_pct','50'))))
+                threshold=max(1,min(100,int(f.get('approval_threshold_pct','50'))))
+            except (TypeError,ValueError):
+                flash('Quorum and approval threshold must be whole percentages from 1 to 100.','warning')
+                return redirect(url_for('chama_votes',chama_id=chama_id))
+            close_value=f.get('closes_at') or None
+            vid=db().insert('chama_votes',chama_id=chama_id,title=title[:180],description=f.get('description','')[:2000],
+                opens_at=S.iso(S.now_utc()),closes_at=close_value,status='OPEN',quorum_pct=quorum,
+                approval_threshold_pct=threshold,result='PENDING',created_by=me['user_id'],created_at=S.iso(S.now_utc()))
+            audit(db(),me['user_id'],'VOTE_CREATED','vote',vid,chama_id,{'quorum_pct':quorum,'approval_threshold_pct':threshold}); db().commit(); flash('Vote opened with its quorum and approval rule recorded.','success')
             return redirect(url_for('chama_votes',chama_id=chama_id))
         now=S.iso(S.now_utc())
-        db().execute("UPDATE chama_votes SET status='CLOSED' WHERE chama_id=? AND status='OPEN' AND closes_at IS NOT NULL AND closes_at<=?",(chama_id,now))
+        # Close expired ballots and calculate the outcome using the rule fixed when each vote opened.
+        expiring=db().all("SELECT * FROM chama_votes WHERE chama_id=? AND status='OPEN' AND closes_at IS NOT NULL AND closes_at<=?",(chama_id,now))
+        for v in expiring:
+            eligible=int(db().val("SELECT COUNT(*) FROM chama_members WHERE chama_id=? AND status='ACTIVE'",(chama_id,),0) or 0)
+            votes=int(db().val('SELECT COUNT(*) FROM chama_vote_responses WHERE vote_id=?',(v['id'],),0) or 0)
+            yes=int(db().val("SELECT COUNT(*) FROM chama_vote_responses WHERE vote_id=? AND choice='YES'",(v['id'],),0) or 0)
+            no=int(db().val("SELECT COUNT(*) FROM chama_vote_responses WHERE vote_id=? AND choice='NO'",(v['id'],),0) or 0)
+            abstain=int(db().val("SELECT COUNT(*) FROM chama_vote_responses WHERE vote_id=? AND choice='ABSTAIN'",(v['id'],),0) or 0)
+            outcome=calculate_vote_result(eligible,votes,yes,no,abstain,v.get('quorum_pct',50),v.get('approval_threshold_pct',50))
+            result=outcome['result']
+            db().execute("UPDATE chama_votes SET status='CLOSED',result=? WHERE id=? AND status='OPEN'",(result,v['id']))
+            audit(db(),me['user_id'],'VOTE_AUTO_CLOSED','vote',v['id'],chama_id,outcome)
         db().commit()
         rows=db().all("""SELECT v.*,u.name creator,(SELECT COUNT(*) FROM chama_vote_responses r WHERE r.vote_id=v.id AND r.choice='YES') yes_count,
                         (SELECT COUNT(*) FROM chama_vote_responses r WHERE r.vote_id=v.id AND r.choice='NO') no_count,
                         (SELECT COUNT(*) FROM chama_vote_responses r WHERE r.vote_id=v.id AND r.choice='ABSTAIN') abstain_count,
-                        (SELECT choice FROM chama_vote_responses r WHERE r.vote_id=v.id AND r.user_id=?) my_choice
+                        (SELECT choice FROM chama_vote_responses r WHERE r.vote_id=v.id AND r.user_id=?) my_choice,
+                        (SELECT COUNT(*) FROM chama_members cm WHERE cm.chama_id=v.chama_id AND cm.status='ACTIVE') eligible_count
                         FROM chama_votes v LEFT JOIN users u ON u.id=v.created_by WHERE v.chama_id=? ORDER BY v.id DESC""",(me['user_id'],chama_id))
+        for v in rows:
+            v['votes_cast']=int(v['yes_count'])+int(v['no_count'])+int(v['abstain_count'])
+            v['quorum_needed']=(int(v['eligible_count'])*int(v.get('quorum_pct') or 50)+99)//100
+            v['yes_threshold_needed']=((int(v['yes_count'])+int(v['no_count']))*int(v.get('approval_threshold_pct') or 50)+99)//100
         return render_template('votes.html',chama=chama,me=me,rows=rows)
 
     @app.route('/chamas/<int:chama_id>/votes/<int:vote_id>/close', methods=['POST'])
@@ -148,9 +177,16 @@ def register_upgrade_routes(app, db, login_required, ctx):
         chama,me,sub=ctx(chama_id,roles=('CHAMA_ADMIN','TREASURER','SECRETARY'))
         v=db().one('SELECT * FROM chama_votes WHERE id=? AND chama_id=?',(vote_id,chama_id)) or abort(404)
         if v['status']=='OPEN':
-            db().execute("UPDATE chama_votes SET status='CLOSED' WHERE id=?",(vote_id,))
-            audit(db(),me['user_id'],'VOTE_CLOSED','vote',vote_id,chama_id)
-            db().commit(); flash('Vote closed and the result is now final in the decision record.','success')
+            eligible=int(db().val("SELECT COUNT(*) FROM chama_members WHERE chama_id=? AND status='ACTIVE'",(chama_id,),0) or 0)
+            votes=int(db().val('SELECT COUNT(*) FROM chama_vote_responses WHERE vote_id=?',(vote_id,),0) or 0)
+            yes=int(db().val("SELECT COUNT(*) FROM chama_vote_responses WHERE vote_id=? AND choice='YES'",(vote_id,),0) or 0)
+            no=int(db().val("SELECT COUNT(*) FROM chama_vote_responses WHERE vote_id=? AND choice='NO'",(vote_id,),0) or 0)
+            abstain=int(db().val("SELECT COUNT(*) FROM chama_vote_responses WHERE vote_id=? AND choice='ABSTAIN'",(vote_id,),0) or 0)
+            outcome=calculate_vote_result(eligible,votes,yes,no,abstain,v.get('quorum_pct',50),v.get('approval_threshold_pct',50))
+            result=outcome['result']
+            db().execute("UPDATE chama_votes SET status='CLOSED',result=? WHERE id=? AND status='OPEN'",(result,vote_id))
+            audit(db(),me['user_id'],'VOTE_CLOSED','vote',vote_id,chama_id,outcome)
+            db().commit(); flash('Vote closed. Result: '+result.replace('_',' ').lower()+'.','success')
         return redirect(url_for('chama_votes',chama_id=chama_id))
 
     @app.route('/chamas/<int:chama_id>/votes/<int:vote_id>', methods=['POST'])

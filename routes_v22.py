@@ -17,28 +17,36 @@ def _stamp():
 
 
 def _health(db, cid, total_members):
+    """Evidence-based score: missing evidence is unknown, never silently scored as healthy."""
     period = date.today().isoformat()[:7]
     paid = int(db.val("SELECT COUNT(DISTINCT user_id) FROM contributions WHERE chama_id=? AND period=? AND status='PAID'", (cid, period), 0) or 0)
-    contrib_score = round((paid / max(total_members, 1)) * 100) if total_members else 0
+    contrib_score = round((paid / total_members) * 100) if total_members else None
+    loan_count = int(db.val("SELECT COUNT(*) FROM loans WHERE chama_id=? AND status IN ('ACTIVE','REPAID','PAID')", (cid,), 0) or 0)
     due = int(db.val("SELECT COALESCE(SUM(total_due_cents),0) FROM loans WHERE chama_id=? AND status IN ('ACTIVE','REPAID','PAID')", (cid,), 0) or 0)
     repaid = int(db.val("SELECT COALESCE(SUM(paid_cents),0) FROM loans WHERE chama_id=? AND status IN ('ACTIVE','REPAID','PAID')", (cid,), 0) or 0)
-    loan_score = round(min(100, (repaid / max(due, 1)) * 100)) if due else 100
+    loan_score = round(min(100, (repaid / max(due, 1)) * 100)) if loan_count else None
     attendance_total = int(db.val("SELECT COUNT(*) FROM attendance WHERE chama_id=?", (cid,), 0) or 0)
     attendance_present = int(db.val("SELECT COUNT(*) FROM attendance WHERE chama_id=? AND status='PRESENT'", (cid,), 0) or 0)
-    attendance_score = round((attendance_present / max(attendance_total, 1)) * 100) if attendance_total else 100
+    attendance_score = round((attendance_present / attendance_total) * 100) if attendance_total else None
     open_actions = int(db.val("SELECT COUNT(*) FROM meeting_actions WHERE chama_id=? AND status='OPEN'", (cid,), 0) or 0)
     overdue = int(db.val("SELECT COUNT(*) FROM loans WHERE chama_id=? AND status='ACTIVE' AND due_date IS NOT NULL AND due_date<?", (cid, date.today().isoformat()), 0) or 0)
-    transparency = 100 if int(db.val("SELECT COUNT(*) FROM audit_logs WHERE chama_id=?", (cid,), 0) or 0) else 70
+    audit_count = int(db.val("SELECT COUNT(*) FROM audit_logs WHERE chama_id=?", (cid,), 0) or 0)
+    transparency = 100 if audit_count else None
     parts = {
         'Contribution consistency': contrib_score,
         'Loan repayment': loan_score,
         'Meeting participation': attendance_score,
         'Financial transparency': transparency,
     }
+    known = [v for v in parts.values() if v is not None]
     penalties = min(25, overdue * 5 + min(open_actions, 5))
-    score = max(0, round(sum(parts.values()) / len(parts)) - penalties)
-    label = 'Excellent' if score >= 85 else 'Healthy' if score >= 70 else 'Needs attention' if score >= 50 else 'At risk'
-    return score, label, parts, {'paid_members': paid, 'total_members': total_members, 'overdue_loans': overdue, 'open_actions': open_actions}
+    score = max(0, round(sum(known) / len(known)) - penalties) if known else None
+    label = ('Insufficient data' if score is None else
+             'Excellent' if score >= 85 else 'Healthy' if score >= 70 else
+             'Needs attention' if score >= 50 else 'At risk')
+    return score, label, parts, {'paid_members': paid, 'total_members': total_members,
+        'overdue_loans': overdue, 'open_actions': open_actions, 'known_indicators': len(known),
+        'unknown_indicators': len(parts)-len(known)}
 
 
 def register_v22_routes(app, db, login_required, ctx, owner_required):

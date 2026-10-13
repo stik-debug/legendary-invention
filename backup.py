@@ -1,6 +1,6 @@
 """Durable logical backup. Uploads a compressed JSON export to S3-compatible object storage when configured."""
 import gzip, json, os
-from datetime import datetime
+from datetime import datetime, timezone
 from db import DB
 
 SENSITIVE={'password_hash','claim_code_hash','reset_hash','totp_secret','totp_recovery','code_hash'}
@@ -13,7 +13,7 @@ def _tables(db):
 def export_database(database_url):
     db=DB(database_url)
     try:
-        payload={'format':'chamapay-daily-backup-v2','exported_at':datetime.utcnow().replace(microsecond=0).isoformat(sep=' '),'tables':{}}
+        payload={'format':'chamapay-daily-backup-v2','exported_at':datetime.now(timezone.utc).replace(microsecond=0).isoformat(sep=' '),'tables':{}}
         for table in _tables(db):
             rows=db.all('SELECT * FROM '+table)
             safe=[]
@@ -24,10 +24,14 @@ def export_database(database_url):
     finally: db.close()
 
 def save_backup(database_url):
-    data=export_database(database_url)
-    stamp=datetime.utcnow().strftime('%Y%m%d-%H%M%S')
-    name=f'chamapay-{stamp}.json.gz'
     bucket=os.environ.get('BACKUP_S3_BUCKET')
+    # Render cron containers are ephemeral. Do not report a successful "daily backup"
+    # when the only copy would be written to /tmp and disappear after the job/container.
+    if os.environ.get('RENDER') and not bucket:
+        raise RuntimeError('Durable backup is not configured: set BACKUP_S3_BUCKET and S3 credentials for the Render cron job.')
+    data=export_database(database_url)
+    stamp=datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')
+    name=f'chamapay-{stamp}.json.gz'
     if bucket:
         import boto3
         client=boto3.client('s3',region_name=os.environ.get('AWS_REGION') or os.environ.get('AWS_DEFAULT_REGION'),endpoint_url=os.environ.get('S3_ENDPOINT_URL') or None,

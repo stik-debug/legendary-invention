@@ -245,7 +245,7 @@ M-Pesa/STK/callback integration is deliberately not expanded in this release.
 
 ## V27 additions
 
-- Email OTP is currently disabled; do not set `EMAIL_OTP_ENABLED=1`. SMTP settings may still be used for ordinary email notifications, but they are not required for signup or login.
+- Email OTP is enabled automatically when `RESEND_API_KEY`, `BREVO_API_KEY`, or `SMTP_HOST` is configured. Set `EMAIL_OTP_ENABLED=0` to explicitly disable it or `EMAIL_OTP_ENABLED=1` to explicitly require it. Verify the provider, sender address, and delivery in staging before production rollout. SMS OTP remains off; no new mobile-money integration is introduced.
 - Meeting reminders are prepared by the daily job; meeting pages include WhatsApp sharing.
 - Officials can calculate year-end dividends using contribution-weighted allocation of collected loan interest and paid fines.
 - Member exit records the share payout through the main ledger and keeps the member history.
