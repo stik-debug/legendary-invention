@@ -2,6 +2,7 @@
 All workflows are record-keeping only; they do not move money or certify providers automatically.
 """
 from datetime import datetime, timezone
+from uuid import uuid4
 import re
 from flask import abort, flash, g, redirect, render_template, request, url_for
 import finance as F
@@ -13,6 +14,7 @@ CATEGORIES = ('Bookkeeping', 'Legal support', 'Insurance', 'Training', 'Financia
 POST_KINDS = ('DISCUSSION', 'TEMPLATE', 'EVENT', 'PROJECT')
 # Starter profanity filter, backed up by community reporting and moderator review.
 PROFANITY = re.compile(r'(?i)(?<![a-z0-9])(?:fuck(?:er|ing|ed|s)?|shit(?:ty|ting|s)?|bitch(?:es)?|asshole(?:s)?|motherfucker|cunt(?:s)?|bastard(?:s)?|dickhead(?:s)?|nigger(?:s)?|faggot(?:s)?|pussy|whore(?:s)?|slut(?:s)?)(?![a-z0-9])')
+MISLEADING_CLAIMS = re.compile(r'(?i)\b(?:guaranteed?\s+(?:returns?|profits?|income|earnings)|risk[- ]free\s+(?:investment|returns?|profits?)|100\s*%\s*(?:profit|returns?)|double\s+your\s+money|no[- ]risk\s+(?:investment|returns?)|assured\s+(?:investment\s+)?returns?)\b')
 
 def respectful_text(value, label, minimum, maximum):
     value=clean(value,label,minimum,maximum)
@@ -20,6 +22,8 @@ def respectful_text(value, label, minimum, maximum):
         raise S.BusinessError(f'{label} contains language that is not allowed. Please rewrite it respectfully.')
     if re.search(r'(.)\1{9,}', value):
         raise S.BusinessError(f'{label} looks like spam. Please write a clear message.')
+    if MISLEADING_CLAIMS.search(value):
+        raise S.BusinessError(f'{label} appears to promise guaranteed financial returns or risk-free profits. Remove the claim and state verifiable facts instead.')
     return value
 
 def stamp():
@@ -37,13 +41,29 @@ def register(app, db, ctx, login_required, owner_required):
     def marketplace():
         category=(request.args.get('category') or '').strip()
         if category not in CATEGORIES: category=''
-        sql="SELECT * FROM marketplace_providers WHERE status='VERIFIED'"
+        query=(request.args.get('q') or '').strip()[:100]
+        county=(request.args.get('county') or '').strip()[:100]
+        sort=(request.args.get('sort') or 'recommended').strip()
+        order_by={'recommended':'category,name','name':'name COLLATE NOCASE','newest':'id DESC'}.get(sort,'category,name')
+        sql="""SELECT p.*,
+            (SELECT COUNT(*) FROM marketplace_reviews r WHERE r.provider_id=p.id AND r.status='PUBLISHED') review_count,
+            (SELECT ROUND(AVG(r.rating),1) FROM marketplace_reviews r WHERE r.provider_id=p.id AND r.status='PUBLISHED') average_rating
+            FROM marketplace_providers p WHERE p.status='VERIFIED'"""
         args=[]
         if category: sql+=' AND category=?'; args.append(category)
-        sql+=' ORDER BY category,name LIMIT 100'
+        if county: sql+=' AND county LIKE ?'; args.append('%'+county+'%')
+        if query:
+            sql+=' AND (name LIKE ? OR description LIKE ? OR category LIKE ? OR county LIKE ?)'
+            term='%'+query+'%'; args.extend([term,term,term,term])
+        sql+=' ORDER BY '+order_by+' LIMIT 100'
         rows=db().all(sql,args)
+        for provider_row in rows:
+            provider_row['recent_reviews']=db().all("SELECT r.*,u.name reviewer_name FROM marketplace_reviews r JOIN users u ON u.id=r.user_id WHERE r.provider_id=? AND r.status='PUBLISHED' ORDER BY r.id DESC LIMIT 3",(provider_row['id'],))
         mine=db().all('SELECT * FROM marketplace_providers WHERE user_id=? ORDER BY id DESC LIMIT 30',(g.user['id'],))
-        return render_template('marketplace.html', rows=rows, mine=mine, categories=CATEGORIES, category=category)
+        counts=db().one("SELECT COUNT(*) total, COUNT(DISTINCT category) categories FROM marketplace_providers WHERE status='VERIFIED'")
+        counties=db().all("SELECT DISTINCT county FROM marketplace_providers WHERE status='VERIFIED' AND county IS NOT NULL AND TRIM(county)<>'' ORDER BY county LIMIT 100")
+        return render_template('marketplace.html', rows=rows, mine=mine, categories=CATEGORIES, category=category,
+            query=query, county=county, sort=sort, counties=counties, counts=counts)
 
     @app.route('/marketplace/providers', methods=['POST'])
     @login_required
@@ -52,7 +72,7 @@ def register(app, db, ctx, login_required, owner_required):
             name=clean(request.form.get('name'),'Provider name',2,100)
             category=request.form.get('category','')
             if category not in CATEGORIES: raise S.BusinessError('Choose a valid service category.')
-            desc=clean(request.form.get('description'),'Description',10,1200)
+            desc=respectful_text(request.form.get('description'),'Description',10,1200)
             email=(request.form.get('contact_email') or '').strip()[:160] or None
             phone=(request.form.get('contact_phone') or '').strip()[:40] or None
             county=(request.form.get('county') or '').strip()[:100] or None
@@ -83,6 +103,188 @@ def register(app, db, ctx, login_required, owner_required):
         except Exception:
             flash('You have already registered interest in this provider for this chama.','info')
         return redirect(url_for('marketplace'))
+
+    @app.route('/marketplace/quote-request', methods=['POST'])
+    @login_required
+    def marketplace_quote_request_many():
+        raw_ids=request.form.getlist('provider_ids')
+        provider_ids=[]
+        for raw_id in raw_ids[:8]:
+            try: provider_ids.append(int(raw_id))
+            except (TypeError,ValueError): continue
+        provider_ids=list(dict.fromkeys(provider_ids))
+        if not provider_ids:
+            flash('Choose at least one provider to request comparable quotes.','warning')
+            return redirect(url_for('marketplace'))
+        placeholders=','.join('?' for _ in provider_ids)
+        providers=db().all(f"SELECT id,user_id FROM marketplace_providers WHERE status='VERIFIED' AND id IN ({placeholders})",provider_ids)
+        providers=[p for p in providers if int(p['user_id']) != int(g.user['id'])]
+        if not providers:
+            flash('Choose reviewed provider listings other than your own.','warning')
+            return redirect(url_for('marketplace'))
+        try:
+            title=clean(request.form.get('title'),'Request title',4,120)
+            details=respectful_text(request.form.get('details'),'Work description',10,1500)
+            budget_hint=(request.form.get('budget_hint') or '').strip()[:100] or None
+            deadline=(request.form.get('deadline') or '').strip()[:30] or None
+            chama_id=request.form.get('chama_id',type=int)
+            if chama_id: ctx(chama_id)
+            comparison_key=str(uuid4()) if len(providers)>1 else None
+            with db().tx():
+                for provider in providers:
+                    rid=db().insert('marketplace_quote_requests',provider_id=provider['id'],user_id=g.user['id'],chama_id=chama_id,
+                        title=title,details=details,budget_hint=budget_hint,deadline=deadline,status='OPEN',comparison_key=comparison_key,
+                        created_at=stamp(),updated_at=stamp())
+                    audit(db(),g.user['id'],'MARKETPLACE_QUOTE_REQUESTED','marketplace_quote_request',rid,chama_id,{'provider_id':provider['id'],'comparison_group':bool(comparison_key)})
+            flash(f'Quote request sent to {len(providers)} provider(s). Their offers will be compared side by side.','success')
+        except S.BusinessError as e: flash(str(e),'warning')
+        return redirect(url_for('marketplace_quotes'))
+
+    @app.route('/marketplace/<int:provider_id>/quote-request', methods=['POST'])
+    @login_required
+    def marketplace_quote_request(provider_id):
+        provider=db().one("SELECT id,user_id,name FROM marketplace_providers WHERE id=? AND status='VERIFIED'",(provider_id,))
+        if not provider: abort(404)
+        if int(provider['user_id']) == int(g.user['id']):
+            flash('You cannot request a quote from your own listing.','warning')
+            return redirect(url_for('marketplace'))
+        try:
+            title=clean(request.form.get('title'),'Request title',4,120)
+            details=clean(request.form.get('details'),'Work description',10,1500)
+            budget_hint=(request.form.get('budget_hint') or '').strip()[:100] or None
+            deadline=(request.form.get('deadline') or '').strip()[:30] or None
+            chama_id=request.form.get('chama_id',type=int)
+            if chama_id: ctx(chama_id)
+            with db().tx():
+                rid=db().insert('marketplace_quote_requests',provider_id=provider_id,user_id=g.user['id'],chama_id=chama_id,
+                    title=title,details=details,budget_hint=budget_hint,deadline=deadline,status='OPEN',
+                    created_at=stamp(),updated_at=stamp())
+                audit(db(),g.user['id'],'MARKETPLACE_QUOTE_REQUESTED','marketplace_quote_request',rid,chama_id,{'provider_id':provider_id})
+            flash('Quote request sent. Compare the written offer and terms before accepting.','success')
+        except S.BusinessError as e: flash(str(e),'warning')
+        return redirect(url_for('marketplace_quotes'))
+
+    @app.route('/marketplace/quotes')
+    @login_required
+    def marketplace_quotes():
+        requested=db().all("""SELECT q.*,p.name provider_name,p.category,u.name requester_name,
+            (SELECT COUNT(*) FROM marketplace_quotes x WHERE x.request_id IN (SELECT q2.id FROM marketplace_quote_requests q2 WHERE q2.comparison_key=q.comparison_key) OR (q.comparison_key IS NULL AND x.request_id=q.id)) quote_count
+            FROM marketplace_quote_requests q JOIN marketplace_providers p ON p.id=q.provider_id
+            JOIN users u ON u.id=q.user_id WHERE q.user_id=? ORDER BY q.id DESC LIMIT 100""",(g.user['id'],))
+        received=db().all("""SELECT q.*,p.name provider_name,requester.name requester_name,
+            (SELECT COUNT(*) FROM marketplace_quotes x WHERE x.request_id IN (SELECT q2.id FROM marketplace_quote_requests q2 WHERE q2.comparison_key=q.comparison_key) OR (q.comparison_key IS NULL AND x.request_id=q.id)) quote_count
+            FROM marketplace_quote_requests q JOIN marketplace_providers p ON p.id=q.provider_id
+            JOIN users requester ON requester.id=q.user_id WHERE p.user_id=? ORDER BY q.id DESC LIMIT 100""",(g.user['id'],))
+        return render_template('marketplace_quotes.html',requested=requested,received=received)
+
+    @app.route('/marketplace/quote-requests/<int:request_id>/respond', methods=['POST'])
+    @login_required
+    def marketplace_quote_respond(request_id):
+        req=db().one("""SELECT q.*,p.user_id provider_owner,p.name provider_name FROM marketplace_quote_requests q
+            JOIN marketplace_providers p ON p.id=q.provider_id WHERE q.id=?""",(request_id,))
+        if not req or int(req['provider_owner']) != int(g.user['id']): abort(404)
+        if req['status'] not in ('OPEN','QUOTED'): abort(400)
+        try:
+            amount=F.parse_kes(request.form.get('amount',''))
+            scope=respectful_text(request.form.get('scope'),'Quote scope',10,1500)
+            timeline=clean(request.form.get('timeline'),'Timeline',2,120)
+            validity=(request.form.get('validity') or '').strip()[:30] or None
+            with db().tx():
+                existing=db().one('SELECT id FROM marketplace_quotes WHERE request_id=? AND provider_id=?',(request_id,req['provider_id']))
+                if existing:
+                    db().execute("UPDATE marketplace_quotes SET amount_cents=?,scope=?,timeline=?,validity=?,status='SUBMITTED',created_at=? WHERE id=?",
+                        (amount,scope,timeline,validity,stamp(),existing['id']))
+                    quote_id=existing['id']
+                else:
+                    quote_id=db().insert('marketplace_quotes',request_id=request_id,provider_id=req['provider_id'],amount_cents=amount,
+                        scope=scope,timeline=timeline,validity=validity,status='SUBMITTED',created_at=stamp())
+                db().execute("UPDATE marketplace_quote_requests SET status='QUOTED',updated_at=? WHERE id=? AND status IN ('OPEN','QUOTED')",(stamp(),request_id))
+                audit(db(),g.user['id'],'MARKETPLACE_QUOTE_SUBMITTED','marketplace_quote',quote_id,req['chama_id'],{'request_id':request_id})
+            flash('Written quote saved. The requester can compare it with other offers.','success')
+        except S.BusinessError as e: flash(str(e),'warning')
+        return redirect(url_for('marketplace_quotes'))
+
+    @app.route('/marketplace/quote-requests/<int:request_id>/compare')
+    @login_required
+    def marketplace_quote_compare(request_id):
+        req=db().one("""SELECT q.*,p.name provider_name,p.user_id provider_owner,u.name requester_name
+            FROM marketplace_quote_requests q JOIN marketplace_providers p ON p.id=q.provider_id
+            JOIN users u ON u.id=q.user_id WHERE q.id=?""",(request_id,))
+        if not req: abort(404)
+        group_rows=db().all('SELECT id,status,user_id,provider_id FROM marketplace_quote_requests WHERE comparison_key=?' if req['comparison_key'] else 'SELECT id,status,user_id,provider_id FROM marketplace_quote_requests WHERE id=?', (req['comparison_key'],) if req['comparison_key'] else (request_id,))
+        is_requester=int(req['user_id'])==int(g.user['id'])
+        owns_group_provider=any(int(db().val('SELECT user_id FROM marketplace_providers WHERE id=?',(item['provider_id'],),-1))==int(g.user['id']) for item in group_rows)
+        if not is_requester and not owns_group_provider: abort(404)
+        states=[item['status'] for item in group_rows]
+        req['comparison_status']=next((state for state in ('COMPLETED','COMPLETION_PENDING','ACCEPTED') if state in states), 'QUOTED' if 'QUOTED' in states else ('CANCELLED' if states and all(x=='CANCELLED' for x in states) else 'OPEN'))
+        quotes=db().all("""SELECT x.*,p.name provider_name,p.category,p.county,p.user_id provider_owner,
+            (SELECT ROUND(AVG(r.rating),1) FROM marketplace_reviews r WHERE r.provider_id=p.id AND r.status='PUBLISHED') average_rating,
+            (SELECT COUNT(*) FROM marketplace_reviews r WHERE r.provider_id=p.id AND r.status='PUBLISHED') review_count
+            FROM marketplace_quotes x JOIN marketplace_providers p ON p.id=x.provider_id
+            WHERE x.request_id IN (SELECT id FROM marketplace_quote_requests WHERE comparison_key=?) OR ( ? IS NULL AND x.request_id=?)
+            ORDER BY x.amount_cents ASC,x.id ASC""",(req['comparison_key'],req['comparison_key'],request_id))
+        return render_template('marketplace_compare.html',req=req,quotes=quotes,is_requester=is_requester)
+
+    @app.route('/marketplace/quote-requests/<int:request_id>/accept/<int:quote_id>', methods=['POST'])
+    @login_required
+    def marketplace_quote_accept(request_id,quote_id):
+        req=db().one('SELECT * FROM marketplace_quote_requests WHERE id=?',(request_id,))
+        quote=db().one('SELECT * FROM marketplace_quotes WHERE id=? AND request_id=?',(quote_id,request_id))
+        if not req or not quote or int(req['user_id']) != int(g.user['id']): abort(404)
+        if req['status'] not in ('OPEN','QUOTED'): abort(400)
+        with db().tx():
+            db().execute("UPDATE marketplace_quote_requests SET status='ACCEPTED',chosen_quote_id=?,updated_at=? WHERE id=? AND status IN ('OPEN','QUOTED')",(quote_id,stamp(),request_id))
+            db().execute("UPDATE marketplace_quotes SET status='ACCEPTED' WHERE id=? AND request_id=?",(quote_id,request_id))
+            selected_request=db().one('SELECT comparison_key FROM marketplace_quote_requests WHERE id=?',(request_id,))
+            if selected_request and selected_request['comparison_key']:
+                db().execute("UPDATE marketplace_quote_requests SET status='CANCELLED',updated_at=? WHERE comparison_key=? AND id<>? AND status IN ('OPEN','QUOTED')",(stamp(),selected_request['comparison_key'],request_id))
+                db().execute("UPDATE marketplace_quotes SET status='NOT_SELECTED' WHERE request_id IN (SELECT id FROM marketplace_quote_requests WHERE comparison_key=? AND id<>?)",(selected_request['comparison_key'],request_id))
+            else:
+                db().execute("UPDATE marketplace_quotes SET status='NOT_SELECTED' WHERE request_id=? AND id<>?",(request_id,quote_id))
+            audit(db(),g.user['id'],'MARKETPLACE_QUOTE_ACCEPTED','marketplace_quote',quote_id,req['chama_id'],{'request_id':request_id})
+        flash('Quote selected. Confirm the scope, provider credentials, and contract directly before work begins.','success')
+        return redirect(url_for('marketplace_quote_compare',request_id=request_id))
+
+    @app.route('/marketplace/quote-requests/<int:request_id>/confirm-completion', methods=['POST'])
+    @login_required
+    def marketplace_quote_confirm_completion(request_id):
+        req=db().one("""SELECT q.*,p.user_id provider_owner FROM marketplace_quote_requests q
+            JOIN marketplace_providers p ON p.id=q.provider_id WHERE q.id=?""",(request_id,))
+        if not req or req['status'] not in ('ACCEPTED','COMPLETION_PENDING','COMPLETED'): abort(404)
+        requester=int(req['user_id'])==int(g.user['id'])
+        provider=int(req['provider_owner'])==int(g.user['id'])
+        if not requester and not provider: abort(404)
+        with db().tx():
+            if requester: db().execute('UPDATE marketplace_quote_requests SET requester_completed=1,updated_at=? WHERE id=?',(stamp(),request_id))
+            if provider: db().execute('UPDATE marketplace_quote_requests SET provider_completed=1,updated_at=? WHERE id=?',(stamp(),request_id))
+            latest=db().one('SELECT requester_completed,provider_completed FROM marketplace_quote_requests WHERE id=?',(request_id,))
+            status='COMPLETED' if latest['requester_completed'] and latest['provider_completed'] else 'COMPLETION_PENDING'
+            db().execute('UPDATE marketplace_quote_requests SET status=?,updated_at=? WHERE id=?',(status,stamp(),request_id))
+            audit(db(),g.user['id'],'MARKETPLACE_COMPLETION_CONFIRMED','marketplace_quote_request',request_id,req['chama_id'],{'status':status})
+        if status=='COMPLETED': flash('Both sides confirmed completion. The requester can now leave one experience-based review.','success')
+        else: flash('Your completion confirmation is recorded. The other party must also confirm before a review can be submitted.','info')
+        return redirect(url_for('marketplace_quotes'))
+
+    @app.route('/marketplace/quote-requests/<int:request_id>/review', methods=['POST'])
+    @login_required
+    def marketplace_review_submit(request_id):
+        req=db().one("""SELECT q.*,p.user_id provider_owner FROM marketplace_quote_requests q
+            JOIN marketplace_providers p ON p.id=q.provider_id WHERE q.id=?""",(request_id,))
+        if not req or int(req['user_id']) != int(g.user['id']) or req['status']!='COMPLETED' or int(req['provider_owner'])==int(g.user['id']): abort(404)
+        try:
+            rating=request.form.get('rating',type=int)
+            if rating not in (1,2,3,4,5): raise S.BusinessError('Choose a rating from 1 to 5 stars.')
+            title=respectful_text(request.form.get('title'),'Review title',4,100)
+            body=respectful_text(request.form.get('body'),'Review',10,1000)
+            with db().tx():
+                rid=db().insert('marketplace_reviews',provider_id=req['provider_id'],user_id=g.user['id'],request_id=request_id,
+                    rating=rating,title=title,body=body,status='PUBLISHED',created_at=stamp())
+                audit(db(),g.user['id'],'MARKETPLACE_REVIEW_PUBLISHED','marketplace_review',rid,req['chama_id'],{'provider_id':req['provider_id'],'rating':rating})
+            flash('Review published. Reviews are limited to completed quote engagements, one per request.','success')
+        except S.BusinessError as e: flash(str(e),'warning')
+        except Exception:
+            flash('A review already exists for this completed request, or the submission could not be saved.','warning')
+        return redirect(url_for('marketplace_quotes'))
 
     @app.route('/owner/marketplace')
     @owner_required

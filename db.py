@@ -409,6 +409,23 @@ CREATE INDEX IF NOT EXISTS ix_marketplace_status ON marketplace_providers(status
 CREATE TABLE IF NOT EXISTS marketplace_interests(
  id {PK}, provider_id BIGINT NOT NULL, user_id BIGINT NOT NULL, chama_id BIGINT, message TEXT, created_at TEXT NOT NULL,
  UNIQUE(provider_id,user_id,chama_id));
+CREATE TABLE IF NOT EXISTS marketplace_quote_requests(
+ id {PK}, provider_id BIGINT NOT NULL, user_id BIGINT NOT NULL, chama_id BIGINT, title TEXT NOT NULL,
+ details TEXT NOT NULL, budget_hint TEXT, deadline TEXT, status TEXT NOT NULL DEFAULT 'OPEN',
+ chosen_quote_id BIGINT, comparison_key TEXT, requester_completed INTEGER NOT NULL DEFAULT 0, provider_completed INTEGER NOT NULL DEFAULT 0,
+ created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS ix_marketplace_quote_requests_provider ON marketplace_quote_requests(provider_id,status,created_at);
+CREATE INDEX IF NOT EXISTS ix_marketplace_quote_requests_user ON marketplace_quote_requests(user_id,status,created_at);
+CREATE TABLE IF NOT EXISTS marketplace_quotes(
+ id {PK}, request_id BIGINT NOT NULL, provider_id BIGINT NOT NULL, amount_cents BIGINT NOT NULL,
+ scope TEXT NOT NULL, timeline TEXT NOT NULL, validity TEXT, status TEXT NOT NULL DEFAULT 'SUBMITTED', created_at TEXT NOT NULL,
+ UNIQUE(request_id,provider_id));
+CREATE INDEX IF NOT EXISTS ix_marketplace_quotes_request ON marketplace_quotes(request_id,amount_cents);
+CREATE TABLE IF NOT EXISTS marketplace_reviews(
+ id {PK}, provider_id BIGINT NOT NULL, user_id BIGINT NOT NULL, request_id BIGINT NOT NULL UNIQUE,
+ rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5), title TEXT NOT NULL, body TEXT NOT NULL,
+ status TEXT NOT NULL DEFAULT 'PUBLISHED', created_at TEXT NOT NULL, UNIQUE(provider_id,user_id,request_id));
+CREATE INDEX IF NOT EXISTS ix_marketplace_reviews_provider ON marketplace_reviews(provider_id,status,created_at);
 CREATE TABLE IF NOT EXISTS welfare_funds(
  id {PK}, chama_id BIGINT NOT NULL, name TEXT NOT NULL, purpose TEXT NOT NULL, target_cents BIGINT NOT NULL DEFAULT 0,
  budget_cents BIGINT NOT NULL DEFAULT 0, eligibility TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'OPEN', created_by BIGINT NOT NULL,
