@@ -30,7 +30,7 @@ class Base(unittest.TestCase):
         pid = S.create_payment(self.db, cid, plan['id'], months, 'MPESA', prov, '254712345678', None, now or self.t0)
         chk = f'CHK-{pid}'
         self.db.execute('UPDATE payments SET provider_txn_id=? WHERE id=?', (chk, pid)); self.db.commit()
-        return pid, chk, S.setting(self.db, 'price_per_member_cents', S.DEFAULT_MEMBER_PRICE_CENTS) * S.active_member_count(self.db, cid) * months
+        return pid, chk, int(plan['price_cents']) * months
 
     def ev(self, chk, amount, code=0, eid=None, receipt=None):
         return {'event_id': eid or chk, 'checkout_id': chk, 'result_code': code, 'amount_cents': amount, 'receipt': receipt or 'RCP' + chk}
@@ -97,17 +97,17 @@ class Lifecycle(Base):
         self.assertEqual(self.sub(cid)['status'], 'TRIAL')
         self.assertEqual(S.parse(self.sub(cid)['due_at']) - self.t0, timedelta(days=30))
 
-    def test_subscription_cost_is_ksh25_per_active_member(self):
+    def test_subscription_cost_is_fixed_for_the_whole_chama(self):
         _, cid = self.chama(); self.fill(cid, 5)
         plan = S.get_plan(self.db, code='starter')
         pid = S.create_payment(self.db, cid, plan['id'], 3, 'MANUAL', 'TEST', '254712345678', None, self.t0)
-        self.assertEqual(self.db.val('SELECT amount_cents FROM payments WHERE id=?', (pid,)), 2500 * 5 * 3)
+        self.assertEqual(self.db.val('SELECT amount_cents FROM payments WHERE id=?', (pid,)), 50000 * 3)
 
     def test_subscription_value_report_uses_real_counts(self):
         _, cid = self.chama(); self.fill(cid, 3)
         report = S.subscription_value_report(self.db, cid, self.t0)
         self.assertEqual(report['active_members'], 3)
-        self.assertEqual(report['monthly_cost_cents'], 7500)
+        self.assertEqual(report['monthly_cost_cents'], 50000)
         self.assertEqual(report['contributions_recorded'], 0)
 
     def test_trial_nudges_are_idempotent_and_in_app_only(self):
@@ -166,12 +166,20 @@ class Lifecycle(Base):
 
 class Payments(Base):
     def test_verified_payments_for_each_plan(self):
-        for plan, cents in [('starter', 2500), ('growth', 2500), ('business', 2500)]:
+        for plan, cents in [('starter', 50000), ('growth', 150000), ('business', 200000)]:
             _, cid = self.chama(plan)
             pid, chk, amt = self.pay(cid, plan)
             self.assertEqual(amt, cents)
             self.assertEqual(S.process_webhook(self.db, 'TEST', self.ev(chk, amt)), 'SUCCESS')
             self.assertEqual(self.sub(cid)['status'], 'ACTIVE')
+
+    def test_fixed_tier_prices_are_paid_once_by_the_chama(self):
+        for code, count, monthly_cents in [('starter', 20, 50000), ('growth', 70, 150000), ('business', 100, 200000)]:
+            _, cid = self.chama(code)
+            self.fill(cid, count)
+            plan = S.get_plan(self.db, code=code)
+            pid = S.create_payment(self.db, cid, plan['id'], 1, 'MPESA', 'TEST', '254712345678', None, self.t0)
+            self.assertEqual(self.db.val('SELECT amount_cents FROM payments WHERE id=?', (pid,)), monthly_cents)
 
     def test_duplicate_webhook_counts_once(self):
         _, cid = self.chama(); pid, chk, amt = self.pay(cid); due = S.parse(self.sub(cid)['due_at'])
@@ -239,10 +247,10 @@ class Payments(Base):
         self.assertEqual(self.sub(cid)['status'], 'ACTIVE')
         self.assertEqual(self.db.val('SELECT method FROM payments WHERE id=?', (pid,)), 'MANUAL')
         self.assertEqual(self.db.val("SELECT COUNT(*) FROM audit_logs WHERE action='MANUAL_PAYMENT'"), 1)
-        self.assertEqual(S.owner_stats(self.db)['revenue_total'], 2500)
+        self.assertEqual(S.owner_stats(self.db)['revenue_total'], 50000)
 
     def test_revenue_ten_chamas_per_plan(self):
-        for plan, total in [('starter', 25000), ('growth', 25000), ('business', 25000)]:
+        for plan, total in [('starter', 500000), ('growth', 1500000), ('business', 2000000)]:
             db2 = dbm.DB('sqlite:///' + tempfile.mkdtemp() + '/r.db'); dbm.init_db(db2); self.db = db2
             for _ in range(10):
                 _, cid = self.chama(plan); pid, chk, amt = self.pay(cid, plan)

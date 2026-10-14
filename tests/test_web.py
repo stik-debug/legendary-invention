@@ -68,7 +68,7 @@ class Web(unittest.TestCase):
     def test_public_pages_and_landing_content(self):
         c = self.client()
         html = c.get('/').get_data(as_text=True)
-        for s in ('Manage Your Chama', 'One Digital Headquarters.', 'KES 25', 'Up to 20 members', 'Up to 70 members', 'Up to 100 members', 'per active member'):
+        for s in ('Manage Your Chama', 'One Digital Headquarters.', 'KES 500', 'KES 1,500', 'KES 2,000', 'Up to 20 members', 'Up to 70 members', 'Up to 100 members', 'paid once by the chama'):
             self.assertIn(s, html)
         self.assertEqual(c.get('/healthz').json, {'status': 'ok'})
         self.assertEqual(c.get('/login').status_code, 200); self.assertEqual(c.get('/register').status_code, 200)
@@ -169,7 +169,7 @@ class Web(unittest.TestCase):
         plan_id = S.get_plan(self.db, code='starter')['id']
         self.post(c, f'/chamas/{cid}/subscription/pay', {'plan_id': plan_id, 'months': '1', 'phone': '0712345678'})
         p = self.db.one('SELECT * FROM payments WHERE chama_id=?', (cid,))
-        self.assertEqual((p['status'], p['amount_cents']), ('PENDING', 2500))
+        self.assertEqual((p['status'], p['amount_cents']), ('PENDING', 50000))
         self.assertEqual(self.sub(cid)['status'], 'SUSPENDED')  # not active until confirmed
         self.post(c, f'/dev/pay/{p["provider_txn_id"]}/success')
         self.assertEqual(self.sub(cid)['status'], 'ACTIVE')
