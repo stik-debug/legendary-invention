@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#06382A">
+<meta name="csrf-token" content="{{ session.get('_csrf', '') }}">
+<meta name="vapid-public-key" content="{{ push_public_key }}">
 <title>{% block title %}ChamaPay Kenya{% endblock %}</title>{% block head %}{% endblock %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
@@ -13,6 +15,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="ChamaPay">
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
+<style>
+.chamapay-toast-stack{position:fixed;z-index:9999;top:calc(14px + env(safe-area-inset-top));right:14px;width:min(390px,calc(100vw - 28px));display:grid;gap:9px;pointer-events:none}
+.chamapay-toast{pointer-events:auto;display:flex;align-items:flex-start;gap:11px;padding:14px 13px;border:1px solid rgba(9,105,75,.2);border-radius:16px;background:rgba(255,255,255,.97);color:#12372b;text-decoration:none;box-shadow:0 18px 45px rgba(4,38,28,.2);backdrop-filter:blur(16px);animation:cp-toast-in .22s ease-out;transition:opacity .3s,transform .3s}
+.chamapay-toast:hover{transform:translateY(-2px);box-shadow:0 22px 50px rgba(4,38,28,.24)}.chamapay-toast-icon{display:grid;place-items:center;flex:0 0 32px;width:32px;height:32px;border-radius:11px;background:#e0f7e9;color:#087f52;font-size:11px;box-shadow:inset 0 -2px 0 rgba(0,0,0,.05)}.chamapay-toast-copy{display:grid;gap:3px;min-width:0;flex:1}.chamapay-toast-copy strong{font-size:13px}.chamapay-toast-copy span{font-size:13px;line-height:1.45;overflow-wrap:anywhere}.chamapay-toast-close{border:0;background:transparent;color:#557064;font-size:21px;line-height:1;cursor:pointer;padding:0 2px}.chamapay-toast.is-leaving{opacity:0;transform:translateX(15px)}@keyframes cp-toast-in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}@media(max-width:560px){.chamapay-toast-stack{top:calc(8px + env(safe-area-inset-top));right:8px;width:calc(100vw - 16px)}.chamapay-toast{padding:12px;border-radius:14px}}@media(prefers-reduced-motion:reduce){.chamapay-toast{animation:none;transition:none}}
+</style>
 </head>
 <body>
 <header class="top"><div class="wrap">
@@ -47,6 +54,7 @@
 <button class="perf-btn hide-sm" data-perf type="button" title="Turn heavy 3D effects on or off">Lite mode</button>
 </nav></div></header>
 <main><div class="wrap">
+<div id="chamapay-notification-root" data-poll-url="{{ url_for('notification_poll') if user else '' }}" data-last-id="{{ notif_latest_id if user else 0 }}" aria-live="polite"></div>
 <div id="network-status" class="banner warning" role="status" aria-live="polite" hidden>You appear to be offline. ChamaPay does not queue financial or governance actions offline. Reconnect before submitting changes; cached pages may be out of date.</div>
 {% with messages = get_flashed_messages(with_categories=true) %}{% for cat, msg in messages %}<div class="flash {{ cat }}" role="status">{{ msg }}</div>{% endfor %}{% endwith %}
 {% block content %}{% endblock %}
