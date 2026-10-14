@@ -123,7 +123,7 @@ def create_app(overrides=None):
     @app.before_request
     def csrf():
         if request.method == 'POST' and request.endpoint not in ('mpesa_webhook', 'chama_mpesa_webhook'):
-            sent, want = request.form.get('_csrf', ''), session.get('_csrf', '')
+            sent, want = (request.form.get('_csrf', '') or request.headers.get('X-CSRF-Token', '')), session.get('_csrf', '')
             if not want or not hmac.compare_digest(sent, want):
                 flash('Your session expired. Please try again.', 'danger')
                 return redirect(request.referrer or url_for('index'))
@@ -148,7 +148,7 @@ def create_app(overrides=None):
                     unread = F.unread_count(db(), cid, g.user['id'])
             except Exception:
                 pass
-        return {'user': g.get('user'), 'S': S, 'unread': unread, 'notif_unread': notif}
+        return {'user': g.get('user'), 'S': S, 'unread': unread, 'notif_unread': notif, 'push_public_key': os.environ.get('VAPID_PUBLIC_KEY', ''), 'notif_latest_id': (db().val('SELECT COALESCE(MAX(id),0) FROM notifications WHERE user_id=?', (g.user['id'],), 0) if g.get('user') else 0)}
 
     @app.after_request
     def deliver_queued_sms(r):
@@ -219,6 +219,52 @@ def create_app(overrides=None):
         if not allow_inactive and sub['status'] not in S.ACCESS_OK and not read_only:
             abort(redirect(url_for('subscription', chama_id=chama_id)))
         return db().one('SELECT * FROM chamas WHERE id=?', (chama_id,)), m, sub
+
+    # App-wide notification polling: alerts appear as toasts wherever the user is working.
+    @app.route('/api/notifications/poll')
+    @login_required
+    def notification_poll():
+        after = max(0, request.args.get('after', 0, type=int))
+        rows = db().all("""SELECT n.id,n.text,n.link,n.created_at,n.chama_id,c.name AS chama
+            FROM notifications n LEFT JOIN chamas c ON c.id=n.chama_id
+            WHERE n.user_id=? AND n.id>? ORDER BY n.id ASC LIMIT 30""", (g.user['id'], after))
+        return jsonify(notifications=[{'id': r['id'], 'text': r['text'], 'link': r['link'], 'created_at': r['created_at'], 'chama': r['chama']} for r in rows])
+
+    @app.route('/api/push/subscribe', methods=['POST'])
+    @login_required
+    def push_subscribe():
+        if not os.environ.get('VAPID_PUBLIC_KEY') or not os.environ.get('VAPID_PRIVATE_KEY'):
+            return jsonify(ok=False, error='Browser push is not configured on the server yet.'), 503
+        payload = request.get_json(silent=True) or {}
+        subscription = payload.get('subscription')
+        if not isinstance(subscription, dict) or not subscription.get('endpoint') or not isinstance(subscription.get('keys'), dict):
+            return jsonify(ok=False, error='Invalid browser subscription.'), 400
+        import json as _json
+        from urllib.parse import urlparse
+        endpoint = str(subscription['endpoint'])[:2000]
+        parsed_endpoint = urlparse(endpoint)
+        host = (parsed_endpoint.hostname or '').lower()
+        allowed_push_hosts = ('fcm.googleapis.com', 'updates.push.services.mozilla.com', 'web.push.apple.com', 'notify.windows.com')
+        if parsed_endpoint.scheme != 'https' or not host or not any(host == allowed or host.endswith('.' + allowed) for allowed in allowed_push_hosts):
+            return jsonify(ok=False, error='Unsupported browser push endpoint.'), 400
+        existing = db().one('SELECT id FROM push_subscriptions WHERE endpoint=?', (endpoint,))
+        now = S.iso(S.now_utc())
+        if existing:
+            db().execute('UPDATE push_subscriptions SET user_id=?,subscription_json=?,last_used_at=? WHERE id=?', (g.user['id'], _json.dumps(subscription), now, existing['id']))
+        else:
+            db().insert('push_subscriptions', user_id=g.user['id'], endpoint=endpoint, subscription_json=_json.dumps(subscription), created_at=now, last_used_at=now)
+        db().commit()
+        return jsonify(ok=True)
+
+    @app.route('/api/push/unsubscribe', methods=['POST'])
+    @login_required
+    def push_unsubscribe():
+        payload = request.get_json(silent=True) or {}
+        endpoint = str(payload.get('endpoint') or '')[:2000]
+        if endpoint:
+            db().execute('DELETE FROM push_subscriptions WHERE endpoint=? AND user_id=?', (endpoint, g.user['id']))
+            db().commit()
+        return jsonify(ok=True)
 
     def safe_next(t):
         return t if t and t.startswith('/') and not t.startswith('//') and '\\' not in t else None

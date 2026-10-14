@@ -7,6 +7,7 @@ import re
 from flask import abort, flash, g, redirect, render_template, request, url_for
 import finance as F
 import services as S
+import notify as N
 from db import audit
 
 ADMIN_ROLES = ('CHAMA_ADMIN', 'TREASURER', 'SECRETARY')
@@ -90,7 +91,7 @@ def register(app, db, ctx, login_required, owner_required):
     @app.route('/marketplace/<int:provider_id>/interest', methods=['POST'])
     @login_required
     def marketplace_interest(provider_id):
-        provider=db().one("SELECT id FROM marketplace_providers WHERE id=? AND status='VERIFIED'",(provider_id,))
+        provider=db().one("SELECT id,user_id,name FROM marketplace_providers WHERE id=? AND status='VERIFIED'",(provider_id,))
         if not provider: abort(404)
         chama_id=request.form.get('chama_id',type=int)
         if chama_id:
@@ -99,6 +100,7 @@ def register(app, db, ctx, login_required, owner_required):
         try:
             with db().tx():
                 db().insert('marketplace_interests',provider_id=provider_id,user_id=g.user['id'],chama_id=chama_id,message=message,created_at=stamp())
+                N.notify(db(), provider['user_id'], chama_id, f'Someone is interested in your marketplace service: {provider["name"]}.', '/marketplace', g.user['id'])
             flash('Interest recorded. Contact the provider directly using their listed details.','success')
         except Exception:
             flash('You have already registered interest in this provider for this chama.','info')
@@ -136,6 +138,7 @@ def register(app, db, ctx, login_required, owner_required):
                         title=title,details=details,budget_hint=budget_hint,deadline=deadline,status='OPEN',comparison_key=comparison_key,
                         created_at=stamp(),updated_at=stamp())
                     audit(db(),g.user['id'],'MARKETPLACE_QUOTE_REQUESTED','marketplace_quote_request',rid,chama_id,{'provider_id':provider['id'],'comparison_group':bool(comparison_key)})
+                    N.notify(db(), provider['user_id'], chama_id, f'New quote request: {title}.', '/marketplace/quotes', g.user['id'])
             flash(f'Quote request sent to {len(providers)} provider(s). Their offers will be compared side by side.','success')
         except S.BusinessError as e: flash(str(e),'warning')
         return redirect(url_for('marketplace_quotes'))
@@ -160,6 +163,7 @@ def register(app, db, ctx, login_required, owner_required):
                     title=title,details=details,budget_hint=budget_hint,deadline=deadline,status='OPEN',
                     created_at=stamp(),updated_at=stamp())
                 audit(db(),g.user['id'],'MARKETPLACE_QUOTE_REQUESTED','marketplace_quote_request',rid,chama_id,{'provider_id':provider_id})
+                N.notify(db(), provider['user_id'], chama_id, f'New quote request: {title}.', '/marketplace/quotes', g.user['id'])
             flash('Quote request sent. Compare the written offer and terms before accepting.','success')
         except S.BusinessError as e: flash(str(e),'warning')
         return redirect(url_for('marketplace_quotes'))
@@ -200,6 +204,7 @@ def register(app, db, ctx, login_required, owner_required):
                         scope=scope,timeline=timeline,validity=validity,status='SUBMITTED',created_at=stamp())
                 db().execute("UPDATE marketplace_quote_requests SET status='QUOTED',updated_at=? WHERE id=? AND status IN ('OPEN','QUOTED')",(stamp(),request_id))
                 audit(db(),g.user['id'],'MARKETPLACE_QUOTE_SUBMITTED','marketplace_quote',quote_id,req['chama_id'],{'request_id':request_id})
+                N.notify(db(), req['user_id'], req['chama_id'], f'{req["provider_name"]} submitted a quote for {req["title"]}.', f'/marketplace/quote-requests/{request_id}/compare', g.user['id'])
             flash('Written quote saved. The requester can compare it with other offers.','success')
         except S.BusinessError as e: flash(str(e),'warning')
         return redirect(url_for('marketplace_quotes'))
@@ -243,6 +248,14 @@ def register(app, db, ctx, login_required, owner_required):
             else:
                 db().execute("UPDATE marketplace_quotes SET status='NOT_SELECTED' WHERE request_id=? AND id<>?",(request_id,quote_id))
             audit(db(),g.user['id'],'MARKETPLACE_QUOTE_ACCEPTED','marketplace_quote',quote_id,req['chama_id'],{'request_id':request_id})
+            provider_owner = db().val('SELECT user_id FROM marketplace_providers WHERE id=?', (quote['provider_id'],), None)
+            if provider_owner:
+                N.notify(db(), provider_owner, req['chama_id'], 'Your marketplace quote was selected.', f'/marketplace/quotes', g.user['id'])
+            if req.get('comparison_key'):
+                other_rows = db().all("""SELECT DISTINCT p.user_id FROM marketplace_quote_requests q JOIN marketplace_providers p ON p.id=q.provider_id
+                    WHERE q.comparison_key=? AND q.id<>?""", (req['comparison_key'], request_id))
+                for other in other_rows:
+                    N.notify(db(), other['user_id'], req['chama_id'], 'A chama selected another offer in a quote comparison. This request is now closed.', '/marketplace/quotes', g.user['id'])
         flash('Quote selected. Confirm the scope, provider credentials, and contract directly before work begins.','success')
         return redirect(url_for('marketplace_quote_compare',request_id=request_id))
 
@@ -262,6 +275,8 @@ def register(app, db, ctx, login_required, owner_required):
             status='COMPLETED' if latest['requester_completed'] and latest['provider_completed'] else 'COMPLETION_PENDING'
             db().execute('UPDATE marketplace_quote_requests SET status=?,updated_at=? WHERE id=?',(status,stamp(),request_id))
             audit(db(),g.user['id'],'MARKETPLACE_COMPLETION_CONFIRMED','marketplace_quote_request',request_id,req['chama_id'],{'status':status})
+            other_user = req['provider_owner'] if requester else req['user_id']
+            N.notify(db(), other_user, req['chama_id'], 'The other party confirmed completion for your marketplace engagement.', '/marketplace/quotes', g.user['id'])
         if status=='COMPLETED': flash('Both sides confirmed completion. The requester can now leave one experience-based review.','success')
         else: flash('Your completion confirmation is recorded. The other party must also confirm before a review can be submitted.','info')
         return redirect(url_for('marketplace_quotes'))
@@ -281,6 +296,7 @@ def register(app, db, ctx, login_required, owner_required):
                 rid=db().insert('marketplace_reviews',provider_id=req['provider_id'],user_id=g.user['id'],request_id=request_id,
                     rating=rating,title=title,body=body,status='PUBLISHED',created_at=stamp())
                 audit(db(),g.user['id'],'MARKETPLACE_REVIEW_PUBLISHED','marketplace_review',rid,req['chama_id'],{'provider_id':req['provider_id'],'rating':rating})
+                N.notify(db(), req['provider_owner'], req['chama_id'], 'A chama member left a review for your completed marketplace engagement.', '/marketplace', g.user['id'])
             flash('Review published. Reviews are limited to completed quote engagements, one per request.','success')
         except S.BusinessError as e: flash(str(e),'warning')
         except Exception:
@@ -303,6 +319,7 @@ def register(app, db, ctx, login_required, owner_required):
         with db().tx():
             db().execute('UPDATE marketplace_providers SET status=?,reviewed_at=?,reviewed_by=? WHERE id=? AND status=\'PENDING\'',(status,stamp(),g.user['id'],provider_id))
             audit(db(),g.user['id'],'MARKETPLACE_PROVIDER_'+status,'marketplace_provider',provider_id,None,{'category':row['category']})
+            N.notify(db(), row['user_id'], None, 'Your marketplace listing was '+('approved for platform review and is now visible as reviewed.' if status=='VERIFIED' else 'not approved. You can update the listing and resubmit if appropriate.'), '/marketplace', g.user['id'])
         flash('Provider review saved. Verification is a platform review, not a guarantee of service quality.','success')
         return redirect(url_for('marketplace_review'))
 
@@ -342,6 +359,7 @@ def register(app, db, ctx, login_required, owner_required):
             with db().tx():
                 rid=db().insert('welfare_requests',fund_id=fund_id,chama_id=chama_id,user_id=g.user['id'],amount_cents=amount,reason=reason,status='PENDING',created_at=stamp())
                 audit(db(),g.user['id'],'WELFARE_REQUESTED','welfare_request',rid,chama_id,{'fund_id':fund_id,'amount_cents':amount})
+                N.notify_roles(db(), chama_id, ADMIN_ROLES, 'A member submitted a welfare fund request for review.', f'/chamas/{chama_id}/welfare', g.user['id'])
             flash('Welfare request submitted for review.','success')
         except S.BusinessError as e: flash(str(e),'warning')
         return redirect(url_for('welfare',chama_id=chama_id))
@@ -358,6 +376,7 @@ def register(app, db, ctx, login_required, owner_required):
         with db().tx():
             db().execute("UPDATE welfare_requests SET status=?,decision_note=?,decided_by=?,decided_at=? WHERE id=? AND status='PENDING'",(status,note,g.user['id'],stamp(),request_id))
             audit(db(),g.user['id'],'WELFARE_REQUEST_'+status,'welfare_request',request_id,chama_id,{'fund_id':row['fund_id']})
+            N.notify(db(), row['user_id'], chama_id, 'Your welfare request was '+status.lower()+'.', f'/chamas/{chama_id}/welfare', g.user['id'])
         flash('Request '+status.lower()+'. Approval records the decision but does not transfer money.','success')
         return redirect(url_for('welfare',chama_id=chama_id))
 
@@ -440,7 +459,7 @@ def register(app, db, ctx, login_required, owner_required):
     @login_required
     def collaboration_reply(post_id):
         try:
-            post=db().one("SELECT id FROM collaboration_posts WHERE id=? AND status='ACTIVE' AND visibility='COMMUNITY'",(post_id,))
+            post=db().one("SELECT id,user_id,title,chama_id FROM collaboration_posts WHERE id=? AND status='ACTIVE' AND visibility='COMMUNITY'",(post_id,))
             if not post: abort(404)
             body=respectful_text(request.form.get('body'),'Reply',2,1200)
             parent_reply_id=request.form.get('parent_reply_id',type=int)
@@ -449,6 +468,11 @@ def register(app, db, ctx, login_required, owner_required):
             with db().tx():
                 rid=db().insert('collaboration_replies',post_id=post_id,user_id=g.user['id'],parent_reply_id=parent_reply_id,body=body,status='ACTIVE',created_at=stamp())
                 audit(db(),g.user['id'],'COLLABORATION_REPLY_CREATED','collaboration_reply',rid,None,{'post_id':post_id,'parent_reply_id':parent_reply_id})
+                N.notify(db(), post['user_id'], post['chama_id'], f'Someone replied to your discussion: {post["title"]}.', '/collaboration#post-'+str(post_id), g.user['id'])
+                if parent_reply_id:
+                    parent_author=db().val('SELECT user_id FROM collaboration_replies WHERE id=? AND post_id=?',(parent_reply_id,post_id),None)
+                    if parent_author:
+                        N.notify(db(), parent_author, post['chama_id'], f'Someone replied to your comment on: {post["title"]}.', '/collaboration#post-'+str(post_id), g.user['id'])
             flash('Reply added to the discussion.','success')
         except S.BusinessError as e: flash(str(e),'warning')
         return redirect(url_for('collaboration')+'#post-'+str(post_id))

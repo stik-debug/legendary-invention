@@ -179,6 +179,8 @@ CREATE TABLE IF NOT EXISTS message_reads(
   last_read_id BIGINT NOT NULL DEFAULT 0, UNIQUE(chama_id, user_id));
 CREATE TABLE IF NOT EXISTS notifications(
   id {PK}, user_id INTEGER NOT NULL REFERENCES users(id), chama_id INTEGER, text TEXT NOT NULL, link TEXT, created_at TEXT NOT NULL, read_at TEXT);
+CREATE TABLE IF NOT EXISTS push_subscriptions(
+  id {PK}, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, endpoint TEXT NOT NULL UNIQUE, subscription_json TEXT NOT NULL, created_at TEXT NOT NULL, last_used_at TEXT);
 CREATE TABLE IF NOT EXISTS meetings(
   id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), title TEXT NOT NULL, venue TEXT, held_at TEXT NOT NULL, agenda TEXT, minutes TEXT,
   status TEXT NOT NULL DEFAULT 'SCHEDULED', absent_fine_cents BIGINT NOT NULL DEFAULT 0, created_by INTEGER, created_at TEXT NOT NULL);
@@ -189,6 +191,7 @@ CREATE TABLE IF NOT EXISTS announcements(
   id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), title TEXT NOT NULL, body TEXT NOT NULL, pinned INTEGER NOT NULL DEFAULT 0,
   created_by INTEGER, created_at TEXT NOT NULL, deleted_at TEXT);
 CREATE INDEX IF NOT EXISTS ix_notif_user ON notifications(user_id, read_at, id);
+CREATE INDEX IF NOT EXISTS ix_push_user ON push_subscriptions(user_id);
 CREATE INDEX IF NOT EXISTS ix_meetings_chama ON meetings(chama_id, held_at);
 CREATE INDEX IF NOT EXISTS ix_announce_chama ON announcements(chama_id, id);
 CREATE TABLE IF NOT EXISTS chama_pay_config(

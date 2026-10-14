@@ -9,6 +9,7 @@ import services as S
 import approvals as A
 import features as X
 import json
+import notify as N
 
 PAGE = 25
 FIN, VIEW, FINE = F.FINANCE_ROLES, F.VIEW_ROLES, F.FINE_ROLES
@@ -305,9 +306,15 @@ def register(app, db, ctx, login_required):
     @app.route('/chamas/<int:chama_id>/chat/send', methods=['POST'])
     @login_required
     def chat_send(chama_id):
-        ctx(chama_id)
+        chama, me, sub = ctx(chama_id)
+        body = (request.form.get('body') or '').strip()
         try:
-            F.send_message(db(), chama_id, g.user['id'], request.form.get('body'))
+            F.send_message(db(), chama_id, g.user['id'], body)
+            # A chat message is also an alert for members not currently in this room.
+            # Notify is actor-aware and never sends the author a notification about their own message.
+            N.notify_chama(db(), chama_id, f'{g.user["name"]} sent a new message in {chama["name"]}.',
+                           f'/chamas/{chama_id}/chat', by=g.user['id'])
+            db().commit()
         except S.BusinessError as e:
             flash(str(e), 'warning')
         return redirect(url_for('chat', chama_id=chama_id) + '#end')

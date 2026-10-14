@@ -6,6 +6,44 @@ import smtplib
 import json
 import urllib.request
 from email.message import EmailMessage
+import threading
+
+
+def _deliver_web_push(subscriptions, payload, private_key, subject):
+    """Send Web Push outside the request path; optional credentials keep local/test installs working."""
+    try:
+        from pywebpush import webpush, WebPushException
+    except ImportError:
+        return
+    for subscription in subscriptions:
+        try:
+            webpush(subscription_info=subscription, data=json.dumps(payload), vapid_private_key=private_key,
+                    vapid_claims={"sub": subject})
+        except Exception:
+            # Stale endpoints and provider outages must never break a financial or chama action.
+            continue
+
+
+def _queue_web_push(db, user_id, text, link, notification_id):
+    public_key = os.environ.get('VAPID_PUBLIC_KEY', '').strip()
+    private_key = os.environ.get('VAPID_PRIVATE_KEY', '').strip()
+    if not public_key or not private_key:
+        return
+    try:
+        pref = db.one('SELECT push FROM notification_preferences WHERE user_id=?', (user_id,))
+        if pref is not None and not int(pref.get('push', 1)):
+            return
+        rows = db.all('SELECT subscription_json FROM push_subscriptions WHERE user_id=?', (user_id,))
+        subscriptions = [json.loads(row['subscription_json']) for row in rows]
+        if not subscriptions:
+            return
+        payload = {'title': 'ChamaPay', 'body': (text or 'You have a new update.')[:180],
+                   'url': link if isinstance(link, str) and link.startswith('/') and not link.startswith('//') else '/notifications',
+                   'notification_id': notification_id}
+        threading.Thread(target=_deliver_web_push, args=(subscriptions, payload, private_key,
+            os.environ.get('VAPID_CLAIMS_SUBJECT', 'mailto:support@chamapay.app')), daemon=True).start()
+    except Exception:
+        return
 
 
 def _queue_sms(db, user_id, text, now=None, dedupe_key=None):
@@ -36,6 +74,7 @@ def notify(db, user_id, chama_id, text, link=None, by=None, now=None):
         return None
     nid = db.insert('notifications', user_id=user_id, chama_id=chama_id, text=(text or '')[:240], link=link, created_at=iso(now or now_utc()))
     _queue_sms(db, user_id, text, now, f'notification:{nid}')
+    _queue_web_push(db, user_id, text, link, nid)
     return nid
 
 
