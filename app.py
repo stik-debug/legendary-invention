@@ -642,9 +642,10 @@ def create_app(overrides=None):
         pays = db().all('SELECT * FROM payments WHERE chama_id=? ORDER BY id DESC LIMIT 20', (chama_id,))
         members = S.active_member_count(db(), chama_id)
         value_report = S.subscription_value_report(db(), chama_id)
-        return render_template('subscription.html', chama=chama, me=me, sub=sub, plan=S.get_plan(db(), sub['plan_id']), plans=plans, pays=pays,
+        plan = S.get_plan(db(), sub['plan_id'])
+        return render_template('subscription.html', chama=chama, me=me, sub=sub, plan=plan, plans=plans, pays=pays,
                                members=members, member_price=S.setting(db(), 'price_per_member_cents', S.DEFAULT_MEMBER_PRICE_CENTS),
-                               monthly_cost=members * S.setting(db(), 'price_per_member_cents', S.DEFAULT_MEMBER_PRICE_CENTS),
+                               monthly_cost=int(plan['price_cents']),
                                value_report=value_report, provider=app.config['PROVIDER'], dev=(app.config['PROVIDER'] and app.config['PROVIDER'].name == 'TEST'),
                                can_pay=me['role'] in ('CHAMA_ADMIN', 'TREASURER'), active=sub['status'] in S.ACCESS_OK, trial_days=S.setting(db(), 'trial_days', 30))
 
@@ -861,7 +862,7 @@ def create_app(overrides=None):
                     current_plan = S.get_plan(db(), int(f.get('plan_id')))
                     if not current_plan:
                         raise S.BusinessError('Plan not found.')
-                    # Legacy price values preserve tier ordering only; actual billing is per active member.
+                    # Each tier has one fixed monthly price paid by the chama as a group.
                     S.update_plan(db(), int(f.get('plan_id')), f.get('name'), current_plan['price_cents'] / 100, f.get('max_members'), f.get('is_active') == '1', g.user['id'])
                 flash('Saved.', 'success')
             except (S.BusinessError, ValueError, TypeError) as e:

@@ -33,7 +33,7 @@ Financial actions remain server-authorized and M-Pesa integration is not expande
 | Multi-tenant isolation | Built, tested | Chama A user gets 403 on Chama B pages and actions |
 | Chama create, members add/remove | Built, tested | Add by name + phone number. New people get an 8-digit join code to claim their account. Removal keeps history |
 | Invitations by link | NOT built | Join codes work today (admin adds a phone number, gives the person an 8-digit code) |
-| Plans Starter 500/20, Growth 1,500/70, Pro 2,000/100 (KES per month) | Built, tested | In the database, editable by the owner. Per chama, never per member |
+| Plans Starter 500/20, Growth 1,500/70, Pro 2,000/100 (KES per month) | Built, tested | In the database, editable by the owner. Paid once by the chama, never individually by members |
 | Member limit (21st, 71st, 101st rejected) | Built, tested | Enforced in the backend, race-safe on PostgreSQL |
 | Upgrade / downgrade | Built, tested | Upgrade = pay. Downgrade blocked if members do not fit. Nobody is auto-removed |
 | Subscription states TRIAL, ACTIVE, PAST_DUE, GRACE_PERIOD, SUSPENDED, CANCELLED | Built, tested | 7-day trial and 3-day grace, both editable |

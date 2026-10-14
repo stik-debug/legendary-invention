@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from db import IntegrityError, audit
 
 ACCESS_OK = {'TRIAL', 'ACTIVE', 'PAST_DUE', 'GRACE_PERIOD'}
-DEFAULT_MEMBER_PRICE_CENTS = 2500  # KSh 25 per active member per 30-day billing period
+DEFAULT_MEMBER_PRICE_CENTS = 2500  # Legacy setting retained for old databases; billing uses the selected chama tier price.
 ROLES = ('CHAMA_ADMIN', 'TREASURER', 'SECRETARY', 'MEMBER')
 PAYMENT_DONE = {'SUCCESS', 'FAILED', 'CANCELLED', 'TIMEOUT'}
 
@@ -233,7 +233,7 @@ def subscription_value_report(db, chama_id, now=None):
     paid_cents = int(db.val("SELECT COALESCE(SUM(amount_cents),0) FROM contributions WHERE chama_id=? AND status='PAID' AND created_at>=?", (chama_id, month_start), 0) or 0)
     return {'month_start': month_start, 'active_members': members, 'contributions_recorded': contributions,
             'ledger_entries': ledger_entries, 'meetings_logged': meetings, 'loans_tracked': approved_loans,
-            'contribution_value_cents': paid_cents, 'monthly_cost_cents': members * setting(db, 'price_per_member_cents', DEFAULT_MEMBER_PRICE_CENTS)}
+            'contribution_value_cents': paid_cents, 'monthly_cost_cents': int((db.one('SELECT p.price_cents FROM subscriptions s JOIN subscription_plans p ON p.id=s.plan_id WHERE s.chama_id=?', (chama_id,)) or {}).get('price_cents', 0))}
 
 
 def subscription_nudges(db, now=None):
@@ -285,13 +285,14 @@ def create_payment(db, chama_id, plan_id, months, method, provider, phone, actor
     if count > plan['max_members']:
         raise PlanLimitError(f'This chama has {count} members, more than the {plan["name"]} limit of {plan["max_members"]}.')
     days = setting(db, 'billing_period_days', 30) * months
-    member_price = setting(db, 'price_per_member_cents', DEFAULT_MEMBER_PRICE_CENTS)
-    amount_cents = member_price * count * months
+    # The chama pays one fixed tier price for the whole group; members are never billed individually.
+    tier_monthly_cents = int(plan['price_cents'])
+    amount_cents = tier_monthly_cents * months
     with db.tx():
         pid = db.insert('payments', chama_id=chama_id, plan_id=plan['id'], amount_cents=amount_cents, period_days=days,
                         method=method, provider=provider, status='PENDING', phone=phone, reference=reference, notes=notes,
                         created_by=actor_id, created_at=iso(now), is_test_data=int(is_test))
-        audit(db, actor_id, 'PAYMENT_CREATED', 'payment', pid, chama_id, {'amount_cents': amount_cents, 'method': method, 'active_members': count, 'price_per_member_cents': member_price, 'months': months})
+        audit(db, actor_id, 'PAYMENT_CREATED', 'payment', pid, chama_id, {'amount_cents': amount_cents, 'method': method, 'active_members': count, 'tier_monthly_cents': tier_monthly_cents, 'plan_code': plan['code'], 'months': months})
     return pid
 
 

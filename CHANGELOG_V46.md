@@ -1,7 +1,7 @@
 # ChamaPay v46 — Trial Conversion and Member-Based Subscription
 
 ## Subscription pricing
-- Public and in-app pricing now communicates KSh 25 per active member per 30-day billing period.
+- Pricing is tier-based and paid once by the whole chama: KSh 500 for up to 20 members, KSh 1,500 for up to 70, or KSh 2,000 for up to 100 per month.
 - Payment totals are calculated from the active member count, selected capacity plan, and selected number of months.
 - Capacity plans continue to limit group size; legacy plan price fields are retained internally for safe compatibility and do not set the amount charged.
 - New trials default to 30 days. Existing subscription trial/due timestamps are not rewritten by the migration.
