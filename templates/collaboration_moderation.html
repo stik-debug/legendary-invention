@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block title %}Community Moderation{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Community moderation</h1><p>Review member reports and hide rule-breaking content. Hidden content remains in the database for audit purposes.</p></div><a class="btn" href="{{ url_for('collaboration') }}">Back to community</a></div>
+{% for r in reports %}<article class="card"><p><span class="pill">{{ r.reason }}</span> Reported by {{ r.reporter }} · {{ r.created_at }}</p><h2>{{ r.title }}</h2><p>Post author: {{ r.post_author }}{% if r.reply_author %} · Reply author: {{ r.reply_author }}{% endif %}</p>{% if r.details %}<p>{{ r.details }}</p>{% endif %}<div style="display:flex;gap:8px;flex-wrap:wrap"><form method="post" action="{{ url_for('collaboration_moderation_action',report_id=r.id,action='hide') }}">{{ csrf_input() }}<button class="btn danger" type="submit">Hide reported content</button></form><form method="post" action="{{ url_for('collaboration_moderation_action',report_id=r.id,action='dismiss') }}">{{ csrf_input() }}<button class="btn" type="submit">Dismiss report</button></form></div></article>{% else %}<div class="card"><h3>No open reports</h3><p>There are no community reports awaiting review.</p></div>{% endfor %}
+{% endblock %}

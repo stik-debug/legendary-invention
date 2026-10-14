@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block title %}Edit Discussion{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Edit your discussion</h1><p>Update your post while keeping the conversation respectful. The edit is recorded for accountability.</p></div><a class="btn" href="{{ url_for('collaboration') }}#post-{{ post.id }}">Cancel</a></div>
+<div class="card"><form method="post" action="{{ url_for('collaboration_post_edit',post_id=post.id) }}">{{ csrf_input() }}<label>Post type<select name="kind">{% for k in kinds %}<option value="{{ k }}" {% if k==post.kind %}selected{% endif %}>{{ k|title }}</option>{% endfor %}</select></label><label>Title<input name="title" required minlength="3" maxlength="120" value="{{ post.title }}"></label><label>Details<textarea name="body" required minlength="10" maxlength="1800">{{ post.body }}</textarea></label><label>County / area<input name="county" maxlength="100" value="{{ post.county or '' }}"></label><p class="mute">Community guidelines and language checks still apply when editing.</p><button class="btn pri" type="submit">Save changes</button></form></div>
+{% endblock %}
