@@ -278,3 +278,6 @@ For recovery, validate backups and run `python restore_drill.py <backup.json.gz>
 ## v45 — Marketplace, welfare and collaboration
 
 See `CHANGELOG_V45.md` for the three new community modules and their safety boundaries. Provider submissions require review before public listing; welfare decisions do not move money; collaboration posts should contain no confidential member data.
+## v47 — Community discussions and moderation
+
+All signed-in users can start community discussions and reply. Common profanity and obvious spam patterns are blocked server-side, and members can report posts or replies for owner review. See `CHANGELOG_V47.md`.

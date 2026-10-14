@@ -2,6 +2,7 @@
 All workflows are record-keeping only; they do not move money or certify providers automatically.
 """
 from datetime import datetime, timezone
+import re
 from flask import abort, flash, g, redirect, render_template, request, url_for
 import finance as F
 import services as S
@@ -10,6 +11,16 @@ from db import audit
 ADMIN_ROLES = ('CHAMA_ADMIN', 'TREASURER', 'SECRETARY')
 CATEGORIES = ('Bookkeeping', 'Legal support', 'Insurance', 'Training', 'Financial education', 'Other')
 POST_KINDS = ('DISCUSSION', 'TEMPLATE', 'EVENT', 'PROJECT')
+# Starter profanity filter, backed up by community reporting and moderator review.
+PROFANITY = re.compile(r'(?i)(?<![a-z0-9])(?:fuck(?:er|ing|ed|s)?|shit(?:ty|ting|s)?|bitch(?:es)?|asshole(?:s)?|motherfucker|cunt(?:s)?|bastard(?:s)?|dickhead(?:s)?|nigger(?:s)?|faggot(?:s)?|pussy|whore(?:s)?|slut(?:s)?)(?![a-z0-9])')
+
+def respectful_text(value, label, minimum, maximum):
+    value=clean(value,label,minimum,maximum)
+    if PROFANITY.search(value):
+        raise S.BusinessError(f'{label} contains language that is not allowed. Please rewrite it respectfully.')
+    if re.search(r'(.)\1{9,}', value):
+        raise S.BusinessError(f'{label} looks like spam. Please write a clear message.')
+    return value
 
 def stamp():
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
@@ -158,7 +169,9 @@ def register(app, db, ctx, login_required, owner_required):
     @app.route('/collaboration')
     @login_required
     def collaboration():
-        rows=db().all("SELECT p.*,u.name author,c.name chama FROM collaboration_posts p JOIN users u ON u.id=p.user_id LEFT JOIN chamas c ON c.id=p.chama_id WHERE p.status='ACTIVE' AND p.visibility='COMMUNITY' ORDER BY p.id DESC LIMIT 100")
+        rows=db().all("SELECT p.*,u.name author,c.name chama,(SELECT COUNT(*) FROM collaboration_replies r WHERE r.post_id=p.id AND r.status='ACTIVE') reply_count FROM collaboration_posts p JOIN users u ON u.id=p.user_id LEFT JOIN chamas c ON c.id=p.chama_id WHERE p.status='ACTIVE' AND p.visibility='COMMUNITY' ORDER BY p.id DESC LIMIT 100")
+        for p in rows:
+            p['replies']=db().all("SELECT r.*,u.name author FROM collaboration_replies r JOIN users u ON u.id=r.user_id WHERE r.post_id=? AND r.status='ACTIVE' ORDER BY r.id ASC LIMIT 100",(p['id'],))
         return render_template('collaboration.html',rows=rows,kinds=POST_KINDS)
 
     @app.route('/collaboration/post',methods=['POST'])
@@ -167,13 +180,103 @@ def register(app, db, ctx, login_required, owner_required):
         try:
             kind=request.form.get('kind','DISCUSSION')
             if kind not in POST_KINDS: raise S.BusinessError('Choose a valid post type.')
-            title=clean(request.form.get('title'),'Title',3,120); body=clean(request.form.get('body'),'Details',10,1800)
+            title=respectful_text(request.form.get('title'),'Title',3,120)
+            body=respectful_text(request.form.get('body'),'Details',10,1800)
             chama_id=request.form.get('chama_id',type=int)
             if chama_id: ctx(chama_id,roles=ADMIN_ROLES)
             county=(request.form.get('county') or '').strip()[:100] or None
             with db().tx():
                 pid=db().insert('collaboration_posts',chama_id=chama_id,user_id=g.user['id'],kind=kind,title=title,body=body,county=county,visibility='COMMUNITY',status='ACTIVE',created_at=stamp())
                 audit(db(),g.user['id'],'COLLABORATION_POST_CREATED','collaboration_post',pid,chama_id,{'kind':kind})
-            flash('Shared with the ChamaPro community. Do not include private member financial or personal information.','success')
+            flash('Your post is live. Keep the discussion respectful and protect private information.','success')
         except S.BusinessError as e: flash(str(e),'warning')
         return redirect(url_for('collaboration'))
+
+    @app.route('/collaboration/<int:post_id>/edit',methods=['GET','POST'])
+    @login_required
+    def collaboration_post_edit(post_id):
+        post=db().one("SELECT * FROM collaboration_posts WHERE id=? AND user_id=? AND status='ACTIVE' AND visibility='COMMUNITY'",(post_id,g.user['id']))
+        if not post:
+            # Do not disclose whether another user's post exists.
+            abort(404)
+        if request.method == 'POST':
+            try:
+                kind=request.form.get('kind',post['kind'])
+                if kind not in POST_KINDS: raise S.BusinessError('Choose a valid post type.')
+                title=respectful_text(request.form.get('title'),'Title',3,120)
+                body=respectful_text(request.form.get('body'),'Details',10,1800)
+                county=(request.form.get('county') or '').strip()[:100] or None
+                with db().tx():
+                    db().execute("UPDATE collaboration_posts SET kind=?,title=?,body=?,county=? WHERE id=? AND user_id=? AND status='ACTIVE'",(kind,title,body,county,post_id,g.user['id']))
+                    audit(db(),g.user['id'],'COLLABORATION_POST_EDITED','collaboration_post',post_id,post['chama_id'],{'kind':kind})
+                flash('Your discussion was updated.','success')
+                return redirect(url_for('collaboration')+'#post-'+str(post_id))
+            except S.BusinessError as e:
+                flash(str(e),'warning')
+        return render_template('collaboration_edit.html',post=post,kinds=POST_KINDS)
+
+    @app.route('/collaboration/<int:post_id>/delete',methods=['POST'])
+    @login_required
+    def collaboration_post_delete(post_id):
+        post=db().one("SELECT * FROM collaboration_posts WHERE id=? AND user_id=? AND status='ACTIVE' AND visibility='COMMUNITY'",(post_id,g.user['id']))
+        if not post: abort(404)
+        with db().tx():
+            # Soft-delete: preserve the original post and replies for audit/moderation history.
+            db().execute("UPDATE collaboration_posts SET status='DELETED' WHERE id=? AND user_id=? AND status='ACTIVE'",(post_id,g.user['id']))
+            audit(db(),g.user['id'],'COLLABORATION_POST_DELETED','collaboration_post',post_id,post['chama_id'],{'title':post['title']})
+        flash('Your discussion was removed. Its history is retained securely for moderation and audit purposes.','success')
+        return redirect(url_for('collaboration'))
+
+    @app.route('/collaboration/<int:post_id>/reply',methods=['POST'])
+    @login_required
+    def collaboration_reply(post_id):
+        try:
+            post=db().one("SELECT id FROM collaboration_posts WHERE id=? AND status='ACTIVE' AND visibility='COMMUNITY'",(post_id,))
+            if not post: abort(404)
+            body=respectful_text(request.form.get('body'),'Reply',2,1200)
+            with db().tx():
+                rid=db().insert('collaboration_replies',post_id=post_id,user_id=g.user['id'],body=body,status='ACTIVE',created_at=stamp())
+                audit(db(),g.user['id'],'COLLABORATION_REPLY_CREATED','collaboration_reply',rid,None,{'post_id':post_id})
+            flash('Reply added to the discussion.','success')
+        except S.BusinessError as e: flash(str(e),'warning')
+        return redirect(url_for('collaboration')+'#post-'+str(post_id))
+
+    @app.route('/collaboration/<int:post_id>/report',methods=['POST'])
+    @login_required
+    def collaboration_report(post_id):
+        post=db().one("SELECT id FROM collaboration_posts WHERE id=? AND status='ACTIVE' AND visibility='COMMUNITY'",(post_id,))
+        if not post: abort(404)
+        reply_id=request.form.get('reply_id',type=int)
+        if reply_id and not db().one("SELECT id FROM collaboration_replies WHERE id=? AND post_id=? AND status='ACTIVE'",(reply_id,post_id)): abort(404)
+        reason=request.form.get('reason','OTHER')
+        allowed=('ABUSIVE','PROFANITY','SPAM','PRIVATE_INFO','HARASSMENT','OTHER')
+        if reason not in allowed: reason='OTHER'
+        details=(request.form.get('details') or '').strip()[:500] or None
+        with db().tx():
+            db().insert('collaboration_reports',post_id=post_id,reply_id=reply_id,reporter_id=g.user['id'],reason=reason,details=details,status='OPEN',created_at=stamp())
+            audit(db(),g.user['id'],'COLLABORATION_CONTENT_REPORTED','collaboration_post',post_id,None,{'reply_id':reply_id,'reason':reason})
+        flash('Report sent to the moderation queue. Thank you for helping keep the community safe.','success')
+        return redirect(url_for('collaboration')+'#post-'+str(post_id))
+
+    @app.route('/owner/community-moderation')
+    @owner_required
+    def collaboration_moderation():
+        reports=db().all("SELECT r.*,p.title,u.name reporter,pu.name post_author,ru.name reply_author FROM collaboration_reports r JOIN collaboration_posts p ON p.id=r.post_id JOIN users u ON u.id=r.reporter_id JOIN users pu ON pu.id=p.user_id LEFT JOIN collaboration_replies rr ON rr.id=r.reply_id LEFT JOIN users ru ON ru.id=rr.user_id WHERE r.status='OPEN' ORDER BY r.id ASC LIMIT 200")
+        return render_template('collaboration_moderation.html',reports=reports)
+
+    @app.route('/owner/community-moderation/<int:report_id>/<action>',methods=['POST'])
+    @owner_required
+    def collaboration_moderation_action(report_id,action):
+        if action not in ('dismiss','hide'): abort(404)
+        report=db().one("SELECT * FROM collaboration_reports WHERE id=? AND status='OPEN'",(report_id,))
+        if not report: abort(404)
+        with db().tx():
+            if action=='hide':
+                if report['reply_id']:
+                    db().execute("UPDATE collaboration_replies SET status='HIDDEN' WHERE id=?",(report['reply_id'],))
+                else:
+                    db().execute("UPDATE collaboration_posts SET status='HIDDEN' WHERE id=?",(report['post_id'],))
+            db().execute("UPDATE collaboration_reports SET status=?,reviewed_by=?,reviewed_at=? WHERE id=?",('DISMISSED' if action=='dismiss' else 'ACTIONED',g.user['id'],stamp(),report_id))
+            audit(db(),g.user['id'],'COLLABORATION_REPORT_'+action.upper(),'collaboration_report',report_id,None,{'post_id':report['post_id'],'reply_id':report['reply_id']})
+        flash('Moderation decision saved. Hidden content remains in the database for audit purposes.','success')
+        return redirect(url_for('collaboration_moderation'))
