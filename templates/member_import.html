@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Import members · {{ chama.name }}{% endblock %}
 {% block content %}
-<div class="head"><div><h2>Import member list</h2><p class="mute">{{ chama.name }} · move an existing list into ChamaPro without retyping every member.</p></div><a class="btn" href="{{ url_for('chama_home', chama_id=chama.id) }}">Back to Chama</a></div>
+<div class="head"><div><h2>Import member list</h2><p class="mute">{{ chama.name }} · move an existing list into ChamaPay without retyping every member.</p></div><a class="btn" href="{{ url_for('chama_home', chama_id=chama.id) }}">Back to Chama</a></div>
 {% include '_chama_nav.html' %}
 <div class="card"><h3>1. Upload or paste a CSV</h3><p>Required columns: <code>name,phone</code>. Optional column: <code>role</code>. Phone numbers should be Kenyan numbers. Use one row per member. Up to 100 rows per import.</p><p class="mute">This imports membership only. It does not create contributions, opening balances, loans, or payment records. Import financial history separately only after it has been checked against statements.</p>
 <form method="post" enctype="multipart/form-data">{{ csrf_input() }}

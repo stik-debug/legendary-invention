@@ -1,8 +1,8 @@
-{% extends "base.html" %}{% block title %}Discover chamas · ChamaPro{% endblock %}
+{% extends "base.html" %}{% block title %}Discover chamas · ChamaPay{% endblock %}
 {% block content %}
 <div class="head"><div><h2>Discover chamas</h2><p>Explore groups that have chosen to be publicly listed. A request never grants access automatically.</p></div></div>
 <div class="grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
-{% for c in rows %}<div class="card"><h3>{{ c.name }}</h3>{% if c.tagline %}<p><b>{{ c.tagline }}</b></p>{% endif %}<p class="mute">{{ c.description or 'A community savings group on ChamaPro.' }}</p><p><b>{{ c.members }}</b> active members</p>
+{% for c in rows %}<div class="card"><h3>{{ c.name }}</h3>{% if c.tagline %}<p><b>{{ c.tagline }}</b></p>{% endif %}<p class="mute">{{ c.description or 'A community savings group on ChamaPay.' }}</p><p><b>{{ c.members }}</b> active members</p>
 {% if g.user %}<form method="post" action="{{ url_for('request_to_join_discovered_chama',chama_id=c.id) }}">{{ csrf_input() }}<div class="field"><label>Message to the chama admin (optional)</label><textarea name="message" maxlength="500" rows="2" placeholder="Introduce yourself"></textarea></div><button class="btn pri">Request to join</button></form>{% else %}<a class="btn pri" href="{{ url_for('login',next='/discover') }}">Sign in to request to join</a>{% endif %}</div>
 {% else %}<div class="card"><h3>No public chamas yet</h3><p class="mute">Chama admins can opt in to appear here from their chama's discovery settings. Private groups remain hidden.</p></div>{% endfor %}
 </div>{% endblock %}
