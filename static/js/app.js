@@ -216,3 +216,76 @@ if(!still&&window.matchMedia('(hover:hover)').matches){
     }
   },true);
 })();
+
+
+// App-wide live alerts: a toast while the app is open, native notification when backgrounded.
+(function(){
+  var root = document.getElementById('chamapay-notification-root');
+  if (root && root.getAttribute('data-poll-url')) {
+    var url = root.getAttribute('data-poll-url');
+    var last = parseInt(root.getAttribute('data-last-id') || '0', 10) || 0;
+    var busy = false;
+    function toast(item) {
+      var host = document.getElementById('chamapay-toast-stack');
+      if (!host) { host = document.createElement('div'); host.id = 'chamapay-toast-stack'; host.className = 'chamapay-toast-stack'; host.setAttribute('aria-live','polite'); host.setAttribute('aria-relevant','additions'); document.body.appendChild(host); }
+      var a = document.createElement('a'); a.className = 'chamapay-toast';
+      var href = item.link;
+      a.href = (typeof href === 'string' && href.charAt(0) === '/' && href.indexOf('//') !== 0) ? href : '/notifications';
+      var icon = document.createElement('span'); icon.className = 'chamapay-toast-icon'; icon.textContent = '●';
+      var copy = document.createElement('span'); copy.className = 'chamapay-toast-copy';
+      var strong = document.createElement('strong'); strong.textContent = item.chama || 'ChamaPay update';
+      var body = document.createElement('span'); body.textContent = item.text || 'You have a new update.';
+      copy.appendChild(strong); copy.appendChild(body); a.appendChild(icon); a.appendChild(copy);
+      var close = document.createElement('button'); close.type = 'button'; close.className = 'chamapay-toast-close'; close.setAttribute('aria-label','Dismiss notification'); close.textContent = '×';
+      close.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); a.remove(); }); a.appendChild(close); host.appendChild(a);
+      window.setTimeout(function(){ if (a.parentNode) a.classList.add('is-leaving'); window.setTimeout(function(){ if (a.parentNode) a.remove(); }, 350); }, 8000);
+    }
+    function poll() {
+      if (busy || !navigator.onLine) return; busy = true;
+      fetch(url + '?after=' + encodeURIComponent(last), {credentials:'same-origin',headers:{'Accept':'application/json','Cache-Control':'no-store'}})
+        .then(function(r){ if (r.status === 401 || r.redirected) return null; return r.ok ? r.json() : null; })
+        .then(function(data){ if (!data || !Array.isArray(data.notifications)) return;
+          data.notifications.forEach(function(n){ last = Math.max(last, Number(n.id)||0);
+            if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+              try { var note = new Notification(n.chama || 'ChamaPay update', {body:n.text || 'You have a new update.',icon:'/static/icons/icon-192.png',tag:'chamapay-' + n.id}); note.onclick = function(){ window.focus(); window.location.assign((n.link && n.link.charAt(0)==='/' && n.link.indexOf('//')!==0) ? n.link : '/notifications'); }; } catch(_) { toast(n); }
+            } else { toast(n); }
+          });
+        }).catch(function(){}).then(function(){ busy = false; });
+    }
+    window.setInterval(poll, 7000); document.addEventListener('visibilitychange', function(){ if (!document.hidden) poll(); });
+  }
+
+  // Existing one-request success/warning/error flashes are also surfaced as a short popup.
+  document.querySelectorAll('.flash').forEach(function(flash){
+    var text = (flash.textContent || '').trim(); if (!text || flash.dataset.popupShown === '1') return;
+    flash.dataset.popupShown = '1';
+    var host = document.getElementById('chamapay-toast-stack');
+    if (!host) { host = document.createElement('div'); host.id = 'chamapay-toast-stack'; host.className = 'chamapay-toast-stack'; host.setAttribute('aria-live','polite'); document.body.appendChild(host); }
+    var a = document.createElement('div'); a.className = 'chamapay-toast'; a.setAttribute('role','status');
+    var icon = document.createElement('span'); icon.className = 'chamapay-toast-icon'; icon.textContent = flash.classList.contains('danger') ? '!' : '✓';
+    var copy = document.createElement('span'); copy.className = 'chamapay-toast-copy';
+    var strong = document.createElement('strong'); strong.textContent = 'ChamaPay update';
+    var body = document.createElement('span'); body.textContent = text;
+    copy.appendChild(strong); copy.appendChild(body); a.appendChild(icon); a.appendChild(copy); host.appendChild(a);
+    window.setTimeout(function(){ if(a.parentNode)a.classList.add('is-leaving'); window.setTimeout(function(){if(a.parentNode)a.remove();},350); },6500);
+  });
+
+  var button = document.getElementById('enable-push'), status = document.getElementById('push-status');
+  if (!button) return;
+  function say(s){ if(status) status.textContent=s; }
+  function decodeKey(base64) { var pad='='.repeat((4-base64.length%4)%4); var raw=atob((base64+pad).replace(/-/g,'+').replace(/_/g,'/')); var out=new Uint8Array(raw.length); for(var i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i); return out; }
+  button.addEventListener('click', function(){
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) { say('This browser does not support push notifications. On-screen alerts still work while ChamaPay is open.'); return; }
+    var key = document.querySelector('meta[name="vapid-public-key"]'); var publicKey = key && key.content;
+    if (!publicKey) { say('Server push is not configured yet. Ask the ChamaPay administrator to configure VAPID keys.'); return; }
+    button.disabled = true; say('Requesting permission…');
+    Notification.requestPermission().then(function(permission){
+      if(permission !== 'granted') throw new Error('Notification permission was not granted. You can change this in browser settings.');
+      return navigator.serviceWorker.ready;
+    }).then(function(reg){ return reg.pushManager.getSubscription().then(function(existing){ return existing || reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:decodeKey(publicKey)}); }); })
+      .then(function(subscription){ return fetch('/api/push/subscribe',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':(document.querySelector('meta[name="csrf-token"]')||{}).content||''},body:JSON.stringify({subscription:subscription.toJSON()})}); })
+      .then(function(r){ return r.json().then(function(j){ if(!r.ok || !j.ok) throw new Error(j.error || 'Could not enable push notifications.'); return j; }); })
+      .then(function(){ say('Device notifications are enabled on this browser.'); button.textContent='Notifications enabled'; })
+      .catch(function(e){ say(e.message || 'Could not enable notifications.'); }).then(function(){ button.disabled=false; });
+  });
+})();
