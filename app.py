@@ -614,7 +614,7 @@ def create_app(overrides=None):
         from datetime import datetime, timezone
         from flask import Response
         buffer = io.BytesIO()
-        manifest = [f'ChamaPro financial audit pack', f'Chama: {chama["name"]}', f'Chama ID: {chama_id}',
+        manifest = [f'ChamaPay financial audit pack', f'Chama: {chama["name"]}', f'Chama ID: {chama_id}',
                     f'Generated UTC: {datetime.now(timezone.utc).isoformat()}',
                     '', 'This pack is an export of application records, not an independent bank audit. Verify balances against external statements.']
         with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as archive:
@@ -632,7 +632,7 @@ def create_app(overrides=None):
             archive.writestr('audit-log.csv', F.to_csv(['Actor user ID','Action','Entity type','Entity ID','Metadata','Created at'],
                 [[r.get('actor_id'),r.get('action'),r.get('entity_type'),r.get('entity_id'),r.get('metadata'),r.get('created_at')] for r in logs]))
         buffer.seek(0)
-        return Response(buffer.getvalue(), mimetype='application/zip', headers={'Content-Disposition': f'attachment; filename=chamapro-audit-pack-{chama_id}.zip', 'Cache-Control':'no-store'})
+        return Response(buffer.getvalue(), mimetype='application/zip', headers={'Content-Disposition': f'attachment; filename=chamapay-audit-pack-{chama_id}.zip', 'Cache-Control':'no-store'})
 
     @app.route('/chamas/<int:chama_id>/subscription')
     @login_required
@@ -691,7 +691,7 @@ def create_app(overrides=None):
         detail = (request.form.get('detail') or '').strip()[:500]
         allowed = {'PRICE', 'NOT_ENOUGH_VALUE', 'TOO_COMPLEX', 'PAYMENT_DIFFICULTY', 'GROUP_INACTIVE', 'OTHER'}
         if reason not in allowed:
-            flash('Choose a reason so we can improve ChamaPro.', 'warning')
+            flash('Choose a reason so we can improve ChamaPay.', 'warning')
         else:
             audit(db(), g.user['id'], 'SUBSCRIPTION_FEEDBACK', 'subscription', sub['id'], chama_id,
                   {'reason': reason, 'detail': detail})

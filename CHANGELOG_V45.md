@@ -1,4 +1,4 @@
-# ChamaPro v45 — Marketplace, Welfare and Collaboration
+# ChamaPay v45 — Marketplace, Welfare and Collaboration
 
 This release adds three community-facing modules on top of v44:
 

@@ -1,4 +1,4 @@
-# ChamaPro monthly subscription pricing
+# ChamaPay monthly subscription pricing
 
 | Plan | Monthly price | Maximum members |
 |---|---:|---:|

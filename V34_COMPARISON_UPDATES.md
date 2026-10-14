@@ -1,4 +1,4 @@
-# ChamaPro v34 — Comparison follow-up
+# ChamaPay v34 — Comparison follow-up
 
 This release builds on v33 and adds two opt-in/official tools without replacing existing merry-go-round, savings, loan, or subscription flows.
 

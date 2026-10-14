@@ -1,4 +1,4 @@
-# ChamaPro v40 — Strategy, Trust & Continuity
+# ChamaPay v40 — Strategy, Trust & Continuity
 
 Built on the v39 source archive. This release is additive; it does not delete existing financial or membership records and does not add new mobile-money integration.
 
@@ -7,7 +7,7 @@ Built on the v39 source archive. This release is additive; it does not delete ex
 - **Saved scenarios:** authorised officials can save named scenario assumptions and results. A saved scenario can be attached to a new vote/proposal so members can consider it during voting.
 - **Fairness & consistency review:** flags repeated paid contribution entries in one member-period, concentrated outstanding borrowing and varying fine amounts for similar recorded reasons. Flags are prompts for human review, not fraud findings.
 - **Promise Tracker:** central view of meeting commitments with owner, due date, overdue state and completion. Reuses existing meeting-action records rather than creating duplicate tasks.
-- **Chama Financial Passport:** staff can export a summary PDF with a QR code and signed verification URL. Public verification confirms that the report snapshot originated from this ChamaPro installation and was not altered; it is not an independent audit, bank confirmation or credit rating.
+- **Chama Financial Passport:** staff can export a summary PDF with a QR code and signed verification URL. Public verification confirms that the report snapshot originated from this ChamaPay installation and was not altered; it is not an independent audit, bank confirmation or credit rating.
 - **Continuity Vault:** staff can export a read-only ZIP snapshot with group records, financial totals, active-member roles, outstanding loans, rules/history, goals, assets, investments, open commitments and recent audit events. It excludes passwords, OTPs and session tokens.
 - **Formal handover:** authorised officials can nominate an active member as successor; the nominee can inspect the continuity package and acknowledge receipt. This records the handover but does not automatically change permissions or certify every record.
 - **Living Constitution history:** before each rules update, the previous rules are saved as a versioned snapshot. Server-side validation now rejects invalid ranges before writing changes.

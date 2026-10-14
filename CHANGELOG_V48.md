@@ -1,4 +1,4 @@
-# ChamaPro v48 — Community post ownership controls
+# ChamaPay v48 — Community post ownership controls
 
 - Original poster can edit their own active community post. The edit form validates title/body using the existing respectful-language and spam checks.
 - Original poster can remove their own active community post. Removal is a soft delete (`status='DELETED'`); the row, replies, and audit history are retained.

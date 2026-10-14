@@ -221,8 +221,9 @@ def register(app, db, ctx, login_required, owner_required):
             (SELECT ROUND(AVG(r.rating),1) FROM marketplace_reviews r WHERE r.provider_id=p.id AND r.status='PUBLISHED') average_rating,
             (SELECT COUNT(*) FROM marketplace_reviews r WHERE r.provider_id=p.id AND r.status='PUBLISHED') review_count
             FROM marketplace_quotes x JOIN marketplace_providers p ON p.id=x.provider_id
-            WHERE x.request_id IN (SELECT id FROM marketplace_quote_requests WHERE comparison_key=?) OR ( ? IS NULL AND x.request_id=?)
-            ORDER BY x.amount_cents ASC,x.id ASC""",(req['comparison_key'],req['comparison_key'],request_id))
+            WHERE (x.request_id IN (SELECT id FROM marketplace_quote_requests WHERE comparison_key=?) OR ( ? IS NULL AND x.request_id=?))
+              AND (? = 1 OR p.user_id = ?)
+            ORDER BY x.amount_cents ASC,x.id ASC""",(req['comparison_key'],req['comparison_key'],request_id,1 if is_requester else 0,g.user['id']))
         return render_template('marketplace_compare.html',req=req,quotes=quotes,is_requester=is_requester)
 
     @app.route('/marketplace/quote-requests/<int:request_id>/accept/<int:quote_id>', methods=['POST'])

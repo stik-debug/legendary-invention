@@ -1,4 +1,4 @@
-# ChamaPro v41 — Pricing and sign-in reliability correction
+# ChamaPay v41 — Pricing and sign-in reliability correction
 
 This is a conservative update to the uploaded v40 strategy-and-continuity source. It preserves existing modules and records and adds no new payment integration.
 

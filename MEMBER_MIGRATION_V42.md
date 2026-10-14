@@ -1,4 +1,4 @@
-# Moving a member list into ChamaPro
+# Moving a member list into ChamaPay
 
 1. Open the chama Home page as the Chama Admin.
 2. Choose **Import CSV**.

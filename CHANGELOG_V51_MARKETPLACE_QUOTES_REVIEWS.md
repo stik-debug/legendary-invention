@@ -1,4 +1,4 @@
-# ChamaPro v51 — Marketplace trust, reviews and quote comparison
+# ChamaPay v51 — Marketplace trust, reviews and quote comparison
 
 ## Added
 - Provider ratings and recent written reviews on reviewed marketplace listings.
@@ -21,4 +21,4 @@
 - Python syntax compilation passed for changed Python modules.
 - Jinja template parsing passed for marketplace, quote workspace and comparison templates.
 - Fresh SQLite schema initialization passed and created all three new tables.
-- Full Flask route/browser integration tests were not run in this environment because Flask is not installed here. This package has not been deployed to the live ChamaPro site.
+- Full Flask route/browser integration tests were not run in this environment because Flask is not installed here. This package has not been deployed to the live ChamaPay site.

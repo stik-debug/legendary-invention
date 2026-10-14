@@ -1,4 +1,4 @@
-# ChamaPro v46 — Trial Conversion and Member-Based Subscription
+# ChamaPay v46 — Trial Conversion and Member-Based Subscription
 
 ## Subscription pricing
 - Public and in-app pricing now communicates KSh 25 per active member per 30-day billing period.

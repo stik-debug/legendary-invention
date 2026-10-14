@@ -1,4 +1,4 @@
-# ChamaPro V42 — member onboarding and data portability
+# ChamaPay V42 — member onboarding and data portability
 
 ## Added
 - Admin-only CSV member import with a preview step before writes.

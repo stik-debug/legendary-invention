@@ -1,5 +1,5 @@
-"""Validate and restore a ChamaPro logical backup into a new SQLite staging file.
-Usage: python restore_drill.py /path/to/backup.json.gz /tmp/chamapro-restore-drill.sqlite
+"""Validate and restore a ChamaPay logical backup into a new SQLite staging file.
+Usage: python restore_drill.py /path/to/backup.json.gz /tmp/chamapay-restore-drill.sqlite
 Never point this script at production data or an existing database.
 """
 import sys

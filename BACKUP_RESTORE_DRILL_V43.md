@@ -1,4 +1,4 @@
-# ChamaPro V43 — backup restore drill
+# ChamaPay V43 — backup restore drill
 
 A backup is only considered usable after it has been restored into a separate staging database and checked. Do not run a restore drill against production.
 

@@ -213,7 +213,7 @@ def register_plus_routes(app, db, login_required, ctx, owner_required):
             writer.writerow([row.get('name') or '', row.get('phone') or '', row.get('role') or '', row.get('status') or '', row.get('joined_at') or ''])
         audit(db(), g.user['id'], 'MEMBER_LIST_EXPORTED', 'chama', chama_id, chama_id, {'rows': len(rows)})
         db().commit()
-        return Response(out.getvalue(), mimetype='text/csv; charset=utf-8', headers={'Content-Disposition': f'attachment; filename="chamapro-members-{chama_id}.csv"', 'Cache-Control': 'no-store'})
+        return Response(out.getvalue(), mimetype='text/csv; charset=utf-8', headers={'Content-Disposition': f'attachment; filename="chamapay-members-{chama_id}.csv"', 'Cache-Control': 'no-store'})
 
     # ---------- private member dashboard ----------
     @app.route('/chamas/<int:chama_id>/my-dashboard')

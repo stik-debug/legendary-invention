@@ -223,8 +223,8 @@ def register_strategy_routes(app, db, ctx, login_required):
         signature=hmac.new(str(app.config['SECRET_KEY']).encode('utf-8'),f'{passport_id}.{digest}'.encode('utf-8'),hashlib.sha256).hexdigest()
         token=base64.urlsafe_b64encode(f'{passport_id}.{digest}.{signature}'.encode('utf-8')).decode('ascii').rstrip('=')
         verify_url=request.url_root.rstrip('/')+url_for('verify_financial_passport',token=token)
-        lines=['ChamaPro Financial Passport',f'Chama: {chama["name"]}',f'Generated: {generated}',f'Report reference: {passport_id}',f'Snapshot SHA-256: {digest}',f'Verification URL: {verify_url}','',f'Active members: {members}',f'Recorded paid contributions lifetime: KES {savings/100:,.2f}',f'Outstanding approved/active loan balance: KES {loans/100:,.2f}',f'Ledger balance snapshot: KES {cash/100:,.2f}',f'Tracked assets: KES {assets/100:,.2f}',f'Tracked investments: KES {investments/100:,.2f}',f'Audit events recorded: {audits}',f'Open meeting commitments: {open_actions}','', 'Interpretation and limits:', 'The verification URL confirms this report snapshot was issued by this ChamaPro installation and has not been altered. It is not a credit rating, bank statement, independent audit, guarantee of solvency or lender approval.', 'Figures may be incomplete if records have not been reconciled. The recipient should verify source documents and current balances.']
-        buf=io.BytesIO(); c=canvas.Canvas(buf,pagesize=A4); w,h=A4; y=h-52; c.setTitle('ChamaPro Financial Passport')
+        lines=['ChamaPay Financial Passport',f'Chama: {chama["name"]}',f'Generated: {generated}',f'Report reference: {passport_id}',f'Snapshot SHA-256: {digest}',f'Verification URL: {verify_url}','',f'Active members: {members}',f'Recorded paid contributions lifetime: KES {savings/100:,.2f}',f'Outstanding approved/active loan balance: KES {loans/100:,.2f}',f'Ledger balance snapshot: KES {cash/100:,.2f}',f'Tracked assets: KES {assets/100:,.2f}',f'Tracked investments: KES {investments/100:,.2f}',f'Audit events recorded: {audits}',f'Open meeting commitments: {open_actions}','', 'Interpretation and limits:', 'The verification URL confirms this report snapshot was issued by this ChamaPay installation and has not been altered. It is not a credit rating, bank statement, independent audit, guarantee of solvency or lender approval.', 'Figures may be incomplete if records have not been reconciled. The recipient should verify source documents and current balances.']
+        buf=io.BytesIO(); c=canvas.Canvas(buf,pagesize=A4); w,h=A4; y=h-52; c.setTitle('ChamaPay Financial Passport')
         expanded=[]
         for line in lines:
             expanded.extend(textwrap.wrap(str(line),width=96,break_long_words=True,break_on_hyphens=False) or [''])
@@ -239,7 +239,7 @@ def register_strategy_routes(app, db, ctx, login_required):
         c.save(); buf.seek(0)
         audit(db(),me['user_id'],'FINANCIAL_PASSPORT_EXPORTED','financial_passport',passport_id,chama_id,{'members':members})
         db().commit()
-        return send_file(buf,mimetype='application/pdf',as_attachment=True,download_name=f'chamapro-financial-passport-{chama_id}.pdf')
+        return send_file(buf,mimetype='application/pdf',as_attachment=True,download_name=f'chamapay-financial-passport-{chama_id}.pdf')
 
     @app.route('/chamas/<int:chama_id>/continuity-vault.zip')
     @login_required
@@ -248,7 +248,7 @@ def register_strategy_routes(app, db, ctx, login_required):
         if me['role'] not in ('CHAMA_ADMIN','TREASURER','AUDITOR') and not db().val("SELECT COUNT(*) FROM chama_handovers WHERE chama_id=? AND proposed_successor=? AND status='PENDING_ACCEPTANCE'",(chama_id,me['user_id']),0):
             abort(403)
         snapshot={
-          'format':'ChamaPro continuity snapshot v1','generated_at':S.iso(S.now_utc()),
+          'format':'ChamaPay continuity snapshot v1','generated_at':S.iso(S.now_utc()),
           'chama':{'id':chama['id'],'name':chama['name'],'created_at':chama.get('created_at')},
           'active_members':db().all("SELECT u.name,m.role,m.joined_at FROM chama_members m JOIN users u ON u.id=m.user_id WHERE m.chama_id=? AND m.status='ACTIVE' ORDER BY u.name",(chama_id,)),
           'financial_totals':{'paid_contributions_cents':int(db().val("SELECT COALESCE(SUM(amount_cents),0) FROM contributions WHERE chama_id=? AND status='PAID'",(chama_id,),0) or 0),'ledger_balance_cents':int(db().val("SELECT COALESCE(SUM(CASE WHEN direction='IN' THEN amount_cents WHEN direction='OUT' THEN -amount_cents ELSE 0 END),0) FROM ledger_transactions WHERE chama_id=?",(chama_id,),0) or 0),'outstanding_loans_cents':int(db().val("SELECT COALESCE(SUM(total_due_cents-paid_cents),0) FROM loans WHERE chama_id=? AND status IN ('ACTIVE','APPROVED') AND disbursed_at IS NOT NULL",(chama_id,),0) or 0)},
@@ -264,6 +264,6 @@ def register_strategy_routes(app, db, ctx, login_required):
         out=io.BytesIO()
         with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED) as z:
             z.writestr('continuity-snapshot.json',raw)
-            z.writestr('README.txt','ChamaPro continuity snapshot\nRead-only export. It does not restore itself automatically. Verify records against source documents before importing into another system. No passwords, OTPs or session tokens are included.\nSHA-256: '+digest+'\n')
+            z.writestr('README.txt','ChamaPay continuity snapshot\nRead-only export. It does not restore itself automatically. Verify records against source documents before importing into another system. No passwords, OTPs or session tokens are included.\nSHA-256: '+digest+'\n')
         out.seek(0); db().begin(); audit(db(),me['user_id'],'CONTINUITY_VAULT_EXPORTED','continuity_vault',chama_id,chama_id,{'sha256':digest,'bytes':len(raw)}); db().commit()
-        return send_file(out,mimetype='application/zip',as_attachment=True,download_name=f'chamapro-continuity-{chama_id}-{date.today().isoformat()}.zip')
+        return send_file(out,mimetype='application/zip',as_attachment=True,download_name=f'chamapay-continuity-{chama_id}-{date.today().isoformat()}.zip')

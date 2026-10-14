@@ -1,4 +1,4 @@
-# ChamaPro v47 — Open Community Discussions and Safety
+# ChamaPay v47 — Open Community Discussions and Safety
 
 - Made the Chama-to-Chama Community explicitly discussion-first: all signed-in users can create posts and reply to other users. Linking a post to a chama remains restricted to officials of that chama.
 - Added threaded replies, reply counts, and report controls for posts and replies.

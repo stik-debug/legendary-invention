@@ -1,8 +1,8 @@
-# ChamaPro v35 — Source Audit and Reliability Fixes
+# ChamaPay v35 — Source Audit and Reliability Fixes
 
 ## Scope
 
-Reviewed the uploaded `chamapro-v34-discovery-audit-pack.zip`. The source contains 34 top-level Python modules, 15 pre-existing test modules, Flask templates, and additive schema migration logic. This update is deliberately conservative: it keeps the existing financial flows and records, adds no new mobile-money integration, and does not claim that a production deployment has been repaired from source alone.
+Reviewed the uploaded `chamapay-v34-discovery-audit-pack.zip`. The source contains 34 top-level Python modules, 15 pre-existing test modules, Flask templates, and additive schema migration logic. This update is deliberately conservative: it keeps the existing financial flows and records, adds no new mobile-money integration, and does not claim that a production deployment has been repaired from source alone.
 
 ## Changes in v35
 

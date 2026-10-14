@@ -320,7 +320,7 @@ def register_upgrade_routes(app, db, login_required, ctx):
             elif 'scenario' in ql or 'afford' in ql or 'what if' in ql or 'forecast' in ql:
                 answer={'title':'What-if planning','text':'Open Strategy & Continuity to model a contribution drop, a stressed loan-default rate, a planned payout and a proposed new loan. The result is an estimate, not a promise of available cash.'}
             else:
-                answer={'title':'ChamaPro Copilot','text':'I can explain recorded savings, loan balances, ledger balance, overdue loans, group wealth, goals and meeting commitments. For scenario planning and consistency checks, open Strategy & Continuity. Answers are based on recorded data, not external bank verification.'}
+                answer={'title':'ChamaPay Copilot','text':'I can explain recorded savings, loan balances, ledger balance, overdue loans, group wealth, goals and meeting commitments. For scenario planning and consistency checks, open Strategy & Continuity. Answers are based on recorded data, not external bank verification.'}
         return render_template('ai.html',chama=chama,me=me,stats=stats,answer=answer,q=q)
 
 

@@ -1,4 +1,4 @@
-# ChamaPro v50 — Marketplace upgrade
+# ChamaPay v50 — Marketplace upgrade
 
 - Redesigned the marketplace with a responsive visual hero, provider cards, category/status badges, contact blocks, and guidance for safer provider selection.
 - Added server-side keyword search across provider name, description, category, and county.
