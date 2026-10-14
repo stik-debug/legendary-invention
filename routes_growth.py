@@ -171,7 +171,13 @@ def register(app, db, ctx, login_required, owner_required):
     def collaboration():
         rows=db().all("SELECT p.*,u.name author,c.name chama,(SELECT COUNT(*) FROM collaboration_replies r WHERE r.post_id=p.id AND r.status='ACTIVE') reply_count FROM collaboration_posts p JOIN users u ON u.id=p.user_id LEFT JOIN chamas c ON c.id=p.chama_id WHERE p.status='ACTIVE' AND p.visibility='COMMUNITY' ORDER BY p.id DESC LIMIT 100")
         for p in rows:
-            p['replies']=db().all("SELECT r.*,u.name author FROM collaboration_replies r JOIN users u ON u.id=r.user_id WHERE r.post_id=? AND r.status='ACTIVE' ORDER BY r.id ASC LIMIT 100",(p['id'],))
+            all_replies=db().all("SELECT r.*,u.name author FROM collaboration_replies r JOIN users u ON u.id=r.user_id WHERE r.post_id=? AND r.status='ACTIVE' ORDER BY r.id ASC LIMIT 300",(p['id'],))
+            by_parent={}
+            for reply in all_replies:
+                by_parent.setdefault(reply['parent_reply_id'], []).append(reply)
+            p['replies']=by_parent.get(None, [])
+            for reply in all_replies:
+                reply['children']=by_parent.get(reply['id'], [])
         return render_template('collaboration.html',rows=rows,kinds=POST_KINDS)
 
     @app.route('/collaboration/post',methods=['POST'])
@@ -234,9 +240,12 @@ def register(app, db, ctx, login_required, owner_required):
             post=db().one("SELECT id FROM collaboration_posts WHERE id=? AND status='ACTIVE' AND visibility='COMMUNITY'",(post_id,))
             if not post: abort(404)
             body=respectful_text(request.form.get('body'),'Reply',2,1200)
+            parent_reply_id=request.form.get('parent_reply_id',type=int)
+            if parent_reply_id and not db().one("SELECT id FROM collaboration_replies WHERE id=? AND post_id=? AND status='ACTIVE' AND parent_reply_id IS NULL",(parent_reply_id,post_id)):
+                abort(400)
             with db().tx():
-                rid=db().insert('collaboration_replies',post_id=post_id,user_id=g.user['id'],body=body,status='ACTIVE',created_at=stamp())
-                audit(db(),g.user['id'],'COLLABORATION_REPLY_CREATED','collaboration_reply',rid,None,{'post_id':post_id})
+                rid=db().insert('collaboration_replies',post_id=post_id,user_id=g.user['id'],parent_reply_id=parent_reply_id,body=body,status='ACTIVE',created_at=stamp())
+                audit(db(),g.user['id'],'COLLABORATION_REPLY_CREATED','collaboration_reply',rid,None,{'post_id':post_id,'parent_reply_id':parent_reply_id})
             flash('Reply added to the discussion.','success')
         except S.BusinessError as e: flash(str(e),'warning')
         return redirect(url_for('collaboration')+'#post-'+str(post_id))

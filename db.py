@@ -423,7 +423,7 @@ CREATE TABLE IF NOT EXISTS collaboration_posts(
  county TEXT, visibility TEXT NOT NULL DEFAULT 'COMMUNITY', status TEXT NOT NULL DEFAULT 'ACTIVE', created_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS ix_collaboration_posts ON collaboration_posts(status,created_at);
 CREATE TABLE IF NOT EXISTS collaboration_replies(
- id {PK}, post_id BIGINT NOT NULL, user_id BIGINT NOT NULL, body TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'ACTIVE', created_at TEXT NOT NULL);
+ id {PK}, post_id BIGINT NOT NULL, user_id BIGINT NOT NULL, parent_reply_id BIGINT, body TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'ACTIVE', created_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS ix_collaboration_replies ON collaboration_replies(post_id,status,created_at);
 CREATE TABLE IF NOT EXISTS collaboration_reports(
  id {PK}, post_id BIGINT NOT NULL, reply_id BIGINT, reporter_id BIGINT NOT NULL, reason TEXT NOT NULL, details TEXT, status TEXT NOT NULL DEFAULT 'OPEN', reviewed_by BIGINT, reviewed_at TEXT, created_at TEXT NOT NULL);
