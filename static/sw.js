@@ -1,4 +1,4 @@
-const CACHE = "chamapay-static-v8";
+const CACHE = "chamapay-static-v9";
 const OFFLINE_URL = "/static/offline.html";
 
 self.addEventListener("install", (event) => {
@@ -51,8 +51,10 @@ self.addEventListener('push', function(event) {
   var title = payload.title || 'ChamaPay';
   var options = { body: payload.body || 'You have a new update.', icon: '/static/icons/icon-192.png',
     badge: '/static/icons/icon-192.png', tag: 'chamapay-' + (payload.notification_id || Date.now()),
-    data: { url: (payload.url && payload.url.charAt(0) === '/' && payload.url.indexOf('//') !== 0) ? payload.url : '/notifications' },
-    renotify: false };
+    // Ask supported mobile browsers to keep the notification visible and use vibration.
+    // The operating system still controls whether a banner is shown or silently delivered.
+    requireInteraction: true, silent: false, vibrate: [200, 100, 200], renotify: true,
+    data: { url: (payload.url && payload.url.charAt(0) === '/' && payload.url.indexOf('//') !== 0) ? payload.url : '/notifications' } };
   event.waitUntil(self.registration.showNotification(title, options));
 });
 self.addEventListener('notificationclick', function(event) {
