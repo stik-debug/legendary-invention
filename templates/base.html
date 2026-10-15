@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#06382A">
-<meta name="csrf-token" content="{{ session.get('_csrf', '') }}">
+<meta name="csrf-token" content="{{ csrf_token() }}">
 <meta name="vapid-public-key" content="{{ push_public_key }}">
 <title>{% block title %}ChamaPay Kenya{% endblock %}</title>{% block head %}{% endblock %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
@@ -99,14 +99,7 @@
 <a href="{{ url_for('chama_more',chama_id=request.view_args.get('chama_id')) }}">☰<span>More</span></a>
 </nav>
 {% endif %}
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function () {
-    navigator.serviceWorker.register('{{ url_for('service_worker') }}', {scope: '/'}).catch(function () {});
-  });
-}
-</script>
-<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v=58"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>
