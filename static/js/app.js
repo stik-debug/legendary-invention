@@ -1,3 +1,13 @@
+// Register the root-scoped service worker from this same-origin external script.
+// The app uses a restrictive CSP that blocks inline scripts, so registration must not
+// live in an inline script in base.html.
+(function registerChamaPayServiceWorker(){
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register('/sw.js', {scope: '/'}).catch(function(error){
+    if (window.console && console.warn) console.warn('ChamaPay service worker registration failed:', error);
+  });
+})();
+
 (function(){
 var root=document.documentElement;
 try{if(localStorage.getItem('perf')==='1')root.classList.add('perf');if(localStorage.getItem('data-saver')==='1')root.classList.add('data-saver');}catch(e){}
@@ -311,7 +321,7 @@ if(!still&&window.matchMedia('(hover:hover)').matches){
     button.disabled = true; say('Requesting permission…');
     Notification.requestPermission().then(function(permission){
       if(permission !== 'granted') throw new Error('Notification permission was not granted. You can change this in browser settings.');
-      return navigator.serviceWorker.ready;
+      return navigator.serviceWorker.register('/sw.js', {scope: '/'});
     }).then(function(reg){ return reg.pushManager.getSubscription().then(function(existing){ return existing || reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:decodeKey(publicKey)}); }); })
       .then(function(subscription){ return fetch('/api/push/subscribe',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf()},body:JSON.stringify({subscription:subscription.toJSON()})}); })
       .then(function(r){ return r.json().then(function(j){ if(!r.ok || !j.ok) throw new Error(j.error || 'Could not enable push notifications.'); return j; }); })
