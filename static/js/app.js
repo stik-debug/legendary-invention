@@ -76,7 +76,7 @@ if(!still&&window.matchMedia('(hover:hover)').matches){
       safari ? 'Add ChamaPay to your Home Screen for quick access.' : 'For the best install experience, open ChamaPay in Safari.',
       'How to install',
       '<ol><li>Tap <b>Share</b> in Safari.</li><li>Tap <b>Add to Home Screen</b>.</li><li>Turn on <b>Open as Web App</b> if shown, then tap <b>Add</b>.</li></ol>');
-    button.addEventListener('click', function(){
+    if(button) button.addEventListener('click', function(){
       if (steps && !steps.hidden) {
         button.textContent = 'Done';
         return;
@@ -270,11 +270,15 @@ if(!still&&window.matchMedia('(hover:hover)').matches){
     window.setTimeout(function(){ if(a.parentNode)a.classList.add('is-leaving'); window.setTimeout(function(){if(a.parentNode)a.remove();},350); },6500);
   });
 
-  var button = document.getElementById('enable-push'), status = document.getElementById('push-status');
-  if (!button) return;
+  var button = document.getElementById('enable-push'), testButton = document.getElementById('test-push'), status = document.getElementById('push-status');
+  if (!button && !testButton) return;
   function say(s){ if(status) status.textContent=s; }
+  function csrf(){ return (document.querySelector('meta[name="csrf-token"]')||{}).content||''; }
+  function refreshPushStatus(){ fetch('/api/push/status',{credentials:'same-origin',headers:{'Accept':'application/json','Cache-Control':'no-store'}}).then(function(r){return r.ok?r.json():null;}).then(function(j){ if(!j)return; if(testButton)testButton.disabled=!(j.server_configured && j.delivery_library && j.device_subscriptions>0); if(!j.server_configured)say('Push service key setup is unavailable. Please contact ChamaPay support.'); else if(!j.delivery_library)say('The server is missing its push delivery package. The host must install requirements.txt.'); else if(!j.device_subscriptions)say('Enable device notifications on this phone, then send a test.'); else say('This account has '+j.device_subscriptions+' registered device(s).'); }).catch(function(){}); }
+  refreshPushStatus();
+  if(testButton)testButton.addEventListener('click',function(){ testButton.disabled=true; say('Sending test notification…'); fetch('/api/push/test',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf(),'Accept':'application/json'},body:'{}'}).then(function(r){return r.json().then(function(j){if(!r.ok||!j.ok)throw new Error(j.error||'Test notification failed.');return j;});}).then(function(j){say(j.message||'Test queued. Check this phone in a few seconds.');}).catch(function(e){say(e.message||'Test notification failed.');}).then(refreshPushStatus); });
   function decodeKey(base64) { var pad='='.repeat((4-base64.length%4)%4); var raw=atob((base64+pad).replace(/-/g,'+').replace(/_/g,'/')); var out=new Uint8Array(raw.length); for(var i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i); return out; }
-  button.addEventListener('click', function(){
+  if(button) button.addEventListener('click', function(){
     if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) { say('This browser does not support push notifications. On-screen alerts still work while ChamaPay is open.'); return; }
     var key = document.querySelector('meta[name="vapid-public-key"]'); var publicKey = key && key.content;
     if (!publicKey) { say('Server push is not configured yet. Ask the ChamaPay administrator to configure VAPID keys.'); return; }
@@ -283,9 +287,9 @@ if(!still&&window.matchMedia('(hover:hover)').matches){
       if(permission !== 'granted') throw new Error('Notification permission was not granted. You can change this in browser settings.');
       return navigator.serviceWorker.ready;
     }).then(function(reg){ return reg.pushManager.getSubscription().then(function(existing){ return existing || reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:decodeKey(publicKey)}); }); })
-      .then(function(subscription){ return fetch('/api/push/subscribe',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':(document.querySelector('meta[name="csrf-token"]')||{}).content||''},body:JSON.stringify({subscription:subscription.toJSON()})}); })
+      .then(function(subscription){ return fetch('/api/push/subscribe',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf()},body:JSON.stringify({subscription:subscription.toJSON()})}); })
       .then(function(r){ return r.json().then(function(j){ if(!r.ok || !j.ok) throw new Error(j.error || 'Could not enable push notifications.'); return j; }); })
-      .then(function(){ say('Device notifications are enabled on this browser.'); button.textContent='Notifications enabled'; })
+      .then(function(){ say('Device notifications are enabled on this browser. Send a test notification to confirm delivery.'); button.textContent='Notifications enabled'; refreshPushStatus(); })
       .catch(function(e){ say(e.message || 'Could not enable notifications.'); }).then(function(){ button.disabled=false; });
   });
 })();
