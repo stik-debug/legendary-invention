@@ -270,6 +270,32 @@ if(!still&&window.matchMedia('(hover:hover)').matches){
     window.setTimeout(function(){ if(a.parentNode)a.classList.add('is-leaving'); window.setTimeout(function(){if(a.parentNode)a.remove();},350); },6500);
   });
 
+  // Ask signed-in members whether they want phone notifications on first eligible visit.
+  // The browser's native permission prompt must follow an explicit user action, so the Allow choice opens Notification Settings.
+  (function notificationOnboarding(){
+    var panel = document.getElementById('notification-onboarding');
+    if (!panel) return;
+    var allow = document.getElementById('notification-onboarding-allow');
+    var deny = document.getElementById('notification-onboarding-deny');
+    var key = 'chamapay-notification-choice-v1';
+    var permission = ('Notification' in window) ? Notification.permission : 'unsupported';
+    if (permission !== 'default') return;
+    var choice = null;
+    try { choice = window.localStorage.getItem(key); } catch (_) {}
+    if (choice) return;
+    window.setTimeout(function(){ panel.hidden = false; if (allow) allow.focus(); }, 900);
+    function close(choiceValue){
+      try { window.localStorage.setItem(key, choiceValue); } catch (_) {}
+      panel.hidden = true;
+    }
+    if (deny) deny.addEventListener('click', function(){ close('later'); });
+    if (allow) allow.addEventListener('click', function(){
+      try { window.localStorage.setItem(key, 'settings'); } catch (_) {}
+      // On the settings page members press the enable button, which triggers the browser's permission prompt.
+    });
+    panel.addEventListener('click', function(e){ if(e.target === panel) close('later'); });
+  })();
+
   var button = document.getElementById('enable-push'), testButton = document.getElementById('test-push'), status = document.getElementById('push-status');
   if (!button && !testButton) return;
   function say(s){ if(status) status.textContent=s; }
