@@ -297,14 +297,11 @@ def create_app(overrides=None):
             import pywebpush  # noqa: F401
         except ImportError:
             return jsonify(ok=False, error='Push delivery package is missing on the server. Please contact ChamaPay support.'), 503
-        count = int(db().val('SELECT COUNT(*) FROM push_subscriptions WHERE user_id=?', (g.user['id'],), 0))
-        if not count:
-            return jsonify(ok=False, error='This phone is not registered for push yet. Tap Enable device notifications first.'), 400
         pref = db().one('SELECT push FROM notification_preferences WHERE user_id=?', (g.user['id'],))
         if pref is not None and not int(pref.get('push', 1)):
             return jsonify(ok=False, error='Push notifications are turned off in your preferences. Enable them and try again.'), 400
-        N.notify(db(), g.user['id'], None, 'This is a ChamaPay test notification. If you see this on your phone, push is working.', '/notification-settings')
-        return jsonify(ok=True, message='Test notification queued. Check this phone in a few seconds.')
+        result = N.send_push_test(db(), g.user['id'])
+        return jsonify(result), (200 if result.get('ok') else 502)
 
     @app.route('/api/push/unsubscribe', methods=['POST'])
     @login_required

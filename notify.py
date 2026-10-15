@@ -28,6 +28,49 @@ def _deliver_web_push(subscriptions, payload, private_key, subject):
             continue
 
 
+def send_push_test(db, user_id):
+    """Deliver a test push synchronously and return honest per-device results."""
+    public_key, private_key = get_vapid_keys(db)
+    if not public_key or not private_key:
+        return {"ok": False, "error": "Push signing keys are not configured."}
+    try:
+        from pywebpush import webpush
+    except ImportError:
+        return {"ok": False, "error": "The server is missing pywebpush. Install requirements.txt and restart the service."}
+    rows = db.all('SELECT id,endpoint,subscription_json FROM push_subscriptions WHERE user_id=?', (user_id,))
+    if not rows:
+        return {"ok": False, "error": "This phone is not registered. Enable device notifications on this phone first."}
+    payload = {"title": "ChamaPay test", "body": "Your phone can receive ChamaPay notifications.",
+               "url": "/notification-settings", "notification_id": "test-" + str(int(now_utc().timestamp()))}
+    sent, failures = 0, []
+    for row in rows:
+        try:
+            webpush(subscription_info=json.loads(row['subscription_json']), data=json.dumps(payload),
+                    vapid_private_key=private_key,
+                    vapid_claims={"sub": os.environ.get('VAPID_CLAIMS_SUBJECT', 'mailto:support@chamapay.app')})
+            sent += 1
+        except Exception as exc:
+            status_code = getattr(getattr(exc, 'response', None), 'status_code', None)
+            failures.append((row['id'], status_code, type(exc).__name__))
+            logging.getLogger(__name__).warning('Push test failed for subscription %s (%s): %s', row['id'], status_code, str(exc)[:240])
+            # Push providers mark expired/unsubscribed endpoints with 404 or 410.
+            if status_code in (404, 410):
+                try:
+                    db.execute('DELETE FROM push_subscriptions WHERE id=?', (row['id'],))
+                except Exception:
+                    pass
+    try:
+        db.commit()
+    except Exception:
+        pass
+    if sent:
+        return {"ok": True, "message": f"Push service accepted the test for {sent} device(s). Check the phone's notification panel." , "sent": sent, "failed": len(failures)}
+    detail = failures[0][2] if failures else "UnknownError"
+    code = failures[0][1] if failures else None
+    hint = f" (HTTP {code})" if code else ""
+    return {"ok": False, "error": f"The push service rejected delivery ({detail}{hint}). Re-enable notifications on this phone and check the server logs.", "failed": len(failures)}
+
+
 def _queue_web_push(db, user_id, text, link, notification_id):
     public_key, private_key = get_vapid_keys(db)
     if not public_key or not private_key:
