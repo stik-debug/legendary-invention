@@ -137,6 +137,7 @@ def create_app(overrides=None):
         return session['_csrf']
 
     app.jinja_env.globals['csrf_input'] = lambda: Markup(f'<input type="hidden" name="_csrf" value="{token()}">')
+    app.jinja_env.globals['csrf_token'] = token
     app.jinja_env.filters['kes'] = S.kes
     app.jinja_env.filters['date'] = lambda s: S.parse(s).strftime('%d %b %Y') if s else '-'
     app.jinja_env.filters['datetime'] = lambda s: S.parse(s).strftime('%d %b %Y %H:%M') if s else '-'
