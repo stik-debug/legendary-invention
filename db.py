@@ -181,6 +181,8 @@ CREATE TABLE IF NOT EXISTS notifications(
   id {PK}, user_id INTEGER NOT NULL REFERENCES users(id), chama_id INTEGER, text TEXT NOT NULL, link TEXT, created_at TEXT NOT NULL, read_at TEXT);
 CREATE TABLE IF NOT EXISTS push_subscriptions(
   id {PK}, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, endpoint TEXT NOT NULL UNIQUE, subscription_json TEXT NOT NULL, created_at TEXT NOT NULL, last_used_at TEXT);
+CREATE TABLE IF NOT EXISTS push_vapid_config(
+  id INTEGER PRIMARY KEY CHECK(id=1), public_key TEXT NOT NULL, private_key_pem TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS meetings(
   id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), title TEXT NOT NULL, venue TEXT, held_at TEXT NOT NULL, agenda TEXT, minutes TEXT,
   status TEXT NOT NULL DEFAULT 'SCHEDULED', absent_fine_cents BIGINT NOT NULL DEFAULT 0, created_by INTEGER, created_at TEXT NOT NULL);

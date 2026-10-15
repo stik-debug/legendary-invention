@@ -8,7 +8,7 @@ import threading
 from datetime import date, timedelta
 from functools import wraps
 
-from flask import Flask, abort, flash, g, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, abort, flash, g, jsonify, redirect, render_template, request, session, url_for, send_file
 from markupsafe import Markup
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -34,6 +34,7 @@ import auth_otp as OTP
 import twofactor as TF
 from db import DB, audit, init_db
 from providers import MpesaPaymentProvider, get_provider
+from push_config import ensure_vapid_keys, get_vapid_keys
 
 PAGE = 25
 
@@ -78,6 +79,8 @@ def create_app(overrides=None):
 
     boot = DB(app.config['DATABASE_URL'])
     init_db(boot)
+    if not ensure_vapid_keys(boot):
+        print('WEB PUSH: VAPID keypair unavailable; install cryptography or configure VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY.')
     e, p, pw = os.environ.get('OWNER_EMAIL', ''), os.environ.get('OWNER_PHONE', ''), os.environ.get('OWNER_PASSWORD', '')
     if e or p or pw:
         if len(pw) < 10:
@@ -148,7 +151,17 @@ def create_app(overrides=None):
                     unread = F.unread_count(db(), cid, g.user['id'])
             except Exception:
                 pass
-        return {'user': g.get('user'), 'S': S, 'unread': unread, 'notif_unread': notif, 'push_public_key': os.environ.get('VAPID_PUBLIC_KEY', ''), 'notif_latest_id': (db().val('SELECT COALESCE(MAX(id),0) FROM notifications WHERE user_id=?', (g.user['id'],), 0) if g.get('user') else 0)}
+        return {'user': g.get('user'), 'S': S, 'unread': unread, 'notif_unread': notif, 'push_public_key': get_vapid_keys(db())[0], 'notif_latest_id': (db().val('SELECT COALESCE(MAX(id),0) FROM notifications WHERE user_id=?', (g.user['id'],), 0) if g.get('user') else 0)}
+
+    @app.route('/sw.js')
+    def service_worker():
+        # A service worker served from /static/ is scoped to /static/ only and
+        # navigator.serviceWorker.ready can hang on app pages. Serve it at root
+        # so it can control all ChamaPay pages and receive push events reliably.
+        response = send_file(os.path.join(app.static_folder, 'sw.js'), mimetype='application/javascript')
+        response.headers['Service-Worker-Allowed'] = '/'
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return response
 
     @app.after_request
     def deliver_queued_sms(r):
@@ -233,8 +246,9 @@ def create_app(overrides=None):
     @app.route('/api/push/subscribe', methods=['POST'])
     @login_required
     def push_subscribe():
-        if not os.environ.get('VAPID_PUBLIC_KEY') or not os.environ.get('VAPID_PRIVATE_KEY'):
-            return jsonify(ok=False, error='Browser push is not configured on the server yet.'), 503
+        vapid_public, vapid_private = get_vapid_keys(db())
+        if not vapid_public or not vapid_private:
+            return jsonify(ok=False, error='Push setup failed on the server. Please contact ChamaPay support.'), 503
         payload = request.get_json(silent=True) or {}
         subscription = payload.get('subscription')
         if not isinstance(subscription, dict) or not subscription.get('endpoint') or not isinstance(subscription.get('keys'), dict):
@@ -254,7 +268,43 @@ def create_app(overrides=None):
         else:
             db().insert('push_subscriptions', user_id=g.user['id'], endpoint=endpoint, subscription_json=_json.dumps(subscription), created_at=now, last_used_at=now)
         db().commit()
+        # A member who explicitly enables device notifications has opted in to push.
+        stamp = S.iso(S.now_utc())
+        db().execute("INSERT INTO notification_preferences(user_id,in_app,email,sms,push,updated_at) VALUES(?,1,1,0,1,?) ON CONFLICT(user_id) DO UPDATE SET push=1,updated_at=excluded.updated_at", (g.user['id'], stamp))
+        db().commit()
         return jsonify(ok=True)
+
+    @app.route('/api/push/status')
+    @login_required
+    def push_status():
+        public, private = get_vapid_keys(db())
+        count = int(db().val('SELECT COUNT(*) FROM push_subscriptions WHERE user_id=?', (g.user['id'],), 0))
+        try:
+            import importlib.util as _import_util
+            delivery_library = _import_util.find_spec('pywebpush') is not None
+        except Exception:
+            delivery_library = False
+        return jsonify(server_configured=bool(public and private), delivery_library=delivery_library, device_subscriptions=count,
+                       ready=bool(public and private and delivery_library and count > 0))
+
+    @app.route('/api/push/test', methods=['POST'])
+    @login_required
+    def push_test():
+        public, private = get_vapid_keys(db())
+        if not public or not private:
+            return jsonify(ok=False, error='Push service is not configured. Please contact ChamaPay support.'), 503
+        try:
+            import pywebpush  # noqa: F401
+        except ImportError:
+            return jsonify(ok=False, error='Push delivery package is missing on the server. Please contact ChamaPay support.'), 503
+        count = int(db().val('SELECT COUNT(*) FROM push_subscriptions WHERE user_id=?', (g.user['id'],), 0))
+        if not count:
+            return jsonify(ok=False, error='This phone is not registered for push yet. Tap Enable device notifications first.'), 400
+        pref = db().one('SELECT push FROM notification_preferences WHERE user_id=?', (g.user['id'],))
+        if pref is not None and not int(pref.get('push', 1)):
+            return jsonify(ok=False, error='Push notifications are turned off in your preferences. Enable them and try again.'), 400
+        N.notify(db(), g.user['id'], None, 'This is a ChamaPay test notification. If you see this on your phone, push is working.', '/notification-settings')
+        return jsonify(ok=True, message='Test notification queued. Check this phone in a few seconds.')
 
     @app.route('/api/push/unsubscribe', methods=['POST'])
     @login_required

@@ -265,9 +265,10 @@ def subscription_nudges(db, now=None):
         link = f'/chamas/{row["chama_id"]}/subscription'
         recipients = db.all("SELECT user_id FROM chama_members WHERE chama_id=? AND status='ACTIVE' AND role IN ('CHAMA_ADMIN','TREASURER')", (row['chama_id'],))
         with db.tx():
+            from notify import notify as send_notification
             for recipient in recipients:
-                db.insert('notifications', user_id=recipient['user_id'], chama_id=row['chama_id'],
-                          text=f'{row["name"]}: {messages[days_left]}', link=link, created_at=iso(now))
+                send_notification(db, recipient['user_id'], row['chama_id'],
+                                  f'{row["name"]}: {messages[days_left]}', link=link, now=now)
             audit(db, None, action, 'subscription', row['id'], row['chama_id'], {'days_left': days_left, 'recipients': len(recipients)})
         sent += len(recipients)
     return sent

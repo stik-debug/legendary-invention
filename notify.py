@@ -7,6 +7,8 @@ import json
 import urllib.request
 from email.message import EmailMessage
 import threading
+import logging
+from push_config import get_vapid_keys
 
 
 def _deliver_web_push(subscriptions, payload, private_key, subject):
@@ -14,20 +16,22 @@ def _deliver_web_push(subscriptions, payload, private_key, subject):
     try:
         from pywebpush import webpush, WebPushException
     except ImportError:
+        logging.getLogger(__name__).error('Web push package pywebpush is missing; install requirements.txt.')
         return
     for subscription in subscriptions:
         try:
             webpush(subscription_info=subscription, data=json.dumps(payload), vapid_private_key=private_key,
                     vapid_claims={"sub": subject})
-        except Exception:
-            # Stale endpoints and provider outages must never break a financial or chama action.
+        except Exception as exc:
+            # Log failures so hosting logs explain delivery problems; never break the business action.
+            logging.getLogger(__name__).warning('Web push delivery failed (%s): %s', type(exc).__name__, str(exc)[:240])
             continue
 
 
 def _queue_web_push(db, user_id, text, link, notification_id):
-    public_key = os.environ.get('VAPID_PUBLIC_KEY', '').strip()
-    private_key = os.environ.get('VAPID_PRIVATE_KEY', '').strip()
+    public_key, private_key = get_vapid_keys(db)
     if not public_key or not private_key:
+        logging.getLogger(__name__).warning('Push delivery skipped: VAPID keys are not configured.')
         return
     try:
         pref = db.one('SELECT push FROM notification_preferences WHERE user_id=?', (user_id,))
