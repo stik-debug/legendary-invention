@@ -19,6 +19,10 @@
 .chamapay-toast-stack{position:fixed;z-index:9999;top:calc(14px + env(safe-area-inset-top));right:14px;width:min(390px,calc(100vw - 28px));display:grid;gap:9px;pointer-events:none}
 .chamapay-toast{pointer-events:auto;display:flex;align-items:flex-start;gap:11px;padding:14px 13px;border:1px solid rgba(9,105,75,.2);border-radius:16px;background:rgba(255,255,255,.97);color:#12372b;text-decoration:none;box-shadow:0 18px 45px rgba(4,38,28,.2);backdrop-filter:blur(16px);animation:cp-toast-in .22s ease-out;transition:opacity .3s,transform .3s}
 .chamapay-toast:hover{transform:translateY(-2px);box-shadow:0 22px 50px rgba(4,38,28,.24)}.chamapay-toast-icon{display:grid;place-items:center;flex:0 0 32px;width:32px;height:32px;border-radius:11px;background:#e0f7e9;color:#087f52;font-size:11px;box-shadow:inset 0 -2px 0 rgba(0,0,0,.05)}.chamapay-toast-copy{display:grid;gap:3px;min-width:0;flex:1}.chamapay-toast-copy strong{font-size:13px}.chamapay-toast-copy span{font-size:13px;line-height:1.45;overflow-wrap:anywhere}.chamapay-toast-close{border:0;background:transparent;color:#557064;font-size:21px;line-height:1;cursor:pointer;padding:0 2px}.chamapay-toast.is-leaving{opacity:0;transform:translateX(15px)}@keyframes cp-toast-in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}@media(max-width:560px){.chamapay-toast-stack{top:calc(8px + env(safe-area-inset-top));right:8px;width:calc(100vw - 16px)}.chamapay-toast{padding:12px;border-radius:14px}}@media(prefers-reduced-motion:reduce){.chamapay-toast{animation:none;transition:none}}
+
+.notification-onboarding{position:fixed;inset:0;z-index:10020;display:grid;place-items:center;padding:20px;background:rgba(4,24,18,.68);backdrop-filter:blur(5px)}
+.notification-onboarding[hidden]{display:none!important}.notification-onboarding-card{width:min(440px,100%);padding:26px 22px;border-radius:22px;background:#fff;color:#18352a;text-align:center;box-shadow:0 24px 80px rgba(0,0,0,.3)}.notification-onboarding-icon{display:grid;place-items:center;width:62px;height:62px;margin:0 auto 14px;border-radius:20px;background:#e0f7e9;font-size:30px}.notification-onboarding-card h2{margin:0 0 10px;font-size:23px;line-height:1.2}.notification-onboarding-card p{margin:0 0 13px;line-height:1.55;font-size:14px}.notification-onboarding-card .notification-onboarding-note{font-size:12px;color:#62746a}.notification-onboarding-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:18px}.notification-onboarding-actions .btn{min-height:44px}.notification-onboarding-actions a{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+
 </style>
 </head>
 <body>
@@ -59,6 +63,21 @@
 {% with messages = get_flashed_messages(with_categories=true) %}{% for cat, msg in messages %}<div class="flash {{ cat }}" role="status">{{ msg }}</div>{% endfor %}{% endwith %}
 {% block content %}{% endblock %}
 </div>
+{% if user %}
+<div id="notification-onboarding" class="notification-onboarding" hidden role="dialog" aria-modal="true" aria-labelledby="notification-onboarding-title" aria-describedby="notification-onboarding-copy">
+  <div class="notification-onboarding-card">
+    <div class="notification-onboarding-icon" aria-hidden="true">🔔</div>
+    <h2 id="notification-onboarding-title">Stay updated with ChamaPay</h2>
+    <p id="notification-onboarding-copy">Get phone-screen alerts for new messages, contribution reminders, meetings, loan updates and important Chama announcements—even when ChamaPay is not open.</p>
+    <p class="notification-onboarding-note">You can allow notifications or choose Not now. You can change this later in Notification Settings.</p>
+    <div class="notification-onboarding-actions">
+      <a class="btn pri" id="notification-onboarding-allow" href="{{ url_for('notification_settings') }}">Allow notifications</a>
+      <button class="btn" id="notification-onboarding-deny" type="button">Not now</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <div id="pwa-install-card" class="pwa-install-card" hidden aria-live="polite">
   <div class="pwa-install-icon"><img src="{{ url_for('static', filename='icons/icon-192.png') }}" alt="ChamaPay"></div>
   <div class="pwa-install-copy">
