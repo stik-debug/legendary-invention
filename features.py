@@ -132,7 +132,9 @@ def meeting_reminders(db, app_base=None, now=None):
         members=db.all("SELECT u.id,u.email,u.name FROM chama_members cm JOIN users u ON u.id=cm.user_id WHERE cm.chama_id=? AND cm.status='ACTIVE'",(m['chama_id'],))
         with db.tx():
             for u in members:
-                N.notify(db,u['id'],m['chama_id'],f'Reminder: {m["title"]} is tomorrow at {m["held_at"]}.',f'/chamas/{m["chama_id"]}/meetings/{m["id"]}',None,now)
+                meeting_text=f'Reminder: {m["title"]} is tomorrow at {m["held_at"]}.'
+                N.notify(db,u['id'],m['chama_id'],meeting_text,f'/chamas/{m["chama_id"]}/meetings/{m["id"]}',None,now)
+                N.queue_opted_in_whatsapp(db,u['id'],meeting_text,now,dedupe_key=f'meeting-24h:{m["id"]}:{u["id"]}')
                 pref=db.one('SELECT email FROM notification_preferences WHERE user_id=?',(u['id'],))
                 if (pref is None or int(pref.get('email',1))) and u.get('email'):
                     N.queue_email(db,u['id'],u['email'],f'Reminder: {m["title"]}',f'Your Chama meeting is tomorrow at {m["held_at"]}. Open ChamaPay for the agenda and meeting details.')

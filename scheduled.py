@@ -1,4 +1,9 @@
 import os
+# Render Cron jobs exit after this script completes. Push deliveries triggered by
+# daily payment/loan/meeting reminders must finish before process exit; otherwise
+# daemon threads are killed and the phone never receives the notification.
+os.environ['CHAMAPAY_SYNC_PUSH'] = '1'
+
 from db import DB, init_db
 import backup
 import features
@@ -17,5 +22,6 @@ try:
 finally:
     db.close()
 print('email outbox:',notify.process_email_outbox(url,25))
+print('SMS outbox:',notify.process_sms_outbox(url,25))
 print('WhatsApp outbox:',notify.process_whatsapp_outbox(url,25))
 print('daily backup:',backup.save_backup(url))

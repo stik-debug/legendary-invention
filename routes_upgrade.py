@@ -223,28 +223,30 @@ def register_upgrade_routes(app, db, login_required, ctx):
             if me['role']!='CHAMA_ADMIN': abort(403)
             f=request.form
             fields=['monthly_contribution','joining_fee','loan_interest','loan_multiplier','loan_months','late_fine','attendance_requirement','voting_requirement']
+            try: contribution_due_day=int(f.get('contribution_due_day') or 0)
+            except (TypeError,ValueError): contribution_due_day=-1
             vals={x:f.get(x,'') for x in fields}
             try:
                 numeric={k:float(vals[k] or 0) for k in fields}
                 if any(not math.isfinite(v) for v in numeric.values()): raise ValueError
-                if any(numeric[k]<0 for k in ('monthly_contribution','joining_fee','loan_interest','late_fine')): raise ValueError
+                if any(numeric[k]<0 for k in ('monthly_contribution','joining_fee','loan_interest','late_fine')) or not 0<=contribution_due_day<=28: raise ValueError
                 if not numeric['loan_multiplier'].is_integer() or not numeric['loan_months'].is_integer() or not numeric['attendance_requirement'].is_integer() or not numeric['voting_requirement'].is_integer(): raise ValueError
                 if not 1<=int(numeric['loan_multiplier'])<=10 or not 1<=int(numeric['loan_months'])<=60: raise ValueError
                 if not 0<=numeric['attendance_requirement']<=100 or not 0<=numeric['voting_requirement']<=100 or numeric['loan_interest']>100: raise ValueError
             except (TypeError,ValueError,OverflowError):
-                flash('Check the rules: money and interest cannot be negative, loan interest must be at most 100%, loan multiplier 1–10, repayment 1–60 months, and attendance/voting 0–100%. No changes were saved.','danger')
+                flash('Check the rules: money and interest cannot be negative, loan interest must be at most 100%, loan multiplier 1–10, repayment 1–60 months, due day 0 (off) or 1–28, and attendance/voting 0–100%. No changes were saved.','danger')
                 return redirect(url_for('constitution',chama_id=chama_id))
             db().begin()
             current=db().one("SELECT * FROM chama_constitutions WHERE chama_id=?",(chama_id,))
             if current:
                 import json
                 version=int(db().val('SELECT COALESCE(MAX(version_no),0)+1 FROM chama_constitution_history WHERE chama_id=?',(chama_id,),1) or 1)
-                snapshot={k:current.get(k) for k in ('monthly_contribution_cents','joining_fee_cents','loan_interest_bps','loan_multiplier','loan_months','late_fine_cents','attendance_requirement','voting_requirement','updated_by','updated_at')}
+                snapshot={k:current.get(k) for k in ('monthly_contribution_cents','joining_fee_cents','loan_interest_bps','loan_multiplier','loan_months','late_fine_cents','contribution_due_day','attendance_requirement','voting_requirement','updated_by','updated_at')}
                 db().insert('chama_constitution_history',chama_id=chama_id,version_no=version,snapshot_json=json.dumps(snapshot,sort_keys=True),changed_by=me['user_id'],changed_at=S.iso(S.now_utc()))
             db().execute("""UPDATE chama_constitutions SET monthly_contribution_cents=?,joining_fee_cents=?,loan_interest_bps=?,loan_multiplier=?,loan_months=?,
-                            late_fine_cents=?,attendance_requirement=?,voting_requirement=?,updated_by=?,updated_at=? WHERE chama_id=?""",
+                            late_fine_cents=?,contribution_due_day=?,attendance_requirement=?,voting_requirement=?,updated_by=?,updated_at=? WHERE chama_id=?""",
                         (int(float(vals['monthly_contribution'] or 0)*100),int(float(vals['joining_fee'] or 0)*100),int(float(vals['loan_interest'] or 0)*100),
-                         int(vals['loan_multiplier'] or 1),int(vals['loan_months'] or 1),int(float(vals['late_fine'] or 0)*100),
+                         int(vals['loan_multiplier'] or 1),int(vals['loan_months'] or 1),int(float(vals['late_fine'] or 0)*100),contribution_due_day,
                          int(float(vals['attendance_requirement'] or 0)),int(float(vals['voting_requirement'] or 0)),me['user_id'],S.iso(S.now_utc()),chama_id))
             audit(db(),me['user_id'],'CONSTITUTION_UPDATED','constitution',chama_id,chama_id); db().commit(); flash('Chama constitution saved. Previous rules were preserved in version history.','success')
             return redirect(url_for('constitution',chama_id=chama_id))
@@ -264,7 +266,29 @@ def register_upgrade_routes(app, db, login_required, ctx):
         contribs=db().val("SELECT COUNT(*) FROM contributions WHERE chama_id=? AND user_id=? AND status='PAID'",(chama_id,user_id),0)
         present=db().val("SELECT COUNT(*) FROM attendance WHERE chama_id=? AND user_id=? AND status='PRESENT'",(chama_id,user_id),0)
         totalmeet=db().val("SELECT COUNT(*) FROM attendance WHERE chama_id=? AND user_id=?",(chama_id,user_id),0)
-        return render_template('passport.html',chama=chama,me=me,target=target,savings=savings,loan=loan,contribs=contribs,present=present,totalmeet=totalmeet)
+        # Transparent participation indicator: attendance and contribution consistency only.
+        # It is not a credit score and must not automatically change lending terms.
+        from datetime import date, timedelta
+        today=date.today()
+        joined_raw=(target.get('joined_at') or today.isoformat())[:10]
+        try: joined=date.fromisoformat(joined_raw)
+        except ValueError: joined=today
+        window_start=max(joined, today.replace(day=1)-timedelta(days=365))
+        expected_months=max(1, min(12, (today.year-window_start.year)*12+today.month-window_start.month+1))
+        periods=int(db().val("SELECT COUNT(DISTINCT period) FROM contributions WHERE chama_id=? AND user_id=? AND status='PAID' AND period>=?",(chama_id,user_id,window_start.strftime('%Y-%m')),0) or 0)
+        attendance_pct=round((int(present or 0)*100/int(totalmeet)) if totalmeet else 0)
+        contribution_pct=round(min(100,periods*100/expected_months))
+        dimensions=[]
+        if totalmeet: dimensions.append(attendance_pct)
+        constitution=db().one('SELECT monthly_contribution_cents FROM chama_constitutions WHERE chama_id=?',(chama_id,))
+        if constitution and int(constitution.get('monthly_contribution_cents') or 0)>0: dimensions.append(contribution_pct)
+        participation_score=round(sum(dimensions)/len(dimensions)) if dimensions else None
+        if participation_score is None: participation_badge='Getting started'
+        elif participation_score>=85: participation_badge='Gold'
+        elif participation_score>=65: participation_badge='Silver'
+        else: participation_badge='Bronze'
+        score_details={'attendance_pct':attendance_pct if totalmeet else None,'contribution_pct':contribution_pct if constitution and int(constitution.get('monthly_contribution_cents') or 0)>0 else None,'months_assessed':expected_months,'paid_periods':periods}
+        return render_template('passport.html',chama=chama,me=me,target=target,savings=savings,loan=loan,contribs=contribs,present=present,totalmeet=totalmeet,participation_score=participation_score,participation_badge=participation_badge,score_details=score_details)
 
     @app.route('/chamas/<int:chama_id>/activity')
     @login_required

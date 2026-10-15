@@ -189,6 +189,7 @@ def register_plus_routes(app, db, login_required, ctx, owner_required):
                         for row in preview:
                             try:
                                 uid, code = S.add_member_by_phone(db(), chama_id, row['phone'], row['name'], row['role'], g.user['id'], generate_password_hash)
+                                N.notify(db(), uid, chama_id, f'You were added to {chama["name"]}. Open ChamaPay to view your group and its updates.', f'/chamas/{chama_id}', g.user['id'])
                                 results['added'].append({'name': row['name'], 'phone': row['phone'], 'role': row['role'], 'code': code, 'already_registered': not bool(code)})
                             except S.BusinessError as exc:
                                 results['errors'].append({'name': row['name'], 'phone': row['phone'], 'error': str(exc)})
@@ -362,7 +363,10 @@ def register_plus_routes(app, db, login_required, ctx, owner_required):
             uid=request.form.get('owner_user_id',type=int)
             if uid: _member_or_404(db(),chama_id,uid)
             aid=db().insert('meeting_actions',meeting_id=mid,chama_id=chama_id,title=title[:240],owner_user_id=uid or None,due_date=request.form.get('due_date') or None,status='OPEN',created_by=me['user_id'],created_at=_stamp())
-            audit(db(),me['user_id'],'MEETING_ACTION_CREATED','meeting_action',aid,chama_id); db().commit(); flash('Action item added.','success')
+            audit(db(),me['user_id'],'MEETING_ACTION_CREATED','meeting_action',aid,chama_id)
+            if uid:
+                N.notify(db(), uid, chama_id, f'You were assigned a meeting action: {title[:160]}.', f'/chamas/{chama_id}/meetings/{mid}', me['user_id'])
+            db().commit(); flash('Action item added.','success')
         return redirect(url_for('meeting_view',chama_id=chama_id,mid=mid))
 
     @app.route('/chamas/<int:chama_id>/meetings/<int:mid>/actions/<int:aid>/toggle', methods=['POST'])
@@ -372,7 +376,10 @@ def register_plus_routes(app, db, login_required, ctx, owner_required):
         row=db().one('SELECT * FROM meeting_actions WHERE id=? AND meeting_id=? AND chama_id=?',(aid,mid,chama_id)) or abort(404)
         if me['role'] not in ('CHAMA_ADMIN','SECRETARY') and row['owner_user_id']!=g.user['id']: abort(403)
         status='DONE' if row['status']!='DONE' else 'OPEN'
-        db().execute('UPDATE meeting_actions SET status=?,completed_at=? WHERE id=?',(status,_stamp() if status=='DONE' else None,aid)); db().commit()
+        db().execute('UPDATE meeting_actions SET status=?,completed_at=? WHERE id=?',(status,_stamp() if status=='DONE' else None,aid))
+        if row.get('owner_user_id') and int(row['owner_user_id']) != int(g.user['id']):
+            N.notify(db(), row['owner_user_id'], chama_id, f'Meeting action "{row["title"][:120]}" was marked {status.lower()}.', f'/chamas/{chama_id}/meetings/{mid}', g.user['id'])
+        db().commit()
         return redirect(url_for('meeting_view',chama_id=chama_id,mid=mid))
 
     @app.route('/chamas/<int:chama_id>/meetings/<int:mid>/actions/list')
@@ -394,12 +401,43 @@ def register_plus_routes(app, db, login_required, ctx, owner_required):
     @login_required
     def notification_settings():
         if request.method=='POST':
-            vals={k:int(request.form.get(k)=='1') for k in ('in_app','email','sms','push')}
+            vals={k:int(request.form.get(k)=='1') for k in ('in_app','email','sms','push','whatsapp')}
             vals['in_app']=1
-            db().execute("INSERT INTO notification_preferences(user_id,in_app,email,sms,push,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET in_app=excluded.in_app,email=excluded.email,sms=excluded.sms,push=excluded.push,updated_at=excluded.updated_at",(g.user['id'],vals['in_app'],vals['email'],vals['sms'],vals['push'],_stamp()))
+            db().execute("INSERT INTO notification_preferences(user_id,in_app,email,sms,push,whatsapp,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET in_app=excluded.in_app,email=excluded.email,sms=excluded.sms,push=excluded.push,whatsapp=excluded.whatsapp,updated_at=excluded.updated_at",(g.user['id'],vals['in_app'],vals['email'],vals['sms'],vals['push'],vals['whatsapp'],_stamp()))
             db().commit(); flash('Notification preferences saved.','success')
-        pref=db().one('SELECT * FROM notification_preferences WHERE user_id=?',(g.user['id'],)) or {'in_app':1,'email':1,'sms':0,'push':1}
+        pref=db().one('SELECT * FROM notification_preferences WHERE user_id=?',(g.user['id'],)) or {'in_app':1,'email':1,'sms':0,'push':1,'whatsapp':0}
         return render_template('notification_settings.html',pref=pref)
+
+    # ---------- read-only external statement matching ----------
+    @app.route('/chamas/<int:chama_id>/statement-match', methods=['GET','POST'])
+    @login_required
+    def statement_match(chama_id):
+        chama,me,sub=ctx(chama_id,roles=STAFF)
+        import statement_audit as SA
+        raw=''; rows=[]; totals={'rows':0,'matched':0,'possible':0,'unmatched':0,'ambiguous':0}
+        if request.method=='POST':
+            uploaded=request.files.get('statement_csv')
+            try:
+                raw_bytes=uploaded.read(256*1024+1) if uploaded and uploaded.filename else (request.form.get('csv_text') or '').encode('utf-8')
+                if len(raw_bytes)>256*1024: raise ValueError('Statement CSV must be 256 KB or smaller.')
+                raw=raw_bytes.decode('utf-8-sig')
+                parsed=SA.parse_statement_csv(raw_bytes)
+                first=min(r['date'] for r in parsed); last=max(r['date'] for r in parsed)
+                ledger=db().all("SELECT id,kind,direction,amount_cents,ref_type,ref_id,description,occurred_on FROM ledger_transactions WHERE chama_id=? AND occurred_on>=? AND occurred_on<=? ORDER BY id",(chama_id,first,last))
+                for item in ledger:
+                    item['reference']=''
+                    rt=(item.get('ref_type') or '').lower(); rid=item.get('ref_id')
+                    if rid and rt in ('contribution','loan_repayment','fine_payment'):
+                        table={'contribution':'contributions','loan_repayment':'loan_repayments','fine_payment':'fine_payments'}[rt]
+                        refrow=db().one(f'SELECT reference FROM {table} WHERE id=?',(rid,))
+                        if refrow: item['reference']=refrow.get('reference') or ''
+                rows=SA.match_statement_rows(parsed,ledger)
+                totals={'rows':len(rows),'matched':sum(r['status']=='MATCHED' for r in rows),'possible':sum(r['status']=='POSSIBLE_MATCH' for r in rows),'unmatched':sum(r['status'] in ('UNMATCHED','REFERENCE_MISMATCH') for r in rows),'ambiguous':sum(r['status']=='AMBIGUOUS' for r in rows)}
+                audit(db(),me['user_id'],'EXTERNAL_STATEMENT_MATCHED','statement_match',chama_id,chama_id,{'rows':totals['rows'],'matched':totals['matched'],'possible':totals['possible'],'unmatched':totals['unmatched'],'ambiguous':totals['ambiguous']})
+                db().commit()
+            except (ValueError, UnicodeDecodeError) as exc:
+                flash(str(exc),'warning')
+        return render_template('statement_match.html',chama=chama,me=me,raw=raw,rows=rows,totals=totals)
 
     # ---------- financial reconciliation ----------
     @app.route('/chamas/<int:chama_id>/financial-check')
@@ -407,7 +445,7 @@ def register_plus_routes(app, db, login_required, ctx, owner_required):
     def financial_check(chama_id):
         chama,me,sub=ctx(chama_id,roles=VIEW)
         rep=_reconcile(db(),chama_id)
-        return render_template('financial_check.html',chama=chama,me=me,rep=rep)
+        return render_template('financial_check.html',chama=chama,me=me,rep=rep,today_period=date.today().strftime('%Y-%m'))
 
     # ---------- backups ----------
     @app.route('/chamas/<int:chama_id>/backup.json')

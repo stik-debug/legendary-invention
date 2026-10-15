@@ -388,6 +388,11 @@ def suspend_chama(db, chama_id, reason, actor_id, now=None):
         sub = db.one('SELECT * FROM subscriptions WHERE chama_id=?', (chama_id,))
         db.execute("UPDATE subscriptions SET status='SUSPENDED', suspended_at=?, suspend_reason=?, updated_at=? WHERE id=?", (iso(now), reason.strip()[:300], iso(now), sub['id']))
         audit(db, actor_id, 'SUBSCRIPTION_SUSPENDED', 'subscription', sub['id'], chama_id, {'reason': reason, 'from': sub['status'], 'manual': True})
+    try:
+        import notify as N
+        N.notify_roles(db, chama_id, ('CHAMA_ADMIN','TREASURER'), f'ChamaPay subscription access was suspended: {reason.strip()[:100]}', f'/chamas/{chama_id}/subscription')
+    except Exception:
+        pass
 
 
 def grant_access(db, chama_id, days, actor_id, reactivate=False, now=None):
@@ -405,6 +410,11 @@ def grant_access(db, chama_id, days, actor_id, reactivate=False, now=None):
                    [status, iso(new_due), iso(now)] + ([iso(new_due)] if status == 'TRIAL' else []) + [sub['id']])
         audit(db, actor_id, 'SUBSCRIPTION_REACTIVATED' if reactivate else 'SUBSCRIPTION_CHANGED', 'subscription', sub['id'], chama_id,
               {'from': sub['status'], 'to': status, 'extended_days': int(days), 'new_due_at': iso(new_due), 'manual': True})
+    try:
+        import notify as N
+        N.notify_roles(db, chama_id, ('CHAMA_ADMIN','TREASURER'), f'ChamaPay subscription access was updated. New status: {status}.', f'/chamas/{chama_id}/subscription')
+    except Exception:
+        pass
 
 
 def cancel_subscription(db, chama_id, actor_id, now=None):
