@@ -20,8 +20,10 @@ def _deliver_web_push(subscriptions, payload, private_key, subject):
         return
     for subscription in subscriptions:
         try:
+            # A non-zero TTL lets push services deliver after a phone wakes from sleep
+            # or briefly loses connectivity. High urgency prioritizes time-sensitive alerts.
             webpush(subscription_info=subscription, data=json.dumps(payload), vapid_private_key=private_key,
-                    vapid_claims={"sub": subject})
+                    vapid_claims={"sub": subject}, ttl=86400, headers={"Urgency": "high"})
         except Exception as exc:
             # Log failures so hosting logs explain delivery problems; never break the business action.
             logging.getLogger(__name__).warning('Web push delivery failed (%s): %s', type(exc).__name__, str(exc)[:240])
@@ -47,7 +49,8 @@ def send_push_test(db, user_id):
         try:
             webpush(subscription_info=json.loads(row['subscription_json']), data=json.dumps(payload),
                     vapid_private_key=private_key,
-                    vapid_claims={"sub": os.environ.get('VAPID_CLAIMS_SUBJECT', 'mailto:support@chamapay.app')})
+                    vapid_claims={"sub": os.environ.get('VAPID_CLAIMS_SUBJECT', 'mailto:support@chamapay.app')},
+                    ttl=86400, headers={"Urgency": "high"})
             sent += 1
         except Exception as exc:
             status_code = getattr(getattr(exc, 'response', None), 'status_code', None)
@@ -89,7 +92,9 @@ def _queue_web_push(db, user_id, text, link, notification_id):
                    'notification_id': notification_id}
         threading.Thread(target=_deliver_web_push, args=(subscriptions, payload, private_key,
             os.environ.get('VAPID_CLAIMS_SUBJECT', 'mailto:support@chamapay.app')), daemon=True).start()
-    except Exception:
+    except Exception as exc:
+        # Do not silently hide why a notification could not even be queued.
+        logging.getLogger(__name__).exception('Unable to queue web push notification: %s', str(exc)[:240])
         return
 
 
