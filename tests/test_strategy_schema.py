@@ -12,6 +12,10 @@ def test_strategy_tables_and_vote_scenario_migration(tmp_path):
         assert 'ux_one_pending_handover_per_chama' in indexes
         cols = {r['name'] for r in db.all('PRAGMA table_info(chama_votes)')}
         assert 'scenario_id' in cols
+        constitution_cols = {r['name'] for r in db.all('PRAGMA table_info(chama_constitutions)')}
+        preference_cols = {r['name'] for r in db.all('PRAGMA table_info(notification_preferences)')}
+        assert 'contribution_due_day' in constitution_cols
+        assert 'whatsapp' in preference_cols
 
         # Simulate a prior schema and ensure the additive repair restores the new optional column.
         db.execute('ALTER TABLE chama_votes DROP COLUMN scenario_id')
@@ -19,5 +23,9 @@ def test_strategy_tables_and_vote_scenario_migration(tmp_path):
         init_db(db)
         cols = {r['name'] for r in db.all('PRAGMA table_info(chama_votes)')}
         assert 'scenario_id' in cols
+        constitution_cols = {r['name'] for r in db.all('PRAGMA table_info(chama_constitutions)')}
+        preference_cols = {r['name'] for r in db.all('PRAGMA table_info(notification_preferences)')}
+        assert 'contribution_due_day' in constitution_cols
+        assert 'whatsapp' in preference_cols
     finally:
         db.close()
