@@ -83,7 +83,12 @@ def register(app, db, ctx, login_required):
         sheet = C.attendance_sheet(db(), chama_id, mid)
         actions = db().all("SELECT a.*,u.name owner FROM meeting_actions a LEFT JOIN users u ON u.id=a.owner_user_id WHERE a.meeting_id=? ORDER BY a.status,a.due_date,a.id", (mid,))
         members = db().all("SELECT u.id,u.name FROM chama_members m JOIN users u ON u.id=m.user_id WHERE m.chama_id=? AND m.status='ACTIVE' ORDER BY u.name", (chama_id,))
-        return render_template('meeting.html', chama=chama, me=me, m=m, sheet=sheet, actions=actions, members=members, join_open=C.join_open(m), joined=C.joined_ids(db(), mid), can=me['role'] in COMMS,
+        rsvp_rows=db().all("SELECT user_id,response FROM meeting_rsvps WHERE meeting_id=?",(mid,))
+        active_count=int(db().val("SELECT COUNT(*) FROM chama_members WHERE chama_id=? AND status='ACTIVE'",(chama_id,),0) or 0)
+        rsvp_map={r['user_id']:r['response'] for r in rsvp_rows}
+        coming=sum(1 for r in rsvp_rows if r['response']=='COMING')
+        quorum=max(1,(active_count//2)+1)
+        return render_template('meeting.html', chama=chama, me=me, m=m, sheet=sheet, actions=actions, members=members, join_open=C.join_open(m), joined=C.joined_ids(db(), mid), can=me['role'] in COMMS, rsvp_map=rsvp_map, rsvp_coming=coming, rsvp_answered=len(rsvp_rows), active_count=active_count, quorum=quorum,
                                mine=next((r['status'] for r in sheet if r['id'] == g.user['id']), None))
 
     @app.route('/chamas/<int:chama_id>/meetings/<int:mid>/join')

@@ -394,11 +394,15 @@ def register_plus_routes(app, db, login_required, ctx, owner_required):
     @login_required
     def notification_settings():
         if request.method=='POST':
-            vals={k:int(request.form.get(k)=='1') for k in ('in_app','email','sms','push')}
+            vals={k:int(request.form.get(k)=='1') for k in ('in_app','email','sms','push','meetings','money','chat')}
             vals['in_app']=1
-            db().execute("INSERT INTO notification_preferences(user_id,in_app,email,sms,push,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET in_app=excluded.in_app,email=excluded.email,sms=excluded.sms,push=excluded.push,updated_at=excluded.updated_at",(g.user['id'],vals['in_app'],vals['email'],vals['sms'],vals['push'],_stamp()))
+            quiet_start=(request.form.get('quiet_start') or '22:00')[:5]; quiet_end=(request.form.get('quiet_end') or '06:00')[:5]
+            import re
+            if not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d',quiet_start) or not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d',quiet_end):
+                flash('Quiet hours must use 24-hour HH:MM time.','warning'); return redirect(url_for('notification_settings'))
+            db().execute("INSERT INTO notification_preferences(user_id,in_app,email,sms,push,meetings,money,chat,quiet_start,quiet_end,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET in_app=excluded.in_app,email=excluded.email,sms=excluded.sms,push=excluded.push,meetings=excluded.meetings,money=excluded.money,chat=excluded.chat,quiet_start=excluded.quiet_start,quiet_end=excluded.quiet_end,updated_at=excluded.updated_at",(g.user['id'],vals['in_app'],vals['email'],vals['sms'],vals['push'],vals['meetings'],vals['money'],vals['chat'],quiet_start,quiet_end,_stamp()))
             db().commit(); flash('Notification preferences saved.','success')
-        pref=db().one('SELECT * FROM notification_preferences WHERE user_id=?',(g.user['id'],)) or {'in_app':1,'email':1,'sms':0,'push':1}
+        pref=db().one('SELECT * FROM notification_preferences WHERE user_id=?',(g.user['id'],)) or {'in_app':1,'email':1,'sms':0,'push':1,'meetings':1,'money':1,'chat':1,'quiet_start':'22:00','quiet_end':'06:00'}
         return render_template('notification_settings.html',pref=pref)
 
     # ---------- financial reconciliation ----------

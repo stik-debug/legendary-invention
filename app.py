@@ -29,6 +29,7 @@ import routes_otp
 import routes_features
 import routes_strategy
 import routes_growth
+import routes_engagement
 import services as S
 import auth_otp as OTP
 import twofactor as TF
@@ -870,6 +871,7 @@ def create_app(overrides=None):
     routes_finance.register(app, db, ctx, login_required)
     routes_community.register(app, db, ctx, login_required)
     routes_growth.register(app, db, ctx, login_required, owner_required)
+    routes_engagement.register(app, db, ctx, login_required)
     routes_mgr.register(app, db, ctx, login_required)
     routes_pay.register(app, db, ctx, login_required)
     UP.register(app, db, ctx, login_required)

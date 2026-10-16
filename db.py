@@ -395,6 +395,19 @@ CREATE TABLE IF NOT EXISTS privacy_consents(
   policy_version TEXT NOT NULL, consented INTEGER NOT NULL, recorded_at TEXT NOT NULL, withdrawn_at TEXT,
   source TEXT NOT NULL DEFAULT 'web');
 CREATE INDEX IF NOT EXISTS ix_privacy_consent_user ON privacy_consents(user_id,purpose,id);
+CREATE TABLE IF NOT EXISTS meeting_rsvps(
+  id {PK}, meeting_id INTEGER NOT NULL REFERENCES meetings(id) ON DELETE CASCADE, chama_id INTEGER NOT NULL REFERENCES chamas(id),
+  user_id INTEGER NOT NULL REFERENCES users(id), response TEXT NOT NULL CHECK(response IN ('COMING','NOT_COMING')),
+  updated_at TEXT NOT NULL, UNIQUE(meeting_id,user_id));
+CREATE TABLE IF NOT EXISTS notice_reads(
+  id {PK}, announcement_id INTEGER NOT NULL REFERENCES announcements(id) ON DELETE CASCADE, chama_id INTEGER NOT NULL REFERENCES chamas(id),
+  user_id INTEGER NOT NULL REFERENCES users(id), seen_at TEXT NOT NULL, UNIQUE(announcement_id,user_id));
+CREATE TABLE IF NOT EXISTS payment_promises(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), user_id INTEGER NOT NULL REFERENCES users(id), amount_cents BIGINT NOT NULL CHECK(amount_cents>0),
+  due_date TEXT NOT NULL, note TEXT, status TEXT NOT NULL DEFAULT 'OPEN', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS chama_referrals(
+  id {PK}, referrer_chama_id INTEGER NOT NULL REFERENCES chamas(id), referred_chama_id INTEGER REFERENCES chamas(id), code TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'PENDING', created_at TEXT NOT NULL, rewarded_at TEXT, UNIQUE(referred_chama_id));
 CREATE TABLE IF NOT EXISTS notification_delivery_log(
   id {PK}, user_id INTEGER REFERENCES users(id), channel TEXT NOT NULL, provider TEXT,
   status TEXT NOT NULL, detail TEXT, created_at TEXT NOT NULL);
@@ -517,6 +530,13 @@ def init_db(db):
         ensure_column(db, 'users', 'claim_fails', 'INTEGER NOT NULL DEFAULT 0')
         ensure_column(db, 'users', 'phone_verified_at', 'TEXT')
         ensure_column(db, 'users', 'email_verified_at', 'TEXT')
+        ensure_column(db, 'users', 'profile_image', 'TEXT')
+        ensure_column(db, 'chamas', 'profile_image', 'TEXT')
+        ensure_column(db, 'notification_preferences', 'meetings', 'INTEGER NOT NULL DEFAULT 1')
+        ensure_column(db, 'notification_preferences', 'money', 'INTEGER NOT NULL DEFAULT 1')
+        ensure_column(db, 'notification_preferences', 'chat', 'INTEGER NOT NULL DEFAULT 1')
+        ensure_column(db, 'notification_preferences', 'quiet_start', "TEXT NOT NULL DEFAULT '22:00'")
+        ensure_column(db, 'notification_preferences', 'quiet_end', "TEXT NOT NULL DEFAULT '06:00'")
         ensure_column(db, 'ledger_transactions', 'account', "TEXT NOT NULL DEFAULT 'MAIN'")
         ensure_column(db, 'users', 'reset_hash', 'TEXT')
         ensure_column(db, 'users', 'reset_expires', 'TEXT')
