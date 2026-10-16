@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block title %}Users - Control Center{% endblock %}
+{% block content %}
+<div class="head"><div><h2>Users</h2><p>Find a person to help with a forgotten password. Check who they really are first: call them on the number we have, or ask their chairperson.</p></div></div>
+{% include '_owner_nav.html' %}
+<form method="GET" class="card" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap"><div style="flex:1;min-width:200px"><label for="q">Name, email or phone</label><input id="q" name="q" value="{{ q }}" required></div><button class="btn">Search</button></form>
+{% if q %}<div class="card tight"><ul class="list">
+{% for r in rows %}<li><span class="av">{{ r.name[:1] }}</span><span class="grow">{{ r.name }}{% if r.is_super_admin %} <span class="pill ok">Owner</span>{% endif %}{% if not r.is_active %} <span class="pill bad">Disabled</span>{% endif %}<br><small>{{ r.phone }} · {{ r.email }}</small><br><small>{% for c in r.chamas %}{{ c.name }}{% if not loop.last %}, {% endif %}{% else %}No active chama{% endfor %}</small></span>
+{% if r.claimed and r.is_active and not r.is_super_admin %}<form method="POST" action="{{ url_for('owner_reset_code', user_id=r.id) }}" data-confirm="Issue a password reset code for {{ r.name }}? Have you checked who is asking?" style="margin:0">{{ csrf_input() }}<input type="hidden" name="q" value="{{ q }}"><button class="btn sm">Reset password</button></form>{% elif not r.claimed %}<span class="pill warn">Not registered yet</span>{% endif %}</li>
+{% else %}<li class="empty grow">Nobody found.</li>{% endfor %}</ul></div>{% endif %}
+{% endblock %}

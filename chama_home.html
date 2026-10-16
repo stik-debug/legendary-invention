@@ -1,0 +1,75 @@
+{% extends "base.html" %}{% block title %}{{ chama.name }} - ChamaPay{% endblock %}
+{% block content %}
+<div class="head"><div><h2>{{ chama.name }}</h2><p>{{ chama.description or 'Your chama' }}</p></div>
+<div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn" href="{{ url_for('statement', chama_id=chama.id) }}">My statement</a><a class="btn" href="{{ url_for('subscription', chama_id=chama.id) }}">Subscription</a>{% if me.role in ('CHAMA_ADMIN','TREASURER') %}<a class="btn" href="{{ url_for('trust_center',chama_id=chama.id) }}">Trust & reconciliation</a>{% endif %}{% if is_admin and chama.created_by|int == me.user_id|int %}<a class="btn" href="{{ url_for('chama_setup',chama_id=chama.id) }}">Finish setup</a>{% endif %}</div></div>
+{% include '_chama_nav.html' %}
+{% if invite_code %}
+<div class="join-code-card card hero3d" role="status" aria-live="polite">
+  <div><span class="pill ok">Member invitation ready</span><h3 style="margin:10px 0 5px">Give {{ invite_name or 'the member' }} this join code</h3><p class="mute" style="margin:0">This code is shown once. Send it directly to the member. They must register using the same phone number you added, then enter this code. Do not post it in a public group.</p></div>
+  <div class="join-code-value" id="join-code-value">{{ invite_code }}</div><p class="mute" style="text-align:center;margin:0">Register: {{ invite_code }} · Join code: {{ invite_code }}</p>
+  <div class="actions"><button class="btn pri" type="button" data-copy-text="{{ invite_code }}">Copy join code</button><button class="btn" type="button" data-share-text="ChamaPay join code for {{ invite_name or 'your Chama' }}: {{ invite_code }}">Share code</button></div>
+</div>
+{% endif %}
+{% if sub.status in ('PAST_DUE','GRACE_PERIOD') %}<div class="banner"><h3>Payment overdue</h3><p>Pay before the grace period ends or access will be suspended. Nothing is deleted.</p><a class="btn gold" href="{{ url_for('subscription', chama_id=chama.id) }}">Pay now</a></div>{% endif %}
+<section class="card chama-glance" aria-labelledby="chama-glance-title">
+  <div class="chama-glance-heading">
+    <div><p class="eyebrow">YOUR GROUP OVERVIEW</p><h3 id="chama-glance-title">Your chama at a glance</h3><p class="glance-intro">A quick look at your contribution, loans and next steps.</p></div>
+  </div>
+  <div class="glance-grid">
+    <article class="glance-tile contribution-tile">
+      <div class="glance-label"><span class="glance-icon" aria-hidden="true">KES</span><span>This month’s contribution</span></div>
+      <b class="glance-value">{% if my_status and my_status.status=='PAID' %}Recorded{% elif my_status and my_status.status=='PARTIAL' %}Partly paid{% else %}Not recorded{% endif %}</b>
+      <p class="glance-detail">Expected: <strong>KES {{ chama.contribution_cents|kes }}</strong></p>
+      {% if my_status and my_status.status=='PAID' %}<span class="glance-status status-good">✓ Payment recorded</span>{% elif my_status and my_status.status=='PARTIAL' %}<span class="glance-status status-warn">! Part payment recorded</span>{% else %}<span class="glance-status status-warn">Action needed · Check with your treasurer</span>{% endif %}
+      <a class="btn sm pri glance-action" href="{{ url_for('savings',chama_id=chama.id) }}">Check contributions <span aria-hidden="true">→</span></a>
+    </article>
+    <article class="glance-tile">
+      <div class="glance-label"><span class="glance-icon" aria-hidden="true">↗</span><span>My outstanding loans</span></div>
+      <b class="glance-value">{{ my_open_loans|length }}</b>
+      <p class="glance-detail">Open loan{{ '' if my_open_loans|length == 1 else 's' }} linked to your membership.</p>
+      <a class="btn sm glance-action" href="{{ url_for('loans',chama_id=chama.id) }}">View my loans <span aria-hidden="true">→</span></a>
+    </article>
+    <article class="glance-tile">
+      <div class="glance-label"><span class="glance-icon" aria-hidden="true">✓</span><span>My meeting commitments</span></div>
+      <b class="glance-value">{{ my_actions|length }}</b>
+      <p class="glance-detail">Open action{{ '' if my_actions|length == 1 else 's' }} assigned to you.</p>
+      <a class="btn sm glance-action" href="{{ url_for('chama_promises',chama_id=chama.id) }}">View commitments <span aria-hidden="true">→</span></a>
+    </article>
+  </div>
+  {% if my_actions %}<div class="glance-next-actions"><h4>What you need to do next</h4><ul>{% for a in my_actions %}<li>{{ a.title }}{% if a.due_date %}<span>Due {{ a.due_date }}</span>{% endif %}</li>{% endfor %}</ul></div>{% endif %}
+</section>
+<div class="stats">
+<div class="stat dark tilt"><small>Chama cash balance</small><b>KES {{ balance|kes }}</b><a class="explain-link" href="{{ url_for('explain_metric',chama_id=chama.id,metric='cash') }}">Explain</a></div>
+<div class="stat gold tilt"><small>My savings</small><b>KES {{ my_savings|kes }}</b><a class="explain-link" href="{{ url_for('money_timeline',chama_id=chama.id) }}">View proof trail</a></div>
+<div class="stat"><small>I owe on loans</small><b>KES {{ st.loan_balance|kes }}</b></div>
+<div class="stat"><small>Fines I owe</small><b>KES {{ st.fine_balance|kes }}</b></div>
+</div>
+<div class="card hero3d tilt">
+<div><small>{{ plan.name }} plan · {{ 'Free trial until' if sub.status=='TRIAL' else 'Paid until' }} {{ sub.due_at|date }}</small><h2>{{ members|length }} of {{ plan.max_members }} members</h2>
+<p>This month: {{ month_paid }} of {{ members|length }} members have paid KES {{ chama.contribution_cents|kes }}</p></div>
+<div class="ring" style="--p:{{ (month_paid / members|length * 100)|round|int if members else 0 }}"><span><div>{{ month_paid }}/{{ members|length }}<small>paid</small></div></span></div>
+</div>
+<div class="card" style="margin-bottom:14px"><h3>Secure member joining</h3><p class="mute" style="margin:0">Only the Chairperson / Chama Admin adds a member first. ChamaPay then creates a one-time <b>8-digit join code</b>. Give the code privately to that member. Their phone number and code must match before they can claim the membership. After registration, the code is destroyed and cannot be reused.</p></div>
+<div class="card tight"><div style="padding:18px 20px 4px;display:flex;justify-content:space-between;align-items:center;gap:10px"><h3 style="margin:0">Members</h3>
+<span style="display:flex;gap:8px;flex-wrap:wrap">{% if is_admin %}<a class="btn sm" href="{{ url_for('pay_settings',chama_id=chama.id) }}">Payment setup</a><button class="btn sm" data-open="set">Chama settings</button><a class="btn sm" href="{{ url_for('member_import',chama_id=chama.id) }}">Import CSV</a><a class="btn sm" href="{{ url_for('member_export_csv',chama_id=chama.id) }}">Export members</a><a class="btn sm" href="{{ url_for('financial_import',chama_id=chama.id) }}">Import financial history</a><button class="btn sm pri" data-open="add">Add member</button>{% endif %}</span></div>
+<ul class="list">
+{% for m in members %}<li><span class="av">{{ m.name[:1] }}</span><span class="grow">{{ m.name }}<br><small>{{ m.phone }}</small></span><span class="pill {{ 'ok' if m.role!='MEMBER' else '' }}">{{ m.role.replace('_',' ')|title }}</span>{% if not m.claimed %}<span class="pill warn">Not registered yet</span>{% if is_admin %}<form method="POST" action="{{ url_for('member_code', chama_id=chama.id, user_id=m.id) }}" style="margin:0">{{ csrf_input() }}<button class="btn sm">New join code</button></form>{% endif %}{% endif %}
+{% if is_admin and m.claimed and m.role!='CHAMA_ADMIN' and m.id!=user.id %}<form method="POST" action="{{ url_for('member_reset_code', chama_id=chama.id, user_id=m.id) }}" data-confirm="Make a password reset code for {{ m.name }}? Give it only to {{ m.name }}." style="margin:0">{{ csrf_input() }}<button class="btn sm">Reset password</button></form>{% endif %}
+{% if can_view_statements %}<a class="btn sm" href="{{ url_for('statement', chama_id=chama.id, user_id=m.id) }}">Statement</a>{% endif %}<a class="btn sm" href="{{ url_for('member_passport', chama_id=chama.id, user_id=m.id) }}">Digital ID</a>
+{% if is_admin and m.id!=user.id %}<a class="btn sm" href="{{ url_for('member_exit',chama_id=chama.id,user_id=m.id) }}">Exit & payout</a>{% endif %}
+{% if is_admin and m.id!=user.id %}<form method="POST" action="{{ url_for('member_remove', chama_id=chama.id, user_id=m.id) }}" data-confirm="Remove {{ m.name }}? Their history is kept." style="margin:0">{{ csrf_input() }}<button class="btn sm bad">Remove</button></form>{% endif %}</li>{% endfor %}
+</ul></div>
+<div class="card" style="border:1px solid var(--line);margin-top:16px"><h3>Membership & closure</h3><p class="mute">You may leave this chama once your loans, fines and guarantees are settled and any admin role is transferred. Group financial records remain available to authorized officials.</p><form method="POST" action="{{ url_for('chama_leave',chama_id=chama.id) }}" data-confirm="Leave {{ chama.name }}? You will lose access to this chama. Your financial history will be preserved." style="margin-bottom:12px">{{ csrf_input() }}<button class="btn">Leave this chama</button></form>{% if is_admin and chama.created_by|int == me.user_id|int %}<details><summary class="btn bad" style="display:inline-block;cursor:pointer">Close / delete this chama</summary><p class="mute">This closes the chama and cancels its subscription. Financial records and audit history are preserved; this is not a hard deletion.</p><form method="POST" action="{{ url_for('chama_delete',chama_id=chama.id) }}" data-confirm="Close this chama for all members? This cannot be undone from the app.">{{ csrf_input() }}<div class="field"><label>Type the exact chama name: {{ chama.name }}</label><input name="confirm_name" required autocomplete="off"></div><button class="btn bad">Confirm chama closure</button></form></details>{% endif %}</div>
+{% if is_admin %}
+<dialog id="add"><form method="POST" action="{{ url_for('member_add', chama_id=chama.id) }}">{{ csrf_input() }}<h3>Add a member</h3>
+<div class="field"><label for="nm">Full name</label><input id="nm" name="name" autocomplete="off" maxlength="80"><small>Needed if they are new to ChamaPay.</small></div>
+<div class="field"><label for="ph">Phone number</label><input id="ph" type="tel" name="phone" placeholder="0712345678" required></div>
+<div class="field"><label for="ro">Role</label><select id="ro" name="role">{% for r in roles %}<option value="{{ r }}">{{ r.replace('_',' ')|title }}</option>{% endfor %}</select></div>
+<div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn pri">Add member</button></div></form></dialog>
+<dialog id="set"><form method="POST" action="{{ url_for('chama_settings', chama_id=chama.id) }}">{{ csrf_input() }}<h3>Chama settings</h3>
+<div class="field"><label>Monthly contribution per member (KES)</label><input name="contribution" value="{{ (chama.contribution_cents/100)|int }}" inputmode="decimal" required></div>
+<div class="field"><label>Loan interest (% flat, one-time)</label><input name="rate" value="{{ chama.loan_rate_bps/100 }}" inputmode="decimal" required></div>
+<div class="field"><label>Members can borrow up to (times their savings)</label><input name="multiplier" type="number" min="1" max="10" value="{{ chama.loan_multiplier }}" required></div>
+<div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn pri">Save</button></div></form></dialog>
+{% endif %}
+{% endblock %}

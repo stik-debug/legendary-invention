@@ -1,0 +1,46 @@
+{% extends "base.html" %}{% block title %}Privacy Policy - ChamaPay{% endblock %}
+{% block content %}
+{# NOTE: plain-language starting text. Have a Kenyan lawyer review it, and register with the Office of the Data Protection Commissioner if required, before launch. #}
+<div class="head"><div><h2>Privacy Policy</h2><p>Last updated 7 October 2026</p></div></div>
+<div class="card" style="line-height:1.6">
+<h3>What this covers</h3>
+<p>ChamaPay is a tool that helps savings groups (chamas) keep their records. This page explains what personal information we hold, why, who can see it, and the choices you have.</p>
+
+<h3>What we collect</h3>
+<ul>
+<li><b>Your account:</b> name, email address, phone number, and your password (we keep only a scrambled version, never the password itself).</li>
+<li><b>Your chama's records:</b> contributions, loans, fines, meetings, notices and messages that you or your officials enter. If a payment is claimed using an M-Pesa message, the text of that message is kept as proof.</li>
+<li><b>Security information:</b> sign-in attempts, a log of important actions (such as changing a password or recording money), and the cookie that keeps you signed in.</li>
+</ul>
+
+<h3>Why we use it</h3>
+<p>To run your chama's records, show each person what their role allows, keep the accounts accurate, protect accounts from misuse, and send the alerts and messages you ask for. We do not sell your information and we do not show advertising.</p>
+
+<h3>Who can see it</h3>
+<ul>
+<li><b>Members of your chama</b> see what the chama's screens show them. Officials (chairperson, treasurer, secretary) can see more, such as everyone's contributions and loans.</li>
+<li><b>ChamaPay staff</b> can access account data only to run and support the service. Sensitive actions are recorded in a log.</li>
+<li><b>Service providers</b> that host the app and, when text messages are switched on, send SMS for us. They handle data only to provide that service.</li>
+<li>We may share information if the law requires it.</li>
+</ul>
+
+<h3>How long we keep it</h3>
+<p>For as long as your chama uses ChamaPay, because a chama's books must keep their history. When an account is deleted, your personal details are erased (see below), but the group's financial entries stay so that its accounts still add up.</p>
+
+<h3>Your choices</h3>
+<p>You can ask to see your data, correct it, object to how it is used, or delete your account. Go to <b>Security &amp; Privacy</b> after signing in. You can also download a copy of your data there. Deleting an account <b>erases your name, phone number, email, password and sign-ins</b> and removes you from your chamas. Entries in the group's books remain, shown as "Deleted member". We may ask you to settle open loans, unpaid fines, or hand over a chairperson role first.</p>
+
+<h3>Keeping it safe</h3>
+<p>Passwords are stored scrambled, the site uses an encrypted connection, access depends on your role, and the platform owner's account can use an authenticator app for extra protection. No system is perfectly secure, so please use a strong password and never share your codes.</p>
+
+<h3>Children</h3>
+<p>ChamaPay is for adults (18 and over).</p>
+
+<h3>Complaints</h3>
+<p>If you are unhappy with how your information is handled, please contact us first{% if support_contact %}: <b>{{ support_contact }}</b>{% endif %}. You also have the right to complain to Kenya's Office of the Data Protection Commissioner.</p>
+
+<h3>Changes</h3>
+<p>If we change this policy in a way that matters, we will update the date above and tell you in the app.</p>
+</div>
+<p class="mute" style="text-align:center"><a href="{{ url_for('terms') }}">Terms of Use</a> · <a href="{{ url_for('index') }}">Home</a></p>
+{% endblock %}

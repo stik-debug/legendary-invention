@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% block title %}Explain {{ title }} - ChamaPay{% endblock %}{% block content %}
+<div class="head"><div><h2>Explain this number</h2><p>{{ chama.name }} · {{ title }}</p></div></div>{% include '_chama_nav.html' %}
+<div class="card explain-card"><small>{{ title }}</small><div class="explain-value">{% if title=='Active members' %}{{ value }}{% else %}KES {{ value|kes }}{% endif %}</div><p>{{ explanation }}</p></div>
+{% if rows %}<div class="card"><h3>Breakdown</h3><ul class="list">{% for r in rows %}<li><span class="grow">{{ r.period }}</span><b>{% if title=='Active members' %}{{ r.amount }}{% else %}KES {{ r.amount|kes }}{% endif %}</b></li>{% endfor %}</ul></div>{% endif %}
+{% endblock %}

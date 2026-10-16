@@ -1,0 +1,4 @@
+{% extends "base.html" %}{% block title %}Activity - {{ chama.name }}{% endblock %}{% block content %}
+<div class="head"><div><h2>Financial Activity</h2><p>A searchable-style timeline of recorded transactions.</p></div></div>{% include '_chama_nav.html' %}
+<div class="card tight"><ul class="list">{% for a in rows %}<li><span class="av">{{ (a.name or 'S')[:1] }}</span><span class="grow"><b>{{ a.name or 'System' }}</b><br><small>{{ a.description or a.kind }} · {{ a.occurred_on }} · {{ a.ref_type or 'record' }}</small></span><span class="amt {{ 'bad' if a.direction=='OUT' else 'ok' }}">{{ '−' if a.direction=='OUT' else '+' }} KES {{ a.amount_cents|kes }}</span></li>{% else %}<li class="empty">No transactions recorded.</li>{% endfor %}</ul></div>
+{% endblock %}

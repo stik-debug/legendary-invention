@@ -1,0 +1,7 @@
+{% extends "base.html" %}{% block title %}{{ label }} - ChamaPay{% endblock %}
+{% block content %}
+<div class="head"><div><h2>{{ label }}</h2><p>Which chama do you want to open?</p></div></div>
+<div class="card tight"><ul class="list">
+{% for c in chamas %}<li><span class="av">{{ c.name[:1] }}</span><span class="grow"><b>{{ c.name }}</b></span><a class="btn sm pri" href="{{ c.url }}">Open</a></li>{% endfor %}
+</ul></div>
+{% endblock %}

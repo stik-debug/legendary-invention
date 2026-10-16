@@ -1,0 +1,4 @@
+{% extends "base.html" %}{% block title %}Audit log - {{ chama.name }}{% endblock %}{% block content %}
+<div class="head"><div><h2>Audit log</h2><p>Officials can see who changed what in this Chama.</p></div></div>{% include '_chama_nav.html' %}
+<div class="card tight"><ul class="list">{% for a in rows %}<li><span class="grow"><b>{{ a.action.replace('_',' ')|title }}</b><br><small>{{ a.actor_name or 'System' }} · {{ a.created_at|datetime }} · {{ a.entity_type or 'record' }}{% if a.entity_id %} #{{ a.entity_id }}{% endif %}</small>{% if a.metadata_obj %}<br><small>{{ a.metadata_obj }}</small>{% endif %}</span></li>{% else %}<li class="empty">No audit entries yet.</li>{% endfor %}</ul></div>
+{% endblock %}

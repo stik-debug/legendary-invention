@@ -1,0 +1,7 @@
+{% extends "base.html" %}{% block title %}Audit log - Control Center{% endblock %}
+{% block content %}
+<div class="head"><div><h2>Audit log</h2><p>Every important action. Read-only.</p></div></div>{% include '_owner_nav.html' %}
+<div class="card tight scroll"><table><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Chama</th><th>Details</th></tr></thead><tbody>
+{% for a in rows %}<tr><td>{{ a.created_at|datetime }}</td><td>{{ a.actor or 'System' }}</td><td><b>{{ a.action.replace('_',' ') }}</b></td><td>{{ a.chama or '-' }}</td><td><small>{{ a.metadata[:120] }}</small></td></tr>{% else %}<tr><td colspan="5" class="empty">Nothing yet.</td></tr>{% endfor %}</tbody></table></div>
+<div class="pager">{% if page>1 %}<a class="btn sm" href="?page={{ page-1 }}">Previous</a>{% endif %}<span class="mute">Page {{ page }} of {{ pages }}</span>{% if page<pages %}<a class="btn sm" href="?page={{ page+1 }}">Next</a>{% endif %}</div>
+{% endblock %}

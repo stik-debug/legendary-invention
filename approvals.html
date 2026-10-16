@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Approvals · {{ chama.name }}{% endblock %}
+{% block content %}
+<div class="head"><div><h2>Second-official approvals</h2><p class="mute">High-risk financial corrections and payouts require a different official to review them.</p></div></div>
+{% include '_chama_nav.html' %}
+<div class="card tight"><ul class="list">
+{% for r in rows %}
+<li style="align-items:flex-start"><div class="grow"><b>{{ r.request_type|replace('_',' ')|title }}</b> · {{ r.entity_type|title }} #{{ r.entity_id }}<br><small>Requested by {{ r.requester }} · {{ r.created_at|datetime }}</small><p>{{ r.reason }}</p>{% if r.status != 'PENDING' %}<small>{{ r.status|title }}{% if r.reviewer %} by {{ r.reviewer }}{% endif %}</small>{% endif %}</div>
+{% if r.status == 'PENDING' %}<div class="row" style="gap:8px"><form method="post" action="{{ url_for('chama_approval_decide',chama_id=chama.id,request_id=r.id,decision='approve') }}">{{ csrf_input() }}<button class="btn pri sm" type="submit" {% if r.requested_by == user.id %}disabled title="You cannot approve your own request"{% endif %}>Approve</button></form><form method="post" action="{{ url_for('chama_approval_decide',chama_id=chama.id,request_id=r.id,decision='reject') }}">{{ csrf_input() }}<button class="btn sm" type="submit" {% if r.requested_by == user.id %}disabled title="You cannot decide your own request"{% endif %}>Reject</button></form></div>{% endif %}</li>
+{% else %}<li class="empty">No approval requests yet.</li>{% endfor %}
+</ul></div>
+{% endblock %}

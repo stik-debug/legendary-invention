@@ -1,0 +1,56 @@
+<section class="profile-photo-card" data-profile-photo-card>
+  <div class="profile-photo-copy">
+    <span class="profile-photo-eyebrow">PROFILE & IDENTITY</span>
+    <h3>{{ photo_title }}</h3>
+    <p>{{ photo_subtitle }}</p>
+    <form class="profile-photo-form" method="post" enctype="multipart/form-data" action="{{ photo_action }}" data-profile-photo-form>
+      {{ csrf_input() }}
+      <input class="profile-photo-input" id="{{ photo_input_id }}" type="file" name="photo" accept="image/jpeg,image/png,image/webp" required data-profile-photo-input>
+      <label class="profile-photo-drop" for="{{ photo_input_id }}" data-profile-photo-drop>
+        <span class="profile-photo-upload-icon" aria-hidden="true">↑</span>
+        <span class="profile-photo-drop-main">Choose a photo</span>
+        <span class="profile-photo-drop-sub">or drag and drop it here</span>
+      </label>
+      <div class="profile-photo-file-meta" data-profile-photo-meta>JPG, PNG or WebP · up to 3 MB</div>
+      <button class="btn pri profile-photo-save" type="submit" data-profile-photo-submit disabled>Save photo</button>
+    </form>
+  </div>
+  <div class="profile-photo-preview-wrap">
+    <div class="profile-photo-preview {{ 'has-photo' if photo_url else '' }}" data-profile-photo-preview>
+      {% if photo_url %}<img src="{{ photo_url }}" alt="Current {{ photo_kind }} photo" data-profile-photo-current>
+      {% else %}<span class="profile-photo-initial" aria-hidden="true">{{ photo_initial }}</span>{% endif %}
+      <span class="profile-photo-preview-tag">{{ 'Current photo' if photo_url else 'Photo preview' }}</span>
+    </div>
+    <div class="profile-photo-preview-hint">Square images look best</div>
+  </div>
+</section>
+<script>
+(()=>{
+ const card=document.currentScript.previousElementSibling;
+ if(!card || !card.matches('[data-profile-photo-card]')) return;
+ const input=card.querySelector('[data-profile-photo-input]');
+ const drop=card.querySelector('[data-profile-photo-drop]');
+ const preview=card.querySelector('[data-profile-photo-preview]');
+ const meta=card.querySelector('[data-profile-photo-meta]');
+ const submit=card.querySelector('[data-profile-photo-submit]');
+ let objectUrl='';
+ const showFile=file=>{
+   if(!file) return;
+   const allowed=['image/jpeg','image/png','image/webp'];
+   if(!allowed.includes(file.type)){meta.textContent='Please choose a JPG, PNG or WebP image.';submit.disabled=true;input.value='';return;}
+   if(file.size>3*1024*1024){meta.textContent='That image is over 3 MB. Choose a smaller image.';submit.disabled=true;input.value='';return;}
+   if(objectUrl) URL.revokeObjectURL(objectUrl);
+   objectUrl=URL.createObjectURL(file);
+   preview.innerHTML='';
+   const img=document.createElement('img');img.src=objectUrl;img.alt='Selected profile photo preview';preview.appendChild(img);preview.classList.add('has-photo');
+   const tag=document.createElement('span');tag.className='profile-photo-preview-tag';tag.textContent='New photo';preview.appendChild(tag);
+   meta.textContent=file.name+' · '+(file.size/1024/1024).toFixed(2)+' MB';
+   submit.disabled=false;
+ };
+ input.addEventListener('change',()=>showFile(input.files && input.files[0]));
+ ['dragenter','dragover'].forEach(evt=>drop.addEventListener(evt,e=>{e.preventDefault();drop.classList.add('is-dragging');}));
+ ['dragleave','drop'].forEach(evt=>drop.addEventListener(evt,e=>{e.preventDefault();drop.classList.remove('is-dragging');}));
+ drop.addEventListener('drop',e=>{const file=e.dataTransfer.files && e.dataTransfer.files[0];if(!file)return;try{const dt=new DataTransfer();dt.items.add(file);input.files=dt.files;}catch(_){}showFile(file);});
+ card.querySelector('form').addEventListener('submit',e=>{if(!input.files || !input.files.length){e.preventDefault();meta.textContent='Choose a photo before saving.';}});
+})();
+</script>

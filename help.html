@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% block title %}Help Center - ChamaPay{% endblock %}{% block content %}
+<div class="head"><div><h2>Help Center</h2><p>Get help with your ChamaPay account or chama.</p></div></div>
+<div class="grid"><div class="card"><h3>Contact support</h3><form method="POST">{{ csrf_input() }}<div class="field"><label>Chama</label><select name="chama_id"><option value="">Account / general</option>{% for c in chamas %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></div><div class="field"><label>Subject</label><input name="subject" required maxlength="160"></div><div class="field"><label>Message</label><textarea name="body" required maxlength="3000" rows="6"></textarea></div><button class="btn pri">Send request</button></form></div>
+<div class="card"><h3>My support requests</h3><ul class="list">{% for t in tickets %}<li><span class="grow"><b>{{ t.subject }}</b><br><small>{{ t.chama or 'Account' }} · {{ t.created_at|datetime }}</small></span><span class="pill {{ 'ok' if t.status=='CLOSED' else 'warn' }}">{{ t.status }}</span></li>{% else %}<li class="empty">No support requests yet.</li>{% endfor %}</ul></div></div>
+{% endblock %}

@@ -1,0 +1,7 @@
+{% extends "base.html" %}{% block title %}ChamaPay AI - {{ chama.name }}{% endblock %}{% block content %}
+<div class="head"><div><h2>ChamaPay AI</h2><p>Ask questions about the data you are authorized to see.</p></div></div>{% include '_chama_nav.html' %}
+<div class="card hero3d"><div><h2>Your group, explained.</h2><p>Try: “How much did we save?”, “What is our loan balance?” or “How much are our investments worth?”</p></div></div>
+<form class="card" method="GET"><div class="field"><label>Ask ChamaPay AI</label><input name="q" value="{{ q }}" placeholder="How much did we save this year?"></div><button class="btn pri">Ask</button></form>
+{% if answer %}<div class="card"><span class="pill info">{{ answer.title }}</span><h3 style="margin-top:12px">{{ answer.text }}</h3><small>Based on recorded ChamaPay data available to your account.</small></div>{% endif %}
+<div class="stats"><div class="stat"><small>Members</small><b>{{ stats.members }}</b></div><div class="stat"><small>Savings</small><b>KES {{ stats.savings|kes }}</b></div><div class="stat"><small>Loans</small><b>KES {{ stats.loans|kes }}</b></div><div class="stat"><small>Investments</small><b>KES {{ stats.investments|kes }}</b></div></div>
+{% endblock %}

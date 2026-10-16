@@ -1,0 +1,18 @@
+{% extends "base.html" %}{% from "_macros.html" import pager %}{% block title %}Ledger - {{ chama.name }}{% endblock %}
+{% block content %}
+<div class="head"><div><h2>Ledger</h2><p>Every shilling in and out of {{ chama.name }}</p></div>
+<span style="display:flex;gap:8px;flex-wrap:wrap">{% if can_export %}<a class="btn" href="{{ url_for('ledger_csv', chama_id=chama.id) }}">Download CSV</a>{% endif %}{% if can %}<button class="btn pri" data-open="add">Add expense or income</button>{% endif %}</span></div>
+{% include '_chama_nav.html' %}
+<div class="stats"><div class="stat dark tilt"><small>Cash balance</small><b>KES {{ balance|kes }}</b></div><div class="stat"><small>Total money in</small><b>KES {{ money_in|kes }}</b></div><div class="stat"><small>Total money out</small><b>KES {{ money_out|kes }}</b></div></div>
+<div class="card tight"><ul class="list">
+{% for r in rows %}<li><span class="grow">{{ r.kind.replace('_',' ')|title }}{% if r.name %} · {{ r.name }}{% endif %}<br><small>{{ r.occurred_on|date }}{% if r.description %} · {{ r.description }}{% endif %}</small></span>
+<span class="amt" style="color:{{ 'var(--em-d)' if r.direction=='IN' else ('var(--bad)' if r.direction=='OUT' else 'var(--mute)') }}">{{ '+' if r.direction=='IN' else ('-' if r.direction=='OUT' else '') }}KES {{ r.amount_cents|kes }}</span>{% if r.direction=='MEMO' %}<span class="pill">Note</span>{% endif %}</li>{% else %}<li class="empty grow">Nothing recorded yet.</li>{% endfor %}</ul></div>
+{{ pager(page, pages) }}
+<p class="mute" style="text-align:center">Entries are never edited or deleted. A mistake is cancelled and shown as a correction.</p>
+{% if can %}<dialog id="add"><form method="POST" action="{{ url_for('ledger_add', chama_id=chama.id) }}">{{ csrf_input() }}<h3>Add to the ledger</h3>
+<div class="field"><label>Type</label><select name="kind"><option value="EXPENSE">Expense (money out)</option><option value="OTHER_INCOME">Other income (money in)</option></select></div>
+<div class="field"><label>Amount (KES)</label><input name="amount" inputmode="decimal" required></div>
+<div class="field"><label>Date</label><input type="date" name="on" value="{{ today }}" max="{{ today }}" required></div>
+<div class="field"><label>What is it for?</label><input name="description" required maxlength="200"></div>
+<div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn pri">Save</button></div></form></dialog>{% endif %}
+{% endblock %}

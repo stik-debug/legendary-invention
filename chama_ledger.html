@@ -1,0 +1,82 @@
+{% extends "base.html" %}{% block title %}Ledger - {{ chama.name }} - ChamaPay Kenya{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>{{ chama.name }}: Ledger</h1><p>Contributions, balances and member statements</p></div>
+  <a href="{{ url_for('chama_home', chama_id=chama.id) }}" class="btn sm">Back</a>
+</div>
+<div class="stats" style="margin-bottom:28px">
+  <div class="stat gold"><b>KES {{ total_contributed|kes }}</b><small>total contributed</small></div>
+  <div class="stat"><b>{{ active_schedules }}</b><small>active schedules</small></div>
+  <div class="stat"><b>{{ members_in_arrears }}</b><small>in arrears</small></div>
+  <div class="stat"><b>{{ total_arrears_kes }}</b><small>total arrears</small></div>
+</div>
+<section style="margin-bottom:28px">
+  <h2>Contribution schedules</h2>
+  <div style="margin-bottom:16px">
+    <a href="{{ url_for('contribution_schedule', chama_id=chama.id) }}" class="btn pri">+ New schedule</a>
+  </div>
+  {% if not schedules %}
+  <div class="card empty">No contribution schedules yet.</div>
+  {% else %}
+  <div class="card tight scroll">
+    <table>
+      <thead><tr><th>Amount</th><th>Frequency</th><th>Start</th><th>Active</th><th></th></tr></thead>
+      <tbody>
+      {% for s in schedules %}
+        <tr>
+          <td class="amt">KES {{ s.amount_cents|kes }}</td>
+          <td>{{ s.frequency }}</td>
+          <td>{{ s.start_date|date }}</td>
+          <td>{% if s.is_active %}<span class="pill ok">Active</span>{% else %}<span class="pill">Inactive</span>{% endif %}</td>
+          <td style="text-align:right"><a href="{{ url_for('contribution_schedule', chama_id=chama.id, schedule_id=s.id) }}">Edit</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
+<h2>Member balances</h2>
+<div class="card tight scroll">
+  <table>
+    <thead><tr><th>Member</th><th>Paid</th><th>Due</th><th>Balance</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for b in member_balances %}
+      <tr>
+        <td><b>{{ b.name }}</b></td>
+        <td class="amt">KES {{ b.paid|kes }}</td>
+        <td class="amt">KES {{ b.due|kes }}</td>
+        <td class="amt" style="{% if b.balance < 0 %}color:var(--bad){% elif b.balance > 0 %}color:var(--em){% endif %}">KES {{ b.balance|kes }}</td>
+        <td>
+          {% if b.in_arrears %}
+            <span class="pill bad">Arrears</span>
+          {% elif b.balance > 0 %}
+            <span class="pill ok">Credit</span>
+          {% else %}
+            <span class="pill info">Paid</span>
+          {% endif %}
+        </td>
+        <td style="text-align:right"><a href="{{ url_for('member_statement', chama_id=chama.id, user_id=b.id) }}">View</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<h2 style="margin-top:28px">Recent transactions</h2>
+<div class="card tight scroll">
+  <table>
+    <thead><tr><th>Date</th><th>Member</th><th>Type</th><th>Amount</th><th>Reference</th></tr></thead>
+    <tbody>
+    {% for t in recent_transactions %}
+      <tr>
+        <td>{{ t.created_at|datetime }}</td>
+        <td>{{ t.member_name }}</td>
+        <td><span class="pill">{{ t.type }}</span></td>
+        <td class="amt">KES {{ t.amount_cents|kes }}</td>
+        <td>{{ t.reference or '-' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

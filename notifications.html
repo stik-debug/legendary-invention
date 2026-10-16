@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block title %}Alerts - ChamaPay{% endblock %}
+{% block content %}
+<div class="head"><div><h2>Alerts</h2><p>What happened in your chamas. These stay inside ChamaPay: no SMS or email is sent.</p></div>
+{% if notif_unread %}<form method="POST" action="{{ url_for('notifications_read') }}" style="margin:0">{{ csrf_input() }}<button class="btn">Mark all as read</button></form>{% endif %}</div>
+<div class="card tight"><ul class="list">
+{% for n in rows %}<li{% if not n.read_at %} style="font-weight:700"{% endif %}><span class="grow">{{ n.text }}<br><small>{{ n.chama or '' }} · {{ n.created_at|datetime }}</small></span>
+{% if n.link %}<form method="POST" action="{{ url_for('notification_open', nid=n.id) }}" style="margin:0">{{ csrf_input() }}<button class="btn sm">Open</button></form>{% endif %}</li>
+{% else %}<li class="empty grow">Nothing yet.</li>{% endfor %}</ul></div>
+{% endblock %}
