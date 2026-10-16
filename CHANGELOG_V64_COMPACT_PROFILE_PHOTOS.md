@@ -18,3 +18,6 @@
 
 ## Tests
 - New `tests/test_account_photos.py` (6 tests). Full suite: same 15 failures/errors as the unmodified v63.
+
+## v64.1
+- The group picture control is now in the chama home header (next to the chama name) for CHAMA_ADMIN. Other members see the picture read-only. It is also still available on All Chama Functions.
