@@ -1,4 +1,4 @@
-const CACHE = "chamapay-static-v10";
+const CACHE = "chamapay-static-v11";
 const OFFLINE_URL = "/static/offline.html";
 
 self.addEventListener("install", (event) => {
