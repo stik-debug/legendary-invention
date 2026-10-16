@@ -9,3 +9,8 @@
 
 Deploy: set VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY on Render if possible, redeploy, then each member enables notifications once and presses "Send test notification".
 Not verified on a physical phone.
+
+## v61 — Meeting reminders
+- Fixed: the daily job only reminded meetings starting in a 2-hour window, so most meetings were never reminded.
+- Members now get a "tomorrow" reminder (meeting within the next 36 hours) and a separate "today" reminder on the day.
+- Each reminder is sent once per meeting. New test added in tests/test_community.py.

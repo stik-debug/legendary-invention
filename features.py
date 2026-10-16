@@ -119,23 +119,35 @@ def meeting_share_url(base_url, chama_id, meeting_id, title, when):
 
 
 def meeting_reminders(db, app_base=None, now=None):
+    """Remind members before meetings.
+
+    The job runs once a day, so a narrow "23-25 hours before" window missed almost every meeting.
+    Instead: a heads-up when the meeting starts within the next 36 hours (worded "tomorrow" or
+    "today" by East Africa date), plus one extra "today" reminder on the day itself.
+    Each reminder type is sent once per meeting (UNIQUE meeting_id + reminder_type).
+    """
     now=now or now_utc()
+    now_local=now+timedelta(hours=3)  # meeting times are stored as East Africa local time (UTC+3)
     sent=0
     meetings=db.all("SELECT * FROM meetings WHERE status='SCHEDULED'")
     for m in meetings:
         try: start=datetime.strptime(m['held_at'],'%Y-%m-%d %H:%M')
         except Exception: continue
-        # Meeting times are stored as East Africa local time. Compare against UTC+3.
-        start_utc=start-timedelta(hours=3)
-        if not (now+timedelta(hours=23) <= start_utc <= now+timedelta(hours=25)): continue
-        if db.val('SELECT COUNT(*) FROM meeting_reminders_sent WHERE meeting_id=? AND reminder_type=?',(m['id'],'24H'),0): continue
+        if start<=now_local or start>now_local+timedelta(hours=36): continue
+        is_today = start.date()==now_local.date()
+        kinds=['TODAY'] if is_today else ['24H']
+        # A meeting first noticed on the day itself still gets its one "today" reminder only.
+        kind=kinds[0]
+        if db.val('SELECT COUNT(*) FROM meeting_reminders_sent WHERE meeting_id=? AND reminder_type=?',(m['id'],kind),0): continue
+        when='today' if is_today else 'tomorrow'
+        clock=m['held_at'][11:16] if len(m['held_at'])>=16 else m['held_at']
         members=db.all("SELECT u.id,u.email,u.name FROM chama_members cm JOIN users u ON u.id=cm.user_id WHERE cm.chama_id=? AND cm.status='ACTIVE'",(m['chama_id'],))
         with db.tx():
             for u in members:
-                N.notify(db,u['id'],m['chama_id'],f'Reminder: {m["title"]} is tomorrow at {m["held_at"]}.',f'/chamas/{m["chama_id"]}/meetings/{m["id"]}',None,now)
+                N.notify(db,u['id'],m['chama_id'],f'Reminder: {m["title"]} is {when} at {clock}.',f'/chamas/{m["chama_id"]}/meetings/{m["id"]}',None,now)
                 pref=db.one('SELECT email FROM notification_preferences WHERE user_id=?',(u['id'],))
                 if (pref is None or int(pref.get('email',1))) and u.get('email'):
-                    N.queue_email(db,u['id'],u['email'],f'Reminder: {m["title"]}',f'Your Chama meeting is tomorrow at {m["held_at"]}. Open ChamaPay for the agenda and meeting details.')
-            db.insert('meeting_reminders_sent',meeting_id=m['id'],reminder_type='24H',sent_at=iso(now))
+                    N.queue_email(db,u['id'],u['email'],f'Reminder: {m["title"]}',f'Your Chama meeting is {when} at {clock}. Open ChamaPay for the agenda and meeting details.')
+            db.insert('meeting_reminders_sent',meeting_id=m['id'],reminder_type=kind,sent_at=iso(now))
         sent+=1
     return sent
