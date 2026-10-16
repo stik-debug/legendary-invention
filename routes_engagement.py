@@ -1,9 +1,9 @@
 """Engagement features: RSVPs, notice receipts, payment promises, annual recap, referrals and profile photos."""
 from datetime import date, datetime, timezone
-from pathlib import Path
+import base64
 from uuid import uuid4
-from werkzeug.utils import secure_filename
-from flask import abort, flash, g, redirect, render_template, request, url_for
+from flask import Response, abort, flash, g, redirect, render_template, request, url_for
+from markupsafe import Markup, escape
 import services as S
 import finance as F
 import notify as N
@@ -112,34 +112,114 @@ def register(app, db, ctx, login_required):
         referred=db().all("SELECT r.*,c.name referred_name FROM chama_referrals r LEFT JOIN chamas c ON c.id=r.referred_chama_id WHERE r.referrer_chama_id=? ORDER BY r.id DESC",(chama_id,))
         return render_template('chama_referrals.html',chama=chama,me=me,row=row,referrals=referred)
 
-    @app.route('/profile/photo',methods=['POST'])
+    # ---------- profile photos (stored in the database so redeploys never delete them) ----------
+    MAX_PHOTO_BYTES = 2 * 1024 * 1024
+
+    def _image_mime(data):
+        """Identify the image from its real bytes (never trust the filename or browser MIME)."""
+        if data.startswith(b'\x89PNG\r\n\x1a\n'): return 'image/png'
+        if data.startswith(b'\xff\xd8\xff'): return 'image/jpeg'
+        if data[:4] == b'RIFF' and data[8:12] == b'WEBP': return 'image/webp'
+        return None
+
+    def _back(default_endpoint, **kw):
+        ref = request.referrer
+        if ref and request.host_url.rstrip('/') in ref:
+            return redirect(ref)
+        return redirect(url_for(default_endpoint, **kw))
+
+    def _store_photo(kind, owner_id):
+        """Validate the upload and save it. Returns an error message, or None on success."""
+        f = request.files.get('photo')
+        if not f or not f.filename:
+            return 'Choose a photo first.'
+        data = f.read(MAX_PHOTO_BYTES + 1)
+        if not data or len(data) > MAX_PHOTO_BYTES:
+            return 'That photo is too large. Choose one under 2 MB.'
+        mime = _image_mime(data)
+        if not mime:
+            return 'Use a JPG, PNG or WebP photo.'
+        encoded = base64.b64encode(data).decode('ascii')
+        now = stamp()
+        db().execute("INSERT INTO profile_images(owner_type,owner_id,mime,data_b64,updated_at) VALUES(?,?,?,?,?) "
+                     "ON CONFLICT(owner_type,owner_id) DO UPDATE SET mime=excluded.mime,data_b64=excluded.data_b64,updated_at=excluded.updated_at",
+                     (kind, owner_id, mime, encoded, now))
+        url = f'/photo/{kind}/{owner_id}?v={int(datetime.now(timezone.utc).timestamp())}'
+        table = 'users' if kind == 'user' else 'chamas'
+        db().execute('UPDATE ' + table + ' SET profile_image=? WHERE id=?', (url, owner_id))
+        db().commit()
+        return None
+
+    def _remove_photo(kind, owner_id):
+        db().execute('DELETE FROM profile_images WHERE owner_type=? AND owner_id=?', (kind, owner_id))
+        table = 'users' if kind == 'user' else 'chamas'
+        db().execute('UPDATE ' + table + ' SET profile_image=NULL WHERE id=?', (owner_id,))
+        db().commit()
+
+    @app.route('/profile/photo', methods=['POST'])
     @login_required
     def profile_photo():
-        f=request.files.get('photo')
-        if not f or not f.filename: flash('Choose a profile image first.','warning'); return redirect(request.referrer if request.referrer and request.host_url.rstrip('/') in request.referrer else url_for('index'))
-        ext=f.filename.rsplit('.',1)[-1].lower() if '.' in f.filename else ''
-        if ext not in ALLOWED_EXT or f.mimetype not in ('image/png','image/jpeg','image/webp'):
-            flash('Use a PNG, JPG or WebP image.','warning'); return redirect(request.referrer if request.referrer and request.host_url.rstrip('/') in request.referrer else url_for('index'))
-        data=f.read(3*1024*1024+1)
-        if not data or len(data)>3*1024*1024 or not data.startswith((b'\x89PNG',b'\xff\xd8\xff',b'RIFF')):
-            flash('Image must be valid and no larger than 3 MB.','warning'); return redirect(request.referrer if request.referrer and request.host_url.rstrip('/') in request.referrer else url_for('index'))
-        name=secure_filename(f"user-{g.user['id']}-{uuid4().hex}.{ext}")
-        folder=Path(app.static_folder)/'uploads'/'profiles'; folder.mkdir(parents=True,exist_ok=True)
-        (folder/name).write_bytes(data)
-        db().execute('UPDATE users SET profile_image=? WHERE id=?',('/static/uploads/profiles/'+name,g.user['id'])); db().commit()
-        flash('Profile photo updated.','success'); return redirect(request.referrer if request.referrer and request.host_url.rstrip('/') in request.referrer else url_for('index'))
+        err = _store_photo('user', g.user['id'])
+        flash(err or 'Profile photo updated.', 'warning' if err else 'success')
+        return _back('index')
 
-    @app.route('/chamas/<int:chama_id>/profile-photo',methods=['POST'])
+    @app.route('/profile/photo/remove', methods=['POST'])
+    @login_required
+    def profile_photo_remove():
+        _remove_photo('user', g.user['id'])
+        flash('Profile photo removed.', 'info')
+        return _back('index')
+
+    @app.route('/chamas/<int:chama_id>/profile-photo', methods=['POST'])
     @login_required
     def chama_profile_photo(chama_id):
-        chama,me,sub=ctx(chama_id,roles=('CHAMA_ADMIN',))
-        f=request.files.get('photo')
-        if not f or not f.filename: flash('Choose a chama image first.','warning'); return redirect(request.referrer if request.referrer and request.host_url.rstrip('/') in request.referrer else url_for('chama_home',chama_id=chama_id))
-        ext=f.filename.rsplit('.',1)[-1].lower() if '.' in f.filename else ''
-        data=f.read(3*1024*1024+1)
-        if ext not in ALLOWED_EXT or f.mimetype not in ('image/png','image/jpeg','image/webp') or not data or len(data)>3*1024*1024 or not data.startswith((b'\x89PNG',b'\xff\xd8\xff',b'RIFF')):
-            flash('Use a valid PNG, JPG or WebP image no larger than 3 MB.','warning'); return redirect(request.referrer if request.referrer and request.host_url.rstrip('/') in request.referrer else url_for('chama_home',chama_id=chama_id))
-        name=secure_filename(f'chama-{chama_id}-{uuid4().hex}.{ext}')
-        folder=Path(app.static_folder)/'uploads'/'profiles'; folder.mkdir(parents=True,exist_ok=True); (folder/name).write_bytes(data)
-        db().execute('UPDATE chamas SET profile_image=? WHERE id=?',('/static/uploads/profiles/'+name,chama_id)); db().commit()
-        flash('Chama profile photo updated.','success'); return redirect(request.referrer if request.referrer and request.host_url.rstrip('/') in request.referrer else url_for('chama_home',chama_id=chama_id))
+        chama, me, sub = ctx(chama_id, roles=('CHAMA_ADMIN',))
+        err = _store_photo('chama', chama_id)
+        flash(err or 'Chama picture updated.', 'warning' if err else 'success')
+        return _back('chama_home', chama_id=chama_id)
+
+    @app.route('/chamas/<int:chama_id>/profile-photo/remove', methods=['POST'])
+    @login_required
+    def chama_profile_photo_remove(chama_id):
+        chama, me, sub = ctx(chama_id, roles=('CHAMA_ADMIN',))
+        _remove_photo('chama', chama_id)
+        flash('Chama picture removed.', 'info')
+        return _back('chama_home', chama_id=chama_id)
+
+    @app.route('/photo/<kind>/<int:owner_id>')
+    @login_required
+    def serve_photo(kind, owner_id):
+        """Photos are visible only to the person themself or to people who share a chama with them."""
+        if kind == 'user':
+            allowed = owner_id == g.user['id'] or db().val(
+                "SELECT COUNT(*) FROM chama_members a JOIN chama_members b ON a.chama_id=b.chama_id "
+                "WHERE a.user_id=? AND b.user_id=? AND a.status='ACTIVE' AND b.status='ACTIVE'", (g.user['id'], owner_id), 0)
+        elif kind == 'chama':
+            allowed = db().val("SELECT COUNT(*) FROM chama_members WHERE chama_id=? AND user_id=? AND status='ACTIVE'", (owner_id, g.user['id']), 0)
+        else:
+            abort(404)
+        row = db().one('SELECT mime,data_b64 FROM profile_images WHERE owner_type=? AND owner_id=?', (kind, owner_id)) if allowed else None
+        if not row:
+            abort(404)
+        resp = Response(base64.b64decode(row['data_b64']), mimetype=row['mime'])
+        resp.headers['Cache-Control'] = 'private, max-age=604800'
+        resp.headers['X-Content-Type-Options'] = 'nosniff'
+        return resp
+
+    def _photo_lookup(kind, owner_id):
+        cache = g.__dict__.setdefault('_photo_cache', {})
+        key = (kind, owner_id)
+        if key not in cache:
+            table = 'users' if kind == 'user' else 'chamas'
+            cache[key] = db().val('SELECT profile_image FROM ' + table + ' WHERE id=?', (owner_id,))
+        return cache[key]
+
+    def avatar(kind, owner_id, name, extra=''):
+        """Small round avatar: the photo when there is one, otherwise the initial."""
+        url = _photo_lookup(kind, owner_id) if owner_id else None
+        initial = escape((name or '?').strip()[:1].upper() or '?')
+        css = ('av ' + extra).strip()
+        if url and url.startswith('/'):
+            return Markup(f'<span class="{css} has-img"><img src="{escape(url)}" alt="" loading="lazy" decoding="async"></span>')
+        return Markup(f'<span class="{css}">{initial}</span>')
+    app.jinja_env.globals['avatar'] = avatar

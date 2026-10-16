@@ -465,6 +465,9 @@ CREATE TABLE IF NOT EXISTS collaboration_reports(
  id {PK}, post_id BIGINT NOT NULL, reply_id BIGINT, reporter_id BIGINT NOT NULL, reason TEXT NOT NULL, details TEXT, status TEXT NOT NULL DEFAULT 'OPEN', reviewed_by BIGINT, reviewed_at TEXT, created_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS ix_collaboration_reports ON collaboration_reports(status,created_at);
 
+CREATE TABLE IF NOT EXISTS profile_images(
+  id {PK}, owner_type TEXT NOT NULL, owner_id INTEGER NOT NULL, mime TEXT NOT NULL, data_b64 TEXT NOT NULL, updated_at TEXT NOT NULL,
+  UNIQUE(owner_type,owner_id));
 """
 
 DEFAULT_PLANS = [('starter', 'Starter', 50000, 20, 1), ('growth', 'Growth', 150000, 70, 2), ('business', 'Pro', 200000, 100, 3)]
