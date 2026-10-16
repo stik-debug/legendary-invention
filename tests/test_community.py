@@ -39,6 +39,26 @@ class CommWeb(unittest.TestCase):
         self.assertEqual(self.m1.get(self.base() + '/reports').status_code, 403)
         self.assertEqual(self.m1.get(self.base() + '/export/members.csv').status_code, 403)
 
+    def test_meeting_reminders_reach_afternoon_meetings_once_per_kind(self):
+        import features as FT
+        from datetime import datetime
+        self.team()
+        mid = self.meeting()
+        # Cron runs at 02:00 UTC (05:00 Nairobi). A 14:00 meeting tomorrow used to fall outside the window.
+        now = datetime(2026, 3, 10, 2, 0)
+        self.db.execute("UPDATE meetings SET held_at=? WHERE id=?", ('2026-03-11 14:00', mid)); self.db.commit()
+        self.assertEqual(FT.meeting_reminders(self.db, now=now), 1)
+        self.assertTrue(any('tomorrow at 14:00' in t for t in self.notes('m1')))
+        self.assertEqual(FT.meeting_reminders(self.db, now=now), 0)  # not repeated
+        # Next morning: a separate "today" reminder, also only once.
+        morning = datetime(2026, 3, 11, 2, 0)
+        self.assertEqual(FT.meeting_reminders(self.db, now=morning), 1)
+        self.assertTrue(any('today at 14:00' in t for t in self.notes('m1')))
+        self.assertEqual(FT.meeting_reminders(self.db, now=morning), 0)
+        # Far-future and already-started meetings are not reminded.
+        self.db.execute("UPDATE meetings SET held_at=? WHERE id=?", ('2026-03-20 14:00', mid)); self.db.commit()
+        self.assertEqual(FT.meeting_reminders(self.db, now=datetime(2026, 3, 12, 2, 0)), 0)
+
     # ---------- announcements ----------
     def test_secretary_posts_notice_members_get_alerts_and_cannot_post(self):
         self.team()
