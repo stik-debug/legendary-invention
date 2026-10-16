@@ -18,6 +18,7 @@ class IntegrityError(Exception):
 
 class DB:
     def __init__(self, url):
+        self.url = url
         self.pg = url.startswith(('postgres://', 'postgresql://'))
         if self.pg:
             if psycopg is None:
@@ -282,7 +283,7 @@ CREATE TABLE IF NOT EXISTS chama_constitutions(
   id {PK}, chama_id INTEGER NOT NULL UNIQUE REFERENCES chamas(id),
   monthly_contribution_cents BIGINT NOT NULL DEFAULT 0, joining_fee_cents BIGINT NOT NULL DEFAULT 0,
   loan_interest_bps INTEGER NOT NULL DEFAULT 500, loan_multiplier INTEGER NOT NULL DEFAULT 3,
-  loan_months INTEGER NOT NULL DEFAULT 6, late_fine_cents BIGINT NOT NULL DEFAULT 0, contribution_due_day INTEGER NOT NULL DEFAULT 0,
+  loan_months INTEGER NOT NULL DEFAULT 6, late_fine_cents BIGINT NOT NULL DEFAULT 0,
   attendance_requirement INTEGER NOT NULL DEFAULT 80, voting_requirement INTEGER NOT NULL DEFAULT 50,
   updated_by INTEGER REFERENCES users(id), updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS chama_constitution_history(
@@ -333,7 +334,7 @@ CREATE TABLE IF NOT EXISTS meeting_actions(
   title TEXT NOT NULL, owner_user_id INTEGER, due_date TEXT, status TEXT NOT NULL DEFAULT 'OPEN', created_by INTEGER, created_at TEXT NOT NULL, completed_at TEXT);
 CREATE TABLE IF NOT EXISTS notification_preferences(
   user_id INTEGER NOT NULL REFERENCES users(id), in_app INTEGER NOT NULL DEFAULT 1, email INTEGER NOT NULL DEFAULT 0, sms INTEGER NOT NULL DEFAULT 0,
-  push INTEGER NOT NULL DEFAULT 1, whatsapp INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, PRIMARY KEY(user_id));
+  push INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL, PRIMARY KEY(user_id));
 CREATE TABLE IF NOT EXISTS sms_outbox(
   id {PK}, user_id INTEGER REFERENCES users(id), phone TEXT NOT NULL, message TEXT NOT NULL,
   created_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'PENDING', attempts INTEGER NOT NULL DEFAULT 0,

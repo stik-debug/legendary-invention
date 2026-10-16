@@ -11,7 +11,6 @@ import features as X
 import finance as F
 import approvals as A
 import services as S
-import notify as N
 from db import audit
 
 STAFF=('CHAMA_ADMIN','TREASURER','SECRETARY','AUDITOR')
@@ -56,7 +55,6 @@ def register(app, db, ctx, login_required, owner_required):
                     request.form.get('reason') or f'Finalize {year} dividend allocation',
                     {'action':'finalize_dividend','id':run_id,'year':year})
                 audit(db(),me['user_id'],'DIVIDEND_RUN_SUBMITTED','dividend_run',run_id,chama_id,{'year':year,'pool_cents':calc['pool'],'members':len(calc['rows'])})
-                N.notify_roles(db(), chama_id, ('CHAMA_ADMIN','TREASURER','SECRETARY'), f'{year} dividend allocation is awaiting independent approval.', f'/chamas/{chama_id}/approvals', me['user_id'])
                 db().commit()
                 flash('Dividend run saved and submitted for independent approval. No dividend has been paid out.','success')
                 return redirect(url_for('dividends',chama_id=chama_id,year=year))

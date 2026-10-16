@@ -187,44 +187,6 @@ def register_strategy_routes(app, db, ctx, login_required):
         can_export=me['role'] in STAFF or bool(db().val("SELECT COUNT(*) FROM chama_handovers WHERE chama_id=? AND proposed_successor=? AND status='PENDING_ACCEPTANCE'",(chama_id,me['user_id']),0))
         return render_template('handover.html',chama=chama,me=me,rows=rows,members=members,can_export=can_export)
 
-    @app.route('/chamas/<int:chama_id>/financial-audit.pdf')
-    @login_required
-    def monthly_financial_audit_pdf(chama_id):
-        chama,me,sub=ctx(chama_id)
-        if me['role'] not in STAFF: abort(403)
-        period=(request.args.get('period') or date.today().strftime('%Y-%m')).strip()
-        try:
-            month=date.fromisoformat(period+'-01')
-            if month.strftime('%Y-%m') != period: raise ValueError
-        except ValueError: abort(400)
-        next_month=date(month.year+1,1,1) if month.month==12 else date(month.year,month.month+1,1)
-        start=month.isoformat(); end=next_month.isoformat()
-        # Reconciles records already in ChamaPay; external bank/M-Pesa statements are not independently verified here.
-        contrib=int(db().val("SELECT COALESCE(SUM(amount_cents),0) FROM contributions WHERE chama_id=? AND status='PAID' AND paid_on>=? AND paid_on<?",(chama_id,start,end),0) or 0)
-        repayments=int(db().val("SELECT COALESCE(SUM(amount_cents),0) FROM loan_repayments WHERE chama_id=? AND status='PAID' AND paid_on>=? AND paid_on<?",(chama_id,start,end),0) or 0)
-        fine_paid=int(db().val("SELECT COALESCE(SUM(amount_cents),0) FROM fine_payments WHERE chama_id=? AND status='PAID' AND voided_at IS NULL AND paid_on>=? AND paid_on<?",(chama_id,start,end),0) or 0)
-        ledger_in=int(db().val("SELECT COALESCE(SUM(amount_cents),0) FROM ledger_transactions WHERE chama_id=? AND account='MAIN' AND direction='IN' AND occurred_on>=? AND occurred_on<?",(chama_id,start,end),0) or 0)
-        ledger_out=int(db().val("SELECT COALESCE(SUM(amount_cents),0) FROM ledger_transactions WHERE chama_id=? AND account='MAIN' AND direction='OUT' AND occurred_on>=? AND occurred_on<?",(chama_id,start,end),0) or 0)
-        source_in=contrib+repayments+fine_paid
-        duplicates=db().all("SELECT MIN(reference) reference,amount_cents,COUNT(*) copies FROM contributions WHERE chama_id=? AND status='PAID' AND paid_on>=? AND paid_on<? AND reference IS NOT NULL AND TRIM(reference)<>'' GROUP BY UPPER(TRIM(reference)),amount_cents HAVING COUNT(*)>1 ORDER BY copies DESC LIMIT 20",(chama_id,start,end))
-        snapshot={'report_type':'monthly_chamapay_reconciliation','chama_id':chama_id,'chama_name':chama['name'],'period':period,'generated_at':S.iso(S.now_utc()),'source':'ChamaPay records only; external statements are not independently verified by this report','contributions_cents':contrib,'loan_repayments_cents':repayments,'fine_payments_cents':fine_paid,'source_payments_total_cents':source_in,'ledger_in_cents':ledger_in,'ledger_out_cents':ledger_out,'inflow_difference_cents':ledger_in-source_in,'possible_duplicate_contribution_references':[dict(r) for r in duplicates]}
-        snapshot_json=_json(snapshot); digest=hashlib.sha256(snapshot_json.encode('utf-8')).hexdigest(); ref='CPAUD-'+period.replace('-','')+'-'+secrets.token_hex(4).upper()
-        db().begin(); db().insert('chama_financial_passports',chama_id=chama_id,report_ref=ref,snapshot_json=snapshot_json,snapshot_sha256=digest,created_by=me['user_id'],created_at=snapshot['generated_at'])
-        signature=hmac.new(str(app.config['SECRET_KEY']).encode('utf-8'),f'{ref}.{digest}'.encode('utf-8'),hashlib.sha256).hexdigest()
-        token=base64.urlsafe_b64encode(f'{ref}.{digest}.{signature}'.encode('utf-8')).decode('ascii').rstrip('=')
-        verify_url=request.url_root.rstrip('/')+url_for('verify_financial_passport',token=token)
-        audit(db(),me['user_id'],'MONTHLY_FINANCIAL_AUDIT_EXPORTED','financial_audit',ref,chama_id,{'period':period,'sha256':digest}); db().commit()
-        buf=io.BytesIO(); c=canvas.Canvas(buf,pagesize=A4); _,h=A4; y=h-50; c.setTitle('ChamaPay Monthly Reconciliation Report')
-        lines=['ChamaPay Monthly Reconciliation Report',f'Group: {chama["name"]}',f'Period: {period}',f'Generated: {snapshot["generated_at"]}',f'Report reference: {ref}',f'SHA-256: {digest}','',f'Paid contributions: KES {contrib/100:,.2f}',f'Paid loan repayments: KES {repayments/100:,.2f}',f'Paid fines: KES {fine_paid/100:,.2f}',f'Source payment total: KES {source_in/100:,.2f}',f'Ledger money in: KES {ledger_in/100:,.2f}',f'Ledger money out: KES {ledger_out/100:,.2f}',f'Inflow difference (ledger minus sources): KES {(ledger_in-source_in)/100:,.2f}',f'Possible duplicate contribution reference groups: {len(duplicates)}','', 'Integrity verification:', verify_url, '', 'Important limits:', 'This is a tamper-evident snapshot of ChamaPay records, not an independent audit or proof of bank/M-Pesa balances.', 'Compare against the original bank or provider statement and investigate differences before approving accounts.', 'Repeated references are review flags, not proof of fraud.']
-        for line in lines:
-            wrapped=textwrap.wrap(str(line),width=96,break_long_words=True,break_on_hyphens=False) or ['']
-            for part in wrapped:
-                if y<55: c.showPage(); y=h-50
-                c.setFont('Helvetica-Bold' if line==lines[0] else 'Helvetica',14 if line==lines[0] else 9)
-                c.drawString(45,y,part); y-=20 if line==lines[0] else 13
-        c.save(); buf.seek(0)
-        return send_file(buf,mimetype='application/pdf',as_attachment=True,download_name=f'chamapay-monthly-audit-{chama_id}-{period}.pdf')
-
     @app.route('/verify/financial-passport/<token>')
     def verify_financial_passport(token):
         try:
@@ -291,7 +253,7 @@ def register_strategy_routes(app, db, ctx, login_required):
           'active_members':db().all("SELECT u.name,m.role,m.joined_at FROM chama_members m JOIN users u ON u.id=m.user_id WHERE m.chama_id=? AND m.status='ACTIVE' ORDER BY u.name",(chama_id,)),
           'financial_totals':{'paid_contributions_cents':int(db().val("SELECT COALESCE(SUM(amount_cents),0) FROM contributions WHERE chama_id=? AND status='PAID'",(chama_id,),0) or 0),'ledger_balance_cents':int(db().val("SELECT COALESCE(SUM(CASE WHEN direction='IN' THEN amount_cents WHEN direction='OUT' THEN -amount_cents ELSE 0 END),0) FROM ledger_transactions WHERE chama_id=?",(chama_id,),0) or 0),'outstanding_loans_cents':int(db().val("SELECT COALESCE(SUM(total_due_cents-paid_cents),0) FROM loans WHERE chama_id=? AND status IN ('ACTIVE','APPROVED') AND disbursed_at IS NOT NULL",(chama_id,),0) or 0)},
           'loans':db().all("SELECT u.name member,l.principal_cents,l.total_due_cents,l.paid_cents,l.status,l.due_date FROM loans l JOIN users u ON u.id=l.user_id WHERE l.chama_id=? AND l.status IN ('PENDING','APPROVED','ACTIVE') ORDER BY l.due_date,l.id",(chama_id,)),
-          'constitution':db().one('SELECT monthly_contribution_cents,joining_fee_cents,loan_interest_bps,loan_multiplier,loan_months,late_fine_cents,contribution_due_day,attendance_requirement,voting_requirement,updated_at FROM chama_constitutions WHERE chama_id=?',(chama_id,)),
+          'constitution':db().one('SELECT monthly_contribution_cents,joining_fee_cents,loan_interest_bps,loan_multiplier,loan_months,late_fine_cents,attendance_requirement,voting_requirement,updated_at FROM chama_constitutions WHERE chama_id=?',(chama_id,)),
           'constitution_history':db().all('SELECT version_no,snapshot_json,changed_at FROM chama_constitution_history WHERE chama_id=? ORDER BY version_no',(chama_id,)),
           'goals':db().all('SELECT name,description,target_cents,current_cents,status,deadline FROM chama_goals WHERE chama_id=? ORDER BY id',(chama_id,)),
           'assets':db().all('SELECT name,category,purchase_price_cents,current_value_cents,purchase_date,status FROM chama_assets WHERE chama_id=? ORDER BY id',(chama_id,)),

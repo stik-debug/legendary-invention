@@ -221,15 +221,11 @@ def register(app, db, ctx, login_required):
                     if int(totals['total']) != int(run['pool_cents']): raise A.ApprovalError('Dividend allocation total does not match the pool. No finalization was made.')
                     db().execute("UPDATE chama_dividend_runs SET status='FINALIZED',approved_by=?,finalized_at=? WHERE id=? AND status='PENDING_REVIEW'",(g.user['id'],S.iso(S.now_utc()),entity_id))
                     audit(db(),g.user['id'],'DIVIDEND_RUN_FINALIZED','dividend_run',entity_id,chama_id,{'year':run['year'],'pool_cents':run['pool_cents'],'member_count':totals['members']})
-                    for item in db().all('SELECT user_id,dividend_cents FROM chama_dividend_items WHERE run_id=?',(entity_id,)):
-                        N.notify(db(), item['user_id'], chama_id, f'Your {run["year"]} dividend was finalized: KES {int(item["dividend_cents"])/100:,.2f}.', f'/chamas/{chama_id}/dividends?year={run["year"]}', g.user['id'])
                 else: raise A.ApprovalError('Unsupported approval action; no financial change was made.')
             elif status == 'REJECTED':
                 payload=json.loads(row.get('payload') or '{}')
                 if payload.get('action') == 'finalize_dividend':
                     db().execute("UPDATE chama_dividend_runs SET status='REJECTED' WHERE id=? AND chama_id=? AND status='PENDING_REVIEW'",(int(payload.get('id') or 0),chama_id))
-            outcome = 'approved and processed' if status == 'APPROVED' else 'rejected; no financial change was made'
-            N.notify(db(), row['requested_by'], chama_id, f'Your {row["request_type"].replace("_", " ").lower()} request was {outcome}.', f'/chamas/{chama_id}/approvals', g.user['id'])
             db().commit()
             flash('Approval recorded and action processed.' if status == 'APPROVED' else 'Request rejected; no financial change was made.', 'success')
         except (A.ApprovalError, S.BusinessError, ValueError, TypeError) as e:

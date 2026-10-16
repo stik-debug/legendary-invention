@@ -45,3 +45,19 @@ def ensure_vapid_keys(db):
             return bool(db.one('SELECT id FROM push_vapid_config WHERE id=1'))
         except Exception:
             return False
+
+
+def signing_key(private):
+    """Return the VAPID private key in the raw base64url form pywebpush always accepts.
+
+    The database stores a PKCS8 PEM. pywebpush's string loader expects a raw/DER base64url
+    key, so handing it a PEM string can fail at send time even though the keys look valid.
+    Environment-supplied keys that are already raw base64url are returned unchanged.
+    """
+    private = (private or '').strip()
+    if 'BEGIN' not in private:
+        return private
+    from cryptography.hazmat.primitives import serialization
+    key = serialization.load_pem_private_key(private.encode('ascii'), password=None)
+    raw = key.private_numbers().private_value.to_bytes(32, 'big')
+    return base64.urlsafe_b64encode(raw).rstrip(b'=').decode('ascii')

@@ -563,7 +563,6 @@ def create_app(overrides=None):
         with db().tx():
             db().execute("UPDATE chama_members SET status='REMOVED',removed_at=? WHERE chama_id=? AND user_id=? AND status='ACTIVE'", (S.iso(S.now_utc()), chama_id, uid))
             audit(db(), uid, 'MEMBER_LEFT_CHAMA', 'chama_member', me['id'], chama_id, {'user_id': uid})
-            N.notify_roles(db(), chama_id, ('CHAMA_ADMIN','TREASURER','SECRETARY'), f'{g.user["name"]} left {chama["name"]}. Review the member list and any outstanding records.', f'/chamas/{chama_id}/members', by=uid)
         flash('You have left this chama. Your financial and audit history remains preserved.', 'success')
         return redirect(url_for('dashboard'))
 
@@ -615,7 +614,6 @@ def create_app(overrides=None):
                 # Render the code directly in the authenticated admin's response.
                 # It is never stored in plaintext and never placed in a URL/session cookie.
                 return render_chama_home(chama_id, invite_code=code, invite_name=request.form.get('name') or 'New member')
-            N.notify(db(), uid, chama_id, f'You were added to {db().one("SELECT name FROM chamas WHERE id=?", (chama_id,))["name"]}. Open ChamaPay to view your group and its updates.', f'/chamas/{chama_id}', by=g.user['id'])
             flash('Member added. They can already log in.', 'success')
         except S.BusinessError as e:
             flash(str(e), 'warning')
@@ -639,7 +637,6 @@ def create_app(overrides=None):
         ctx(chama_id, roles=('CHAMA_ADMIN',))
         try:
             S.remove_member(db(), chama_id, user_id, g.user['id'])
-            N.notify(db(), user_id, chama_id, f'Your membership in {db().one("SELECT name FROM chamas WHERE id=?", (chama_id,))["name"]} was removed by a group administrator. Your historical financial records remain preserved.', '/notifications', by=g.user['id'])
             flash('Member removed. Their history is kept.', 'success')
         except S.BusinessError as e:
             flash(str(e), 'warning')

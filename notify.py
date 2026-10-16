@@ -8,26 +8,74 @@ import urllib.request
 from email.message import EmailMessage
 import threading
 import logging
-from push_config import get_vapid_keys
+from push_config import get_vapid_keys, signing_key
 
 
-def _deliver_web_push(subscriptions, payload, private_key, subject):
+_PUSH_THREADS = []
+_PUSH_LOCK = threading.Lock()
+
+
+def _prune_dead_endpoints(database_url, endpoints):
+    """Remove subscriptions the push service reports as expired (HTTP 404/410)."""
+    if not database_url or not endpoints:
+        return
+    try:
+        from db import DB
+        conn = DB(database_url)
+        try:
+            for endpoint in endpoints:
+                conn.execute('DELETE FROM push_subscriptions WHERE endpoint=?', (endpoint,))
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as exc:
+        logging.getLogger(__name__).warning('Could not prune expired push subscriptions: %s', str(exc)[:200])
+
+
+def _deliver_web_push(subscriptions, payload, private_key, subject, database_url=None):
     """Send Web Push outside the request path; optional credentials keep local/test installs working."""
     try:
-        from pywebpush import webpush, WebPushException
+        from pywebpush import webpush
     except ImportError:
         logging.getLogger(__name__).error('Web push package pywebpush is missing; install requirements.txt.')
         return
+    try:
+        key = signing_key(private_key)
+    except Exception as exc:
+        logging.getLogger(__name__).error('Stored VAPID private key could not be read: %s', str(exc)[:200])
+        return
+    dead = []
     for subscription in subscriptions:
         try:
             # A non-zero TTL lets push services deliver after a phone wakes from sleep
             # or briefly loses connectivity. High urgency prioritizes time-sensitive alerts.
-            webpush(subscription_info=subscription, data=json.dumps(payload), vapid_private_key=private_key,
-                    vapid_claims={"sub": subject}, ttl=86400, headers={"Urgency": "high"})
+            webpush(subscription_info=subscription, data=json.dumps(payload), vapid_private_key=key,
+                    vapid_claims={"sub": subject}, ttl=86400, headers={"Urgency": "high"}, timeout=10)
         except Exception as exc:
+            status_code = getattr(getattr(exc, 'response', None), 'status_code', None)
+            if status_code in (404, 410) and isinstance(subscription, dict) and subscription.get('endpoint'):
+                dead.append(subscription['endpoint'])
             # Log failures so hosting logs explain delivery problems; never break the business action.
-            logging.getLogger(__name__).warning('Web push delivery failed (%s): %s', type(exc).__name__, str(exc)[:240])
+            logging.getLogger(__name__).warning('Web push delivery failed (%s, HTTP %s): %s', type(exc).__name__, status_code, str(exc)[:240])
             continue
+    _prune_dead_endpoints(database_url, dead)
+
+
+def wait_for_pending_push(timeout=60):
+    """Block until queued push deliveries finish.
+
+    Web requests do not need this (the server keeps running), but one-shot scripts such as the
+    daily cron job exit immediately, which would silently kill background push threads.
+    """
+    import time
+    deadline = time.time() + timeout
+    while True:
+        with _PUSH_LOCK:
+            _PUSH_THREADS[:] = [t for t in _PUSH_THREADS if t.is_alive()]
+            pending = list(_PUSH_THREADS)
+        if not pending or time.time() >= deadline:
+            return len(pending)
+        pending[0].join(max(0.1, min(5, deadline - time.time())))
 
 
 def send_push_test(db, user_id):
@@ -39,6 +87,10 @@ def send_push_test(db, user_id):
         from pywebpush import webpush
     except ImportError:
         return {"ok": False, "error": "The server is missing pywebpush. Install requirements.txt and restart the service."}
+    try:
+        private_key = signing_key(private_key)
+    except Exception:
+        return {"ok": False, "error": "The stored push signing key is unreadable. Set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in the server environment."}
     rows = db.all('SELECT id,endpoint,subscription_json FROM push_subscriptions WHERE user_id=?', (user_id,))
     if not rows:
         return {"ok": False, "error": "This phone is not registered. Enable device notifications on this phone first."}
@@ -50,7 +102,7 @@ def send_push_test(db, user_id):
             webpush(subscription_info=json.loads(row['subscription_json']), data=json.dumps(payload),
                     vapid_private_key=private_key,
                     vapid_claims={"sub": os.environ.get('VAPID_CLAIMS_SUBJECT', 'mailto:support@chamapay.app')},
-                    ttl=86400, headers={"Urgency": "high"})
+                    ttl=86400, headers={"Urgency": "high"}, timeout=10)
             sent += 1
         except Exception as exc:
             status_code = getattr(getattr(exc, 'response', None), 'status_code', None)
@@ -90,16 +142,11 @@ def _queue_web_push(db, user_id, text, link, notification_id):
         payload = {'title': 'ChamaPay', 'body': (text or 'You have a new update.')[:180],
                    'url': link if isinstance(link, str) and link.startswith('/') and not link.startswith('//') else '/notifications',
                    'notification_id': notification_id}
-        subject = os.environ.get('VAPID_CLAIMS_SUBJECT', 'mailto:support@chamapay.app')
-        if os.environ.get('CHAMAPAY_SYNC_PUSH', '').strip() == '1':
-            # Scheduled/one-shot jobs must wait for delivery attempts to finish.
-            # Daemon threads are terminated when a Render Cron process exits, which
-            # can silently discard payment reminders before they reach the push service.
-            _deliver_web_push(subscriptions, payload, private_key, subject)
-        else:
-            # Keep normal web requests responsive; the long-running web process lets
-            # this delivery thread finish after the HTTP response has been returned.
-            threading.Thread(target=_deliver_web_push, args=(subscriptions, payload, private_key, subject), daemon=True).start()
+        worker = threading.Thread(target=_deliver_web_push, args=(subscriptions, payload, private_key,
+            os.environ.get('VAPID_CLAIMS_SUBJECT', 'mailto:support@chamapay.app'), getattr(db, 'url', None)), daemon=True)
+        with _PUSH_LOCK:
+            _PUSH_THREADS.append(worker)
+        worker.start()
     except Exception as exc:
         # Do not silently hide why a notification could not even be queued.
         logging.getLogger(__name__).exception('Unable to queue web push notification: %s', str(exc)[:240])
@@ -284,13 +331,8 @@ def send_whatsapp_now(phone, message):
         phone = normalize_phone(phone)
         if not phone:
             return False, 'Invalid Kenyan phone number.'
-        template_name = (os.environ.get('WHATSAPP_REMINDER_TEMPLATE') or '').strip()
-        if not template_name:
-            return False, 'Set WHATSAPP_REMINDER_TEMPLATE to an approved Meta template before sending reminders.'
-        language = (os.environ.get('WHATSAPP_TEMPLATE_LANGUAGE') or 'en').strip()
-        payload = {'messaging_product': 'whatsapp', 'to': phone, 'type': 'template',
-                   'template': {'name': template_name, 'language': {'code': language},
-                                'components': [{'type': 'body', 'parameters': [{'type': 'text', 'text': (message or '')[:900]}]}]}}
+        payload = {'messaging_product': 'whatsapp', 'to': phone, 'type': 'text',
+                   'text': {'preview_url': False, 'body': (message or '')[:4000]}}
         version = os.environ.get('WHATSAPP_API_VERSION', 'v21.0')
         req = urllib.request.Request('https://graph.facebook.com/' + version + '/' + phone_id + '/messages',
             data=json.dumps(payload).encode(), headers={'Authorization': 'Bearer ' + token,
@@ -305,7 +347,7 @@ def send_whatsapp_now(phone, message):
 
 def queue_whatsapp(db, user_id, phone, message, now=None, dedupe_key=None):
     """Queue WhatsApp only when the app has the API configured; respect opt-in at call site."""
-    if not os.environ.get('WHATSAPP_ACCESS_TOKEN') or not os.environ.get('WHATSAPP_PHONE_NUMBER_ID') or not os.environ.get('WHATSAPP_REMINDER_TEMPLATE'):
+    if not os.environ.get('WHATSAPP_ACCESS_TOKEN') or not os.environ.get('WHATSAPP_PHONE_NUMBER_ID'):
         return None
     try:
         kwargs = dict(user_id=user_id, phone=phone, message=(message or '')[:4000],
@@ -317,21 +359,8 @@ def queue_whatsapp(db, user_id, phone, message, now=None, dedupe_key=None):
         return None
 
 
-def queue_opted_in_whatsapp(db, user_id, message, now=None, dedupe_key=None):
-    """Queue a WhatsApp reminder only after explicit user opt-in and provider/template setup."""
-    if not os.environ.get('WHATSAPP_ACCESS_TOKEN') or not os.environ.get('WHATSAPP_PHONE_NUMBER_ID') or not os.environ.get('WHATSAPP_REMINDER_TEMPLATE'):
-        return None
-    pref = db.one('SELECT whatsapp FROM notification_preferences WHERE user_id=?', (user_id,))
-    if not pref or not int(pref.get('whatsapp') or 0):
-        return None
-    user = db.one('SELECT phone FROM users WHERE id=?', (user_id,))
-    if not user or not user.get('phone'):
-        return None
-    return queue_whatsapp(db, user_id, user['phone'], message, now, dedupe_key)
-
-
 def process_whatsapp_outbox(database_url, limit=10):
-    if not os.environ.get('WHATSAPP_ACCESS_TOKEN') or not os.environ.get('WHATSAPP_PHONE_NUMBER_ID') or not os.environ.get('WHATSAPP_REMINDER_TEMPLATE'):
+    if not os.environ.get('WHATSAPP_ACCESS_TOKEN') or not os.environ.get('WHATSAPP_PHONE_NUMBER_ID'):
         return 0
     from db import DB
     db = DB(database_url); sent = 0
