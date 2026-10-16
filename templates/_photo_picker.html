@@ -1,0 +1,20 @@
+{# Compact profile picture control. Set before including: pp_kind ('user'|'chama'), pp_id, pp_name, pp_url, pp_action, pp_remove, pp_editable #}
+<div class="pp">
+{% if pp_editable %}
+  <form class="pp-form" method="post" enctype="multipart/form-data" action="{{ pp_action }}" data-pp-form>
+    {{ csrf_input() }}
+    <input class="pp-input" id="pp-{{ pp_kind }}-{{ pp_id }}" type="file" name="photo" accept="image/jpeg,image/png,image/webp" aria-label="Choose a new {{ pp_kind }} photo" data-pp-input>
+    <label class="pp-ring" for="pp-{{ pp_kind }}-{{ pp_id }}" data-pp-avatar>
+      {% if pp_url %}<img src="{{ pp_url }}" alt="" data-pp-img>{% else %}<span class="pp-initial" data-pp-initial>{{ (pp_name or '?')[:1]|upper }}</span>{% endif %}
+      <span class="pp-cam" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span>
+    </label>
+    <noscript><button class="btn sm" type="submit">Save</button></noscript>
+  </form>
+  <div class="pp-text"><b>{{ 'Group picture' if pp_kind=='chama' else 'Profile photo' }}</b>
+    <span class="pp-note" data-pp-note aria-live="polite">{{ 'Tap to change' if pp_url else 'Tap to add a photo' }}</span>
+    {% if pp_url %}<form method="post" action="{{ pp_remove }}" data-confirm="Remove this picture?" class="pp-remove">{{ csrf_input() }}<button type="submit">Remove</button></form>{% endif %}
+  </div>
+{% else %}
+  <span class="pp-ring pp-static">{% if pp_url %}<img src="{{ pp_url }}" alt="">{% else %}<span class="pp-initial">{{ (pp_name or '?')[:1]|upper }}</span>{% endif %}</span>
+{% endif %}
+</div>
