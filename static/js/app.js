@@ -329,3 +329,37 @@ if(!still&&window.matchMedia('(hover:hover)').matches){
       .catch(function(e){ say(e.message || 'Could not enable notifications.'); }).then(function(){ button.disabled=false; });
   });
 })();
+
+
+// Keep this device registered for background push once the member has allowed notifications.
+// Subscriptions can be lost (browser data cleared, push service rotation, expired endpoint),
+// so silently re-register on any signed-in page. This never shows a permission prompt.
+(function keepPushRegistered(){
+  try {
+    var root = document.getElementById('chamapay-notification-root');
+    if (!root || !root.getAttribute('data-poll-url')) return;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+    var keyMeta = document.querySelector('meta[name="vapid-public-key"]');
+    var publicKey = keyMeta && keyMeta.content;
+    var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    if (!publicKey || !csrfMeta) return;
+    function decodeKey(base64){ var pad='='.repeat((4-base64.length%4)%4); var raw=atob((base64+pad).replace(/-/g,'+').replace(/_/g,'/')); var out=new Uint8Array(raw.length); for(var i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i); return out; }
+    navigator.serviceWorker.register('/sw.js', {scope: '/'}).then(function(reg){
+      return navigator.serviceWorker.ready.then(function(){ return reg.pushManager.getSubscription(); }).then(function(existing){
+        return existing || reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:decodeKey(publicKey)});
+      });
+    }).then(function(subscription){
+      if (!subscription) return;
+      // Re-send on every signed-in session start so the server always knows this device belongs to this account.
+      var stamp = 'chamapay-push-sync';
+      var signature = subscription.endpoint.slice(-24) + ':' + (root.getAttribute('data-last-id') ? 'u' : 'x');
+      try { if (window.sessionStorage.getItem(stamp) === signature) return; } catch (_) {}
+      return fetch('/api/push/subscribe', {method:'POST', credentials:'same-origin',
+        headers:{'Content-Type':'application/json','X-CSRF-Token':csrfMeta.content},
+        body:JSON.stringify({subscription:subscription.toJSON()})}).then(function(r){
+          if (r.ok) { try { window.sessionStorage.setItem(stamp, signature); } catch (_) {} }
+        });
+    }).catch(function(){});
+  } catch (_) {}
+})();

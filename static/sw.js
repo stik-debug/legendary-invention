@@ -1,4 +1,4 @@
-const CACHE = "chamapay-static-v9";
+const CACHE = "chamapay-static-v10";
 const OFFLINE_URL = "/static/offline.html";
 
 self.addEventListener("install", (event) => {
@@ -68,4 +68,18 @@ self.addEventListener('notificationclick', function(event) {
     }
     return clients.openWindow(path);
   }));
+});
+
+// If the browser rotates the push subscription, tell the server so background alerts keep arriving.
+self.addEventListener('pushsubscriptionchange', function(event) {
+  event.waitUntil(
+    self.registration.pushManager.subscribe(event.oldSubscription ? event.oldSubscription.options : {userVisibleOnly: true})
+      .then(function(sub) {
+        return clients.matchAll({type: 'window', includeUncontrolled: true}).then(function(list) {
+          // The page holds the CSRF token; ask an open page to re-register. If none is open, the
+          // next visit re-registers automatically (see keepPushRegistered in app.js).
+          list.forEach(function(c) { c.postMessage({type: 'push-resubscribed'}); });
+        });
+      }).catch(function() {})
+  );
 });
