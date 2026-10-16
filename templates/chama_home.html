@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% block title %}{{ chama.name }} - ChamaPay{% endblock %}
 {% block content %}
-<div class="head"><div class="head-id">{{ avatar('chama', chama.id, chama.name, 'av-lg') }}<div><h2>{{ chama.name }}</h2><p>{{ chama.description or 'Your chama' }}</p></div></div>
+<div class="head"><div class="head-id">{% if me.role=='CHAMA_ADMIN' %}{% set pp_kind='chama' %}{% set pp_id=chama.id %}{% set pp_name=chama.name %}{% set pp_url=chama.profile_image %}{% set pp_action=url_for('chama_profile_photo',chama_id=chama.id) %}{% set pp_remove=url_for('chama_profile_photo_remove',chama_id=chama.id) %}{% set pp_editable=True %}{% include '_photo_picker.html' %}{% else %}{{ avatar('chama', chama.id, chama.name, 'av-lg') }}{% endif %}<div><h2>{{ chama.name }}</h2><p>{{ chama.description or 'Your chama' }}</p></div></div>
 <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn" href="{{ url_for('statement', chama_id=chama.id) }}">My statement</a><a class="btn" href="{{ url_for('subscription', chama_id=chama.id) }}">Subscription</a>{% if me.role in ('CHAMA_ADMIN','TREASURER') %}<a class="btn" href="{{ url_for('trust_center',chama_id=chama.id) }}">Trust & reconciliation</a>{% endif %}{% if is_admin and chama.created_by|int == me.user_id|int %}<a class="btn" href="{{ url_for('chama_setup',chama_id=chama.id) }}">Finish setup</a>{% endif %}</div></div>
 {% include '_chama_nav.html' %}
 {% if invite_code %}
@@ -73,3 +73,4 @@
 <div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn pri">Save</button></div></form></dialog>
 {% endif %}
 {% endblock %}
+{% block scripts %}{% if me.role=='CHAMA_ADMIN' %}<script src="{{ url_for('static', filename='js/photo.js') }}?v=64" defer></script>{% endif %}{% endblock %}
