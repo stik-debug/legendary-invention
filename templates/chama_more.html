@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}All Chama Functions - {{ chama.name }}{% endblock %}
-{% block content %}
+{% block content %}<div class="card"><h3>Engagement tools</h3><p><a href="{{ url_for('payment_promises',chama_id=chama.id) }}">Payment promises</a></p><p><a href="{{ url_for('chama_wrapped',chama_id=chama.id) }}">Chama Wrapped year-end recap</a></p>{% if me.role=='CHAMA_ADMIN' %}<p><a href="{{ url_for('chama_referrals',chama_id=chama.id) }}">Invite another chama</a></p><form method="post" enctype="multipart/form-data" action="{{ url_for('chama_profile_photo',chama_id=chama.id) }}">{{ csrf_input() }}<label>Chama profile picture</label><input type="file" name="photo" accept="image/png,image/jpeg,image/webp" required><button class="btn sm">Upload chama photo</button></form>{% endif %}</div>
 <div class="head"><div><h2>All Chama Functions</h2><p>{{ chama.name }} · everything in one place</p></div><a class="btn pri" href="{{ url_for('chama_home', chama_id=chama.id) }}">Chama Home</a></div>
 {% include '_chama_nav.html' %}
 <div class="grid">
