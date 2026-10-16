@@ -76,6 +76,9 @@ class Photos(unittest.TestCase):
         self.assertIn('data-pp-form', more); self.assertIn('js/photo.js', more)
         self.assertNotIn('profile-photo-card', more)
         self.assertNotIn('data-pp-form', self.m1.get(self.base() + '/more').get_data(as_text=True))  # members only view the group picture
+        admin_home = self.admin.get(self.base()).get_data(as_text=True)
+        self.assertIn('data-pp-form', admin_home); self.assertIn('js/photo.js', admin_home)
+        self.assertNotIn('data-pp-form', self.m2.get(self.base()).get_data(as_text=True))
         home = self.m2.get(self.base()).get_data(as_text=True)
         self.assertIn('has-img', home); self.assertIn('/photo/chama/', home); self.assertIn(f"/photo/user/{self.uid['m1']}", home)
         mine = self.m1.get(self.base() + '/my-dashboard')
