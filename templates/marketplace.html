@@ -1,53 +1,94 @@
 {% extends 'base.html' %}
 {% block title %}Chama Marketplace · Find trusted services{% endblock %}
-{% block head %}
-<style>
-.market-hero{position:relative;overflow:hidden;border-radius:26px;padding:clamp(24px,4vw,42px);margin-bottom:18px;color:#effff7;background:radial-gradient(circle at 90% 15%,rgba(240,180,41,.34),transparent 28%),linear-gradient(135deg,#0a6647,#06382a 78%);box-shadow:var(--sh)}
-.market-hero:after{content:'◇';position:absolute;right:3%;bottom:-68px;font-size:230px;line-height:1;color:rgba(255,255,255,.06);pointer-events:none}
-.market-hero h1{font-size:clamp(32px,5vw,52px);max-width:760px}.market-hero p{color:#c8eadb;max-width:700px;margin:12px 0 0}.market-kpis{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}.market-kpi{border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);padding:10px 14px;border-radius:14px;min-width:130px}.market-kpi b{display:block;font-size:22px;color:#fff}.market-kpi span{font-size:12px;color:#c8eadb}.market-filters{display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:12px;align-items:end}.market-filters label{margin:0}.market-filters .btn{white-space:nowrap}.provider-card{display:flex;flex-direction:column;gap:12px;min-width:0;position:relative;transform-style:preserve-3d;transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease;border-color:rgba(14,138,95,.14);box-shadow:0 10px 26px rgba(6,56,42,.07),0 3px 0 rgba(6,56,42,.04)}.provider-card:hover{transform:translateY(-5px) rotateX(.7deg);border-color:rgba(14,138,95,.3);box-shadow:0 22px 42px rgba(6,56,42,.14),0 5px 0 rgba(6,56,42,.05)}.market-hero{box-shadow:0 20px 44px rgba(6,56,42,.22),inset 0 1px 0 rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.14)}.market-hero .btn{box-shadow:0 5px 0 rgba(0,0,0,.18),0 12px 22px rgba(0,0,0,.14)}.market-kpi{box-shadow:inset 0 1px 0 rgba(255,255,255,.12)}.provider-mark{box-shadow:0 5px 0 rgba(6,56,42,.09),0 10px 18px rgba(6,56,42,.08);transform:translateZ(12px)}.market-filters input,.market-filters select{background:rgba(255,255,255,.92)}.market-help article{box-shadow:0 5px 0 rgba(6,56,42,.035);transition:transform .18s ease,box-shadow .18s ease}.market-help article:hover{transform:translateY(-3px);box-shadow:0 12px 22px rgba(6,56,42,.09)}.provider-actions details{border-top:1px solid var(--line);padding-top:5px}.provider-actions summary{color:var(--em-d)}.provider-top{display:flex;align-items:flex-start;gap:12px}.provider-mark{width:52px;height:52px;border-radius:16px;display:grid;place-items:center;flex:none;font-size:22px;font-weight:900;color:var(--em-d);background:linear-gradient(145deg,#e0f5e9,#fff0bf);border:1px solid var(--line)}.provider-card h2{font-size:23px;overflow-wrap:anywhere}.provider-card p{margin:0}.provider-description{color:var(--mute);overflow-wrap:anywhere;white-space:pre-line}.provider-meta{display:flex;gap:7px;flex-wrap:wrap}.provider-contact{display:grid;gap:6px;background:rgba(14,138,95,.06);border:1px solid var(--line);border-radius:14px;padding:12px}.provider-contact a,.provider-contact span{overflow-wrap:anywhere}.provider-actions{margin-top:auto;padding-top:4px}.market-section-head{display:flex;justify-content:space-between;gap:12px;align-items:end;flex-wrap:wrap;margin:22px 0 14px}.market-section-head h2{font-size:28px}.market-section-head p{margin:4px 0 0;color:var(--mute)}.market-help{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}.market-help article{padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--card)}.market-help b{display:block;margin-bottom:5px}.market-help p{margin:0;color:var(--mute);font-size:14px}.market-form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.market-empty{text-align:center;padding:38px 20px}.market-empty .symbol{font-size:36px;margin-bottom:8px}@media(max-width:900px){.market-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.market-filters .search-wide{grid-column:1/-1}.market-filters button{width:100%}}@media (prefers-reduced-motion:reduce){.provider-card,.market-help article{transition:none!important}.provider-card:hover,.market-help article:hover{transform:none!important}}@media(max-width:520px){.market-filters{grid-template-columns:1fr}.market-filters .search-wide{grid-column:auto}.market-kpi{flex:1}.provider-card h2{font-size:21px}}
-</style>
-{% endblock %}
+{% macro mxlink(label, cls='') -%}
+{%- set a = {'q': query or None, 'category': category or None, 'county': county or None, 'sort': (sort if sort!='recommended' else None), 'min_rating': min_rating, 'saved': ('1' if saved_only else None)} -%}
+{%- for k,v in kwargs.items() %}{% if a.update({k: v}) %}{% endif %}{% endfor -%}
+<a class="mx-chip {{ cls }}" href="{{ url_for('marketplace', **a) }}">{{ caller() if caller else label }}</a>
+{%- endmacro %}
 {% block content %}
-<section class="market-hero">
-  <span class="pill" style="background:rgba(255,255,255,.15);color:#fff">CHAMAPAY MARKETPLACE</span>
-  <h1>Good groups grow with the right partners.</h1>
-  <p>Discover services for your chama—from bookkeeping and legal support to training and financial education. Compare providers, contact them directly, and register your interest when you need help.</p>
-  <div class="market-kpis"><div class="market-kpi"><b>{{ counts.total or 0 }}</b><span>Reviewed listings</span></div><div class="market-kpi"><b>{{ counts.categories or 0 }}</b><span>Service categories</span></div><div class="market-kpi"><b>Free</b><span>To browse and enquire</span></div></div><p style="margin-top:18px"><a class="btn" href="{{ url_for('marketplace_quotes') }}">My quote requests &amp; comparisons →</a></p>
-</section>
-<section class="card">
-  <div class="market-section-head" style="margin-top:0"><div><h2>Find your provider</h2><p>Search by service, provider name, or area.</p></div><span class="pill info">{{ rows|length }} result{% if rows|length != 1 %}s{% endif %}</span></div>
-  <form method="get" action="{{ url_for('marketplace') }}" class="market-filters">
-    <label class="search-wide">Search<input name="q" value="{{ query }}" maxlength="100" placeholder="e.g. bookkeeping, training, insurance"></label>
-    <label>Service category<select name="category"><option value="">All services</option>{% for c in categories %}<option value="{{ c }}" {% if c==category %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></label>
-    <label>County / area<select name="county"><option value="">All areas</option>{% for item in counties %}<option value="{{ item.county }}" {% if item.county==county %}selected{% endif %}>{{ item.county }}</option>{% endfor %}</select></label>
-    <label>Sort by<select name="sort"><option value="recommended" {% if sort=='recommended' %}selected{% endif %}>Recommended</option><option value="name" {% if sort=='name' %}selected{% endif %}>Name A–Z</option><option value="newest" {% if sort=='newest' %}selected{% endif %}>Recently listed</option></select></label>
-    <button class="btn pri" type="submit">Search</button>
+<section class="mx-hero">
+  <div class="mx-hero-text"><span class="mx-eyebrow">ChamaPay Marketplace</span><h1>Find trusted help for your chama</h1>
+  <p>Bookkeeping, legal support, insurance and training. Compare providers, ask for written quotes and save the ones you like.</p></div>
+  <form method="get" action="{{ url_for('marketplace') }}" class="mx-search" role="search">
+    <input type="search" name="q" value="{{ query }}" maxlength="100" placeholder="Search services, providers or areas" aria-label="Search the marketplace">
+    {% if category %}<input type="hidden" name="category" value="{{ category }}">{% endif %}{% if saved_only %}<input type="hidden" name="saved" value="1">{% endif %}
+    <button class="btn gold" type="submit">Search</button>
   </form>
-  {% if query or category or county %}<p style="margin-bottom:0;margin-top:12px"><a href="{{ url_for('marketplace') }}">Clear all filters</a></p>{% endif %}
+  <div class="mx-stats"><span><b>{{ counts.total or 0 }}</b> reviewed listings</span><span><b>{{ counts.categories or 0 }}</b> categories</span><span><b>Free</b> to browse &amp; enquire</span><a href="{{ url_for('marketplace_quotes') }}">My quotes →</a></div>
 </section>
-<div class="market-section-head"><div><h2>Service providers</h2><p>Listings are reviewed before publication. Always verify credentials, prices, and terms directly.</p></div></div>
-<section class="card" style="margin-bottom:16px"><div class="market-section-head" style="margin-top:0"><div><h2>Ask several providers at once</h2><p>Select up to 8 providers below, then send one shared brief to get comparable written offers.</p></div><span class="pill info">Side-by-side quotes</span></div>
-<form id="bulk-quote-form" method="post" action="{{ url_for('marketplace_quote_request_many') }}">{{ csrf_input() }}<div class="market-form-grid"><label>What service do you need?<input name="title" required minlength="4" maxlength="120" placeholder="e.g. Annual bookkeeping for our chama"></label><label>Budget guide (optional)<input name="budget_hint" maxlength="100" placeholder="e.g. KSh 5,000–10,000"></label><label>Needed by (optional)<input name="deadline" maxlength="30" placeholder="e.g. 30 November 2026"></label><label>Chama ID (optional)<input name="chama_id" type="number" min="1" placeholder="If relevant"></label></div><label>Describe the same scope for each provider<textarea name="details" required minlength="10" maxlength="1500" placeholder="Number of members, expected deliverables, timing, and any requirements"></textarea></label><button class="btn pri" type="submit">Send quote request to selected providers</button><small class="mute">Only providers you select receive this brief. Do not include passwords, PINs, identity numbers, or confidential member records.</small></form></section>
-<div class="grid">
+
+<nav class="mx-chips" aria-label="Service categories">
+  {% call mxlink('', ('on' if not category and not saved_only else ''), category=None, saved=None) %}All {{ counts.total or 0 }}{% endcall %}
+  {% for c in categories %}{% if category_counts.get(c) or c==category %}{% call mxlink('', ('on' if c==category else ''), category=c, saved=None) %}{{ c }} <i>{{ category_counts.get(c,0) }}</i>{% endcall %}{% endif %}{% endfor %}
+  {% call mxlink('', ('on saved' if saved_only else 'saved'), saved=('1' if not saved_only else None), category=None) %}♥ Saved <i>{{ saved_count }}</i>{% endcall %}
+</nav>
+
+<details class="mx-filters"{% if county or min_rating or sort!='recommended' %} open{% endif %}>
+  <summary>Filters &amp; sorting</summary>
+  <form method="get" action="{{ url_for('marketplace') }}">
+    <input type="hidden" name="q" value="{{ query }}">{% if category %}<input type="hidden" name="category" value="{{ category }}">{% endif %}{% if saved_only %}<input type="hidden" name="saved" value="1">{% endif %}
+    <label>Area<select name="county"><option value="">All areas</option>{% for item in counties %}<option value="{{ item.county }}" {% if item.county==county %}selected{% endif %}>{{ item.county }}</option>{% endfor %}</select></label>
+    <label>Rating<select name="min_rating"><option value="">Any rating</option><option value="4" {% if min_rating==4 %}selected{% endif %}>4★ and above</option><option value="3" {% if min_rating==3 %}selected{% endif %}>3★ and above</option></select></label>
+    <label>Sort by<select name="sort"><option value="recommended" {% if sort=='recommended' %}selected{% endif %}>Recommended</option><option value="rating" {% if sort=='rating' %}selected{% endif %}>Highest rated</option><option value="newest" {% if sort=='newest' %}selected{% endif %}>Recently listed</option><option value="name" {% if sort=='name' %}selected{% endif %}>Name A–Z</option></select></label>
+    <button class="btn pri" type="submit">Apply</button>
+  </form>
+</details>
+
+<div class="mx-results-head"><b>{{ rows|length }} provider{% if rows|length != 1 %}s{% endif %}{% if saved_only %} saved{% endif %}</b>{% if query or category or county or min_rating or saved_only %}<a href="{{ url_for('marketplace') }}">Clear filters</a>{% endif %}</div>
+
+<details class="mx-compare">
+  <summary><b>Compare several providers</b><span>Send one brief and get comparable quotes</span></summary>
+  <form id="bulk-quote-form" method="post" action="{{ url_for('marketplace_quote_request_many') }}">{{ csrf_input() }}
+    <p class="mute">Tick <b>Compare</b> on up to 8 provider cards below, then describe what you need once.</p>
+    <div class="mx-form-grid"><label>What service do you need?<input name="title" required minlength="4" maxlength="120" placeholder="e.g. Annual bookkeeping for our chama"></label><label>Budget guide (optional)<input name="budget_hint" maxlength="100" placeholder="e.g. KSh 5,000–10,000"></label><label>Needed by (optional)<input name="deadline" maxlength="30" placeholder="e.g. 30 November 2026"></label><label>Chama ID (optional)<input name="chama_id" type="number" min="1" placeholder="If relevant"></label></div>
+    <label>Describe the same scope for each provider<textarea name="details" required minlength="10" maxlength="1500" placeholder="Number of members, expected deliverables, timing, and any requirements"></textarea></label>
+    <button class="btn pri" type="submit">Send quote requests</button>
+  </form>
+</details>
+
+<div class="mx-grid">
 {% for p in rows %}
-<article class="card provider-card">
-  {% if p.user_id|int != g.user['id']|int %}<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" form="bulk-quote-form" name="provider_ids" value="{{ p.id }}" style="width:auto"> Include in comparison request</label>{% endif %}
-  <div class="provider-top"><div class="provider-mark" aria-hidden="true">{{ p.name[:1]|upper }}</div><div style="min-width:0;flex:1"><div class="provider-meta"><span class="pill info">{{ p.category }}</span><span class="pill ok">✓ Platform reviewed</span></div><h2 style="margin-top:8px">{{ p.name }}</h2><p class="mute" aria-label="Provider rating">{% if p.average_rating %}★ {{ p.average_rating }}/5 · {{ p.review_count }} experience-based review{% if p.review_count != 1 %}s{% endif %}{% else %}No completed-engagement reviews yet{% endif %}</p>{% if p.county %}<p class="mute">⌖ {{ p.county }}</p>{% endif %}</div></div>
-  <p class="provider-description">{{ p.description }}</p>
-  {% if p.website or p.contact_email or p.contact_phone %}<div class="provider-contact"><b>Contact provider</b>{% if p.website %}<a href="{{ p.website }}" target="_blank" rel="noopener noreferrer">Visit website ↗</a>{% endif %}{% if p.contact_email %}<a href="mailto:{{ p.contact_email }}">{{ p.contact_email }}</a>{% endif %}{% if p.contact_phone %}<span>☎ {{ p.contact_phone }}</span>{% endif %}</div>{% else %}<p class="mute">Contact details are not listed yet.</p>{% endif %}
-  {% if p.recent_reviews %}<div class="provider-contact"><b>Recent reviews</b>{% for r in p.recent_reviews %}<div><span aria-label="{{ r.rating }} out of 5 stars">{% for star in range(r.rating) %}★{% endfor %}{% for star in range(5-r.rating) %}☆{% endfor %}</span> <b>{{ r.title }}</b><p class="mute" style="margin-top:3px">{{ r.body }}</p><small class="mute">{{ r.reviewer_name }} · completed quote engagement</small></div>{% endfor %}</div>{% endif %}
-  <div class="provider-actions"><form method="post" action="{{ url_for('marketplace_interest',provider_id=p.id) }}">{{ csrf_input() }}<label>Chama ID <span class="mute" style="font-weight:400">(optional)</span><input name="chama_id" type="number" min="1" placeholder="Enter if relevant"></label><label>What do you need? <span class="mute" style="font-weight:400">(optional)</span><input name="message" maxlength="500" placeholder="Ask about pricing, availability…"></label><button class="btn block" type="submit">Register interest</button></form>
-  <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:700;padding:10px 0">Request a written quote</summary><form method="post" action="{{ url_for('marketplace_quote_request',provider_id=p.id) }}">{{ csrf_input() }}<label>Request title<input name="title" required minlength="4" maxlength="120" placeholder="e.g. Bookkeeping for 25 members"></label><label>Describe what you need<textarea name="details" required minlength="10" maxlength="1500" placeholder="Scope, number of members, expected deliverables…"></textarea></label><div class="market-form-grid"><label>Budget (optional)<input name="budget_hint" maxlength="100" placeholder="e.g. KSh 5,000–10,000"></label><label>Needed by (optional)<input name="deadline" maxlength="30" placeholder="e.g. 30 November 2026"></label><label>Chama ID (optional)<input name="chama_id" type="number" min="1" placeholder="If relevant"></label></div><button class="btn pri block" type="submit">Send quote request</button><small class="mute">Your request is shared with this listed provider. Do not include PINs, passwords, ID numbers, or confidential member records.</small></form></details></div>
+<article class="mx-card" id="provider-{{ p.id }}">
+  <header>
+    <div class="mx-logo" aria-hidden="true">{{ p.name[:1]|upper }}</div>
+    <div class="mx-title"><h2>{{ p.name }}</h2>
+      <div class="mx-badges"><span class="pill info">{{ p.category }}</span><span class="pill ok">✓ Reviewed</span>{% if p.top_rated %}<span class="pill warn">★ Top rated</span>{% endif %}{% if p.is_new %}<span class="pill">New</span>{% endif %}</div></div>
+    <form method="post" action="{{ url_for('marketplace_save',provider_id=p.id) }}" class="mx-save">{{ csrf_input() }}<button type="submit" class="{{ 'on' if p.saved }}" aria-pressed="{{ 'true' if p.saved else 'false' }}" title="{{ 'Remove from saved' if p.saved else 'Save this provider' }}"><span class="sr">{{ 'Unsave' if p.saved else 'Save' }} {{ p.name }}</span><span aria-hidden="true">{{ '♥' if p.saved else '♡' }}</span></button></form>
+  </header>
+  <p class="mx-rating" aria-label="Provider rating">{% if p.average_rating %}<b>★ {{ p.average_rating }}</b> · {{ p.review_count }} review{% if p.review_count != 1 %}s{% endif %}{% else %}No reviews yet{% endif %}{% if p.county %} · ⌖ {{ p.county }}{% endif %}</p>
+  <p class="mx-desc">{{ p.description }}</p>
+  {% if p.website or p.contact_email or p.contact_phone %}<div class="mx-contact">{% if p.contact_phone %}<a href="tel:{{ p.contact_phone|replace(' ','') }}">☎ Call</a>{% endif %}{% if p.contact_email %}<a href="mailto:{{ p.contact_email }}">✉ Email</a>{% endif %}{% if p.website %}<a href="{{ p.website }}" target="_blank" rel="noopener noreferrer">Website ↗</a>{% endif %}</div>{% endif %}
+  {% if p.recent_reviews %}<div class="mx-reviews">{% for r in p.recent_reviews %}<blockquote><span class="stars" aria-label="{{ r.rating }} out of 5 stars">{% for star in range(r.rating) %}★{% endfor %}{% for star in range(5-r.rating) %}☆{% endfor %}</span> <b>{{ r.title }}</b><p>{{ r.body }}</p><small>{{ r.reviewer_name }} · completed engagement</small></blockquote>{% endfor %}</div>{% endif %}
+  <footer>
+    {% if p.user_id|int != g.user['id']|int %}<label class="mx-pick"><input type="checkbox" form="bulk-quote-form" name="provider_ids" value="{{ p.id }}"> Compare</label>{% endif %}
+    <div class="mx-acts">
+    <details class="mx-act"><summary class="btn pri">Request a quote</summary>
+      <form method="post" action="{{ url_for('marketplace_quote_request',provider_id=p.id) }}">{{ csrf_input() }}
+        <label>Request title<input name="title" required minlength="4" maxlength="120" placeholder="e.g. Bookkeeping for 25 members"></label>
+        <label>What do you need?<textarea name="details" required minlength="10" maxlength="1500" placeholder="Scope, number of members, expected deliverables…"></textarea></label>
+        <div class="mx-form-grid"><label>Budget (optional)<input name="budget_hint" maxlength="100" placeholder="e.g. KSh 5,000–10,000"></label><label>Needed by (optional)<input name="deadline" maxlength="30" placeholder="e.g. 30 November 2026"></label><label>Chama ID (optional)<input name="chama_id" type="number" min="1" placeholder="If relevant"></label></div>
+        <button class="btn pri" type="submit">Send request</button></form></details>
+    <details class="mx-act"><summary class="btn">Quick enquiry</summary>
+      <form method="post" action="{{ url_for('marketplace_interest',provider_id=p.id) }}">{{ csrf_input() }}
+        <label>Chama ID <span class="mute">(optional)</span><input name="chama_id" type="number" min="1" placeholder="Enter if relevant"></label>
+        <label>Your question <span class="mute">(optional)</span><input name="message" maxlength="500" placeholder="Ask about pricing, availability…"></label>
+        <button class="btn block" type="submit">Register interest</button></form></details>
+    </div>
+  </footer>
 </article>
 {% else %}
-<div class="card market-empty"><div class="symbol">⌕</div><h3>No matching providers yet</h3><p class="mute">Try another search or area, or submit a provider listing for review.</p><a class="btn sm" style="margin-top:14px" href="{{ url_for('marketplace') }}">Show all services</a></div>
+<div class="mx-empty"><div class="symbol">⌕</div><h3>{% if saved_only %}Nothing saved yet{% else %}No matching providers yet{% endif %}</h3><p class="mute">{% if saved_only %}Tap the ♡ on any provider to keep it here.{% else %}Try another search or area, or list your own service below.{% endif %}</p><a class="btn sm" href="{{ url_for('marketplace') }}">Show all services</a></div>
 {% endfor %}
 </div>
-<section class="card" style="margin-top:24px"><div class="market-section-head" style="margin-top:0"><div><h2>What to look for</h2><p>Use the marketplace confidently and protect your chama.</p></div></div><div class="market-help"><article><b>✓ Check credentials</b><p>Ask for registration details, references, and relevant qualifications before engaging a provider.</p></article><article><b>↔ Compare terms</b><p>Request written pricing, scope of work, timelines, and cancellation terms before agreeing.</p></article><article><b>🔒 Protect your records</b><p>Do not share passwords, PINs, member identity documents, or private financial records unnecessarily.</p></article><article><b>ℹ Understand review status</b><p>Platform review is not a guarantee, endorsement, or promise of results. Reviews require both sides to confirm a completed quote engagement and are limited to one per request.</p></article></div></section>
-<section class="card"><div class="market-section-head" style="margin-top:0"><div><h2>Are you a service provider?</h2><p>Help chamas find your service. Every new listing is reviewed before it becomes public.</p></div><span class="pill warn">Review required</span></div>
+
+<section class="mx-tips"><article><b>✓ Check credentials</b><p>Ask for registration details and references before engaging anyone.</p></article><article><b>↔ Compare terms</b><p>Get pricing, scope, timelines and cancellation terms in writing.</p></article><article><b>🔒 Protect records</b><p>Never share passwords, PINs or member ID documents unnecessarily.</p></article><article><b>ℹ Reviews</b><p>Platform review is not an endorsement. Reviews need both sides to confirm a completed quote.</p></article></section>
+
+<details class="card mx-list-service"><summary><b>Are you a service provider?</b><span class="mute"> List your service. Every listing is reviewed before it goes public.</span></summary>
 <form method="post" action="{{ url_for('marketplace_add') }}">{{ csrf_input() }}
-  <div class="market-form-grid"><label>Provider / organization name<input name="name" required minlength="2" maxlength="100" placeholder="Business or organization name"></label><label>Service category<select name="category" required>{% for c in categories %}<option>{{ c }}</option>{% endfor %}</select></label><label>County / area<input name="county" maxlength="100" placeholder="e.g. Nairobi, Kiambu"></label><label>Contact email<input name="contact_email" type="email" maxlength="160" placeholder="hello@example.com"></label><label>Contact phone<input name="contact_phone" maxlength="40" placeholder="Business contact number"></label><label>Website (https://)<input name="website" type="url" placeholder="https://example.com"></label></div>
-  <label>Service description<textarea name="description" required minlength="10" maxlength="1200" placeholder="Describe your services, who you help, and what a chama can expect."></textarea></label><label>Credentials / registration details<textarea name="credentials" maxlength="1000" placeholder="Relevant registration, qualifications, or references"></textarea></label><button class="btn pri" type="submit">Submit listing for review</button>
-</form></section>
-{% if mine %}<section class="card"><h2 style="font-size:25px">Your provider submissions</h2><p class="mute">Track review status for listings you have submitted.</p>{% for p in mine %}<div class="list"><li><div class="grow"><b>{{ p.name }}</b><br><small>{{ p.category }}{% if p.county %} · {{ p.county }}{% endif %}</small></div><span class="pill {% if p.status=='VERIFIED' %}ok{% elif p.status=='REJECTED' %}bad{% else %}warn{% endif %}">{{ p.status|title }}</span></li></div>{% endfor %}</section>{% endif %}
+  <div class="mx-form-grid"><label>Provider / organization name<input name="name" required minlength="2" maxlength="100" placeholder="Business or organization name"></label><label>Service category<select name="category" required>{% for c in categories %}<option>{{ c }}</option>{% endfor %}</select></label><label>County / area<input name="county" maxlength="100" placeholder="e.g. Nairobi, Kiambu"></label><label>Contact email<input name="contact_email" type="email" maxlength="160" placeholder="hello@example.com"></label><label>Contact phone<input name="contact_phone" maxlength="40" placeholder="Business contact number"></label><label>Website (https://)<input name="website" type="url" placeholder="https://example.com"></label></div>
+  <label>Service description<textarea name="description" required minlength="10" maxlength="1200" placeholder="Describe your services, who you help, and what a chama can expect."></textarea></label>
+  <label>Credentials / registration details<textarea name="credentials" maxlength="1000" placeholder="Relevant registration, qualifications, or references"></textarea></label>
+  <button class="btn pri" type="submit">Submit listing for review</button>
+</form></details>
+{% if mine %}<section class="card"><h3>Your provider submissions</h3>{% for p in mine %}<div class="list"><li><div class="grow"><b>{{ p.name }}</b><br><small>{{ p.category }}{% if p.county %} · {{ p.county }}{% endif %}</small></div><span class="pill {% if p.status=='VERIFIED' %}ok{% elif p.status=='REJECTED' %}bad{% else %}warn{% endif %}">{{ p.status|title }}</span></li></div>{% endfor %}</section>{% endif %}
 {% endblock %}
