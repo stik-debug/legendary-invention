@@ -14,7 +14,7 @@
     {% if category %}<input type="hidden" name="category" value="{{ category }}">{% endif %}{% if saved_only %}<input type="hidden" name="saved" value="1">{% endif %}
     <button class="btn gold" type="submit">Search</button>
   </form>
-  <div class="mx-stats"><span><b>{{ counts.total or 0 }}</b> reviewed listings</span><span><b>{{ counts.categories or 0 }}</b> categories</span><span><b>Free</b> to browse &amp; enquire</span><a href="{{ url_for('marketplace_quotes') }}">My quotes →</a></div>
+  <div class="mx-stats"><span><b>{{ counts.total or 0 }}</b> platform-reviewed listings</span><span><b>{{ counts.categories or 0 }}</b> categories</span><span><b>Free</b> to browse &amp; enquire</span><a href="{{ url_for('marketplace_quotes') }}">My quotes →</a></div>
 </section>
 
 <nav class="mx-chips" aria-label="Service categories">
@@ -52,11 +52,12 @@
   <header>
     <div class="mx-logo" aria-hidden="true">{{ p.name[:1]|upper }}</div>
     <div class="mx-title"><h2>{{ p.name }}</h2>
-      <div class="mx-badges"><span class="pill info">{{ p.category }}</span><span class="pill ok">✓ Reviewed</span>{% if p.top_rated %}<span class="pill warn">★ Top rated</span>{% endif %}{% if p.is_new %}<span class="pill">New</span>{% endif %}</div></div>
+      <div class="mx-badges"><span class="pill info">{{ p.category }}</span><span class="pill ok" title="An administrator reviewed this listing. This does not certify qualifications or guarantee service quality.">✓ Platform reviewed</span>{% if p.top_rated %}<span class="pill warn">★ Top rated</span>{% endif %}{% if p.is_new %}<span class="pill">New</span>{% endif %}</div></div>
     <form method="post" action="{{ url_for('marketplace_save',provider_id=p.id) }}" class="mx-save">{{ csrf_input() }}<button type="submit" class="{{ 'on' if p.saved }}" aria-pressed="{{ 'true' if p.saved else 'false' }}" title="{{ 'Remove from saved' if p.saved else 'Save this provider' }}"><span class="sr">{{ 'Unsave' if p.saved else 'Save' }} {{ p.name }}</span><span aria-hidden="true">{{ '♥' if p.saved else '♡' }}</span></button></form>
   </header>
   <p class="mx-rating" aria-label="Provider rating">{% if p.average_rating %}<b>★ {{ p.average_rating }}</b> · {{ p.review_count }} review{% if p.review_count != 1 %}s{% endif %}{% else %}No reviews yet{% endif %}{% if p.county %} · ⌖ {{ p.county }}{% endif %}</p>
   <p class="mx-desc">{{ p.description }}</p>
+  {% if p.credentials %}<div class="mx-credentials"><b>Credentials supplied</b><p>{{ p.credentials }}</p><small>Provider-submitted information; independently verify qualifications and registration before hiring.</small></div>{% endif %}
   {% if p.website or p.contact_email or p.contact_phone %}<div class="mx-contact">{% if p.contact_phone %}<a href="tel:{{ p.contact_phone|replace(' ','') }}">☎ Call</a>{% endif %}{% if p.contact_email %}<a href="mailto:{{ p.contact_email }}">✉ Email</a>{% endif %}{% if p.website %}<a href="{{ p.website }}" target="_blank" rel="noopener noreferrer">Website ↗</a>{% endif %}</div>{% endif %}
   {% if p.recent_reviews %}<div class="mx-reviews">{% for r in p.recent_reviews %}<blockquote><span class="stars" aria-label="{{ r.rating }} out of 5 stars">{% for star in range(r.rating) %}★{% endfor %}{% for star in range(5-r.rating) %}☆{% endfor %}</span> <b>{{ r.title }}</b><p>{{ r.body }}</p><small>{{ r.reviewer_name }} · completed engagement</small></blockquote>{% endfor %}</div>{% endif %}
   <footer>
@@ -83,7 +84,7 @@
 
 <section class="mx-tips"><article><b>✓ Check credentials</b><p>Ask for registration details and references before engaging anyone.</p></article><article><b>↔ Compare terms</b><p>Get pricing, scope, timelines and cancellation terms in writing.</p></article><article><b>🔒 Protect records</b><p>Never share passwords, PINs or member ID documents unnecessarily.</p></article><article><b>ℹ Reviews</b><p>Platform review is not an endorsement. Reviews need both sides to confirm a completed quote.</p></article></section>
 
-<details class="card mx-list-service"><summary><b>Are you a service provider?</b><span class="mute"> List your service. Every listing is reviewed before it goes public.</span></summary>
+<details class="card mx-list-service"><summary><b>Are you a service provider?</b><span class="mute"> List your service. Every listing is reviewed before it goes public. Platform review is not professional certification.</span></summary>
 <form method="post" action="{{ url_for('marketplace_add') }}">{{ csrf_input() }}
   <div class="mx-form-grid"><label>Provider / organization name<input name="name" required minlength="2" maxlength="100" placeholder="Business or organization name"></label><label>Service category<select name="category" required>{% for c in categories %}<option>{{ c }}</option>{% endfor %}</select></label><label>County / area<input name="county" maxlength="100" placeholder="e.g. Nairobi, Kiambu"></label><label>Contact email<input name="contact_email" type="email" maxlength="160" placeholder="hello@example.com"></label><label>Contact phone<input name="contact_phone" maxlength="40" placeholder="Business contact number"></label><label>Website (https://)<input name="website" type="url" placeholder="https://example.com"></label></div>
   <label>Service description<textarea name="description" required minlength="10" maxlength="1200" placeholder="Describe your services, who you help, and what a chama can expect."></textarea></label>
