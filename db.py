@@ -468,6 +468,10 @@ CREATE INDEX IF NOT EXISTS ix_collaboration_reports ON collaboration_reports(sta
 CREATE TABLE IF NOT EXISTS profile_images(
   id {PK}, owner_type TEXT NOT NULL, owner_id INTEGER NOT NULL, mime TEXT NOT NULL, data_b64 TEXT NOT NULL, updated_at TEXT NOT NULL,
   UNIQUE(owner_type,owner_id));
+CREATE TABLE IF NOT EXISTS post_likes(
+  id {PK}, post_id BIGINT NOT NULL, user_id BIGINT NOT NULL, created_at TEXT NOT NULL, UNIQUE(post_id,user_id));
+CREATE TABLE IF NOT EXISTS provider_saves(
+  id {PK}, provider_id BIGINT NOT NULL, user_id BIGINT NOT NULL, created_at TEXT NOT NULL, UNIQUE(provider_id,user_id));
 """
 
 DEFAULT_PLANS = [('starter', 'Starter', 50000, 20, 1), ('growth', 'Growth', 150000, 70, 2), ('business', 'Pro', 200000, 100, 3)]

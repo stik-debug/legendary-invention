@@ -1,7 +1,7 @@
 """Community growth features: provider marketplace, welfare funds and chama collaboration.
 All workflows are record-keeping only; they do not move money or certify providers automatically.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 import re
 from flask import abort, flash, g, redirect, render_template, request, url_for
@@ -37,6 +37,13 @@ def clean(value, label, minimum=2, maximum=1500):
     return value
 
 def register(app, db, ctx, login_required, owner_required):
+    def _back_to(default_endpoint, anchor=''):
+        """Return to the page the person came from (same site only), keeping their filters."""
+        ref = request.referrer or ''
+        if ref.startswith(request.host_url):
+            return redirect(ref.split('#')[0] + anchor)
+        return redirect(url_for(default_endpoint) + anchor)
+
     @app.route('/marketplace')
     @login_required
     def marketplace():
@@ -45,7 +52,11 @@ def register(app, db, ctx, login_required, owner_required):
         query=(request.args.get('q') or '').strip()[:100]
         county=(request.args.get('county') or '').strip()[:100]
         sort=(request.args.get('sort') or 'recommended').strip()
-        order_by={'recommended':'category,name','name':'name COLLATE NOCASE','newest':'id DESC'}.get(sort,'category,name')
+        if sort not in ('recommended','name','newest','rating'): sort='recommended'
+        min_rating=request.args.get('min_rating',type=int)
+        if min_rating not in (3,4): min_rating=None
+        saved_only=request.args.get('saved')=='1'
+        order_by={'recommended':'category,name','name':'name COLLATE NOCASE','newest':'id DESC','rating':'name COLLATE NOCASE'}[sort]
         sql="""SELECT p.*,
             (SELECT COUNT(*) FROM marketplace_reviews r WHERE r.provider_id=p.id AND r.status='PUBLISHED') review_count,
             (SELECT ROUND(AVG(r.rating),1) FROM marketplace_reviews r WHERE r.provider_id=p.id AND r.status='PUBLISHED') average_rating
@@ -53,18 +64,39 @@ def register(app, db, ctx, login_required, owner_required):
         args=[]
         if category: sql+=' AND category=?'; args.append(category)
         if county: sql+=' AND county LIKE ?'; args.append('%'+county+'%')
+        if saved_only: sql+=' AND p.id IN (SELECT provider_id FROM provider_saves WHERE user_id=?)'; args.append(g.user['id'])
         if query:
             sql+=' AND (name LIKE ? OR description LIKE ? OR category LIKE ? OR county LIKE ?)'
             term='%'+query+'%'; args.extend([term,term,term,term])
         sql+=' ORDER BY '+order_by+' LIMIT 100'
         rows=db().all(sql,args)
+        if min_rating: rows=[r for r in rows if (r['average_rating'] or 0)>=min_rating]
+        if sort=='rating': rows.sort(key=lambda r:(-(r['average_rating'] or 0),-(r['review_count'] or 0),r['name'].lower()))
+        saved_ids={r['provider_id'] for r in db().all('SELECT provider_id FROM provider_saves WHERE user_id=?',(g.user['id'],))}
+        fresh_after=(datetime.now(timezone.utc)-timedelta(days=14)).isoformat()
         for provider_row in rows:
-            provider_row['recent_reviews']=db().all("SELECT r.*,u.name reviewer_name FROM marketplace_reviews r JOIN users u ON u.id=r.user_id WHERE r.provider_id=? AND r.status='PUBLISHED' ORDER BY r.id DESC LIMIT 3",(provider_row['id'],))
+            provider_row['recent_reviews']=db().all("SELECT r.*,u.name reviewer_name FROM marketplace_reviews r JOIN users u ON u.id=r.user_id WHERE r.provider_id=? AND r.status='PUBLISHED' ORDER BY r.id DESC LIMIT 2",(provider_row['id'],))
+            provider_row['saved']=provider_row['id'] in saved_ids
+            provider_row['top_rated']=(provider_row['average_rating'] or 0)>=4.5 and (provider_row['review_count'] or 0)>=3
+            provider_row['is_new']=str(provider_row['created_at'] or '')>=fresh_after
         mine=db().all('SELECT * FROM marketplace_providers WHERE user_id=? ORDER BY id DESC LIMIT 30',(g.user['id'],))
         counts=db().one("SELECT COUNT(*) total, COUNT(DISTINCT category) categories FROM marketplace_providers WHERE status='VERIFIED'")
+        category_counts={r['category']:r['n'] for r in db().all("SELECT category, COUNT(*) n FROM marketplace_providers WHERE status='VERIFIED' GROUP BY category")}
         counties=db().all("SELECT DISTINCT county FROM marketplace_providers WHERE status='VERIFIED' AND county IS NOT NULL AND TRIM(county)<>'' ORDER BY county LIMIT 100")
         return render_template('marketplace.html', rows=rows, mine=mine, categories=CATEGORIES, category=category,
-            query=query, county=county, sort=sort, counties=counties, counts=counts)
+            query=query, county=county, sort=sort, counties=counties, counts=counts, min_rating=min_rating,
+            saved_only=saved_only, saved_count=len(saved_ids), category_counts=category_counts)
+
+    @app.route('/marketplace/<int:provider_id>/save', methods=['POST'])
+    @login_required
+    def marketplace_save(provider_id):
+        if not db().one("SELECT id FROM marketplace_providers WHERE id=? AND status='VERIFIED'",(provider_id,)): abort(404)
+        with db().tx():
+            if db().val('SELECT COUNT(*) FROM provider_saves WHERE provider_id=? AND user_id=?',(provider_id,g.user['id']),0):
+                db().execute('DELETE FROM provider_saves WHERE provider_id=? AND user_id=?',(provider_id,g.user['id']))
+            else:
+                db().insert('provider_saves',provider_id=provider_id,user_id=g.user['id'],created_at=stamp())
+        return _back_to('marketplace','#provider-%d'%provider_id)
 
     @app.route('/marketplace/providers', methods=['POST'])
     @login_required
@@ -391,7 +423,29 @@ def register(app, db, ctx, login_required, owner_required):
     @app.route('/collaboration')
     @login_required
     def collaboration():
-        rows=db().all("SELECT p.*,u.name author,c.name chama,(SELECT COUNT(*) FROM collaboration_replies r WHERE r.post_id=p.id AND r.status='ACTIVE') reply_count FROM collaboration_posts p JOIN users u ON u.id=p.user_id LEFT JOIN chamas c ON c.id=p.chama_id WHERE p.status='ACTIVE' AND p.visibility='COMMUNITY' ORDER BY p.id DESC LIMIT 100")
+        kind=(request.args.get('kind') or '').upper()
+        if kind not in POST_KINDS: kind=''
+        query=(request.args.get('q') or '').strip()[:100]
+        sort=(request.args.get('sort') or 'latest').strip()
+        if sort not in ('latest','helpful','replies'): sort='latest'
+        mine=request.args.get('mine')=='1'
+        limit=min(max(request.args.get('limit',20,type=int),1),100)
+        sql="""SELECT p.*,u.name author,c.name chama,
+            (SELECT COUNT(*) FROM collaboration_replies r WHERE r.post_id=p.id AND r.status='ACTIVE') reply_count,
+            (SELECT COUNT(*) FROM post_likes l WHERE l.post_id=p.id) like_count,
+            (SELECT COUNT(*) FROM post_likes l WHERE l.post_id=p.id AND l.user_id=?) liked
+            FROM collaboration_posts p JOIN users u ON u.id=p.user_id LEFT JOIN chamas c ON c.id=p.chama_id
+            WHERE p.status='ACTIVE' AND p.visibility='COMMUNITY'"""
+        args=[g.user['id']]
+        if kind: sql+=' AND p.kind=?'; args.append(kind)
+        if mine: sql+=' AND p.user_id=?'; args.append(g.user['id'])
+        if query:
+            sql+=' AND (p.title LIKE ? OR p.body LIKE ? OR p.county LIKE ?)'
+            term='%'+query+'%'; args.extend([term,term,term])
+        order={'latest':'p.id DESC','helpful':'like_count DESC, p.id DESC','replies':'reply_count DESC, p.id DESC'}[sort]
+        sql+=' ORDER BY '+order+' LIMIT ?'; args.append(limit+1)
+        rows=db().all(sql,args)
+        has_more=len(rows)>limit; rows=rows[:limit]
         for p in rows:
             all_replies=db().all("SELECT r.*,u.name author FROM collaboration_replies r JOIN users u ON u.id=r.user_id WHERE r.post_id=? AND r.status='ACTIVE' ORDER BY r.id ASC LIMIT 300",(p['id'],))
             by_parent={}
@@ -400,7 +454,21 @@ def register(app, db, ctx, login_required, owner_required):
             p['replies']=by_parent.get(None, [])
             for reply in all_replies:
                 reply['children']=by_parent.get(reply['id'], [])
-        return render_template('collaboration.html',rows=rows,kinds=POST_KINDS)
+        pulse=db().one("SELECT (SELECT COUNT(*) FROM collaboration_posts WHERE status='ACTIVE') posts,(SELECT COUNT(*) FROM collaboration_replies WHERE status='ACTIVE') replies,(SELECT COUNT(DISTINCT user_id) FROM collaboration_posts WHERE status='ACTIVE') voices")
+        kind_counts={r['kind']:r['n'] for r in db().all("SELECT kind, COUNT(*) n FROM collaboration_posts WHERE status='ACTIVE' AND visibility='COMMUNITY' GROUP BY kind")}
+        return render_template('collaboration.html',rows=rows,kinds=POST_KINDS,kind=kind,query=query,sort=sort,mine=mine,
+            limit=limit,has_more=has_more,pulse=pulse,kind_counts=kind_counts)
+
+    @app.route('/collaboration/<int:post_id>/like',methods=['POST'])
+    @login_required
+    def collaboration_like(post_id):
+        if not db().one("SELECT id FROM collaboration_posts WHERE id=? AND status='ACTIVE'",(post_id,)): abort(404)
+        with db().tx():
+            if db().val('SELECT COUNT(*) FROM post_likes WHERE post_id=? AND user_id=?',(post_id,g.user['id']),0):
+                db().execute('DELETE FROM post_likes WHERE post_id=? AND user_id=?',(post_id,g.user['id']))
+            else:
+                db().insert('post_likes',post_id=post_id,user_id=g.user['id'],created_at=stamp())
+        return _back_to('collaboration','#post-%d'%post_id)
 
     @app.route('/collaboration/post',methods=['POST'])
     @login_required
