@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% block title %}Reports - {{ chama.name }}{% endblock %}
 {% block content %}
-<div class="head"><div><h2>Reports</h2><p>{{ chama.name }} · for officials</p></div></div>
+<div class="head"><div><h2>Monthly Chama Report</h2><p>{{ chama.name }} · generated from recorded financial and meeting data</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn" href="{{ url_for('financial_check',chama_id=chama.id) }}">Financial reconciliation</a><a class="btn pri" href="{{ url_for('reports_print',chama_id=chama.id,period=r.period) }}" target="_blank" rel="noopener">Print report</a></div></div>
 {% include '_chama_nav.html' %}
 <form method="GET" class="card" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap"><div style="flex:1;min-width:150px"><label for="pr">Month</label><input id="pr" type="month" name="period" value="{{ r.period }}"></div><button class="btn">Show</button></form>
 <div class="stats">
