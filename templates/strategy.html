@@ -3,7 +3,6 @@
 {% include '_chama_nav.html' %}
 <div class="grid">
   <a class="card" href="{{ url_for('chama_ai',chama_id=chama.id) }}" style="color:inherit;text-decoration:none"><h3>ChamaPay Copilot →</h3><p class="mute">Ask questions about recorded group data.</p></a>
-  <a class="card" href="{{ url_for('chama_memory',chama_id=chama.id) }}" style="color:inherit;text-decoration:none"><h3>Chama Memory →</h3><p class="mute">Search recorded meetings, decisions, commitments, rules and audit history.</p></a>
   <a class="card" href="{{ url_for('chama_promises',chama_id=chama.id) }}" style="color:inherit;text-decoration:none"><h3>Promise Tracker →</h3><p class="mute">Track meeting decisions, owners and deadlines.</p></a>
   {% if me.role in ('CHAMA_ADMIN','TREASURER','SECRETARY','AUDITOR') %}<a class="card" href="{{ url_for('chama_financial_passport',chama_id=chama.id) }}" style="color:inherit;text-decoration:none"><h3>Financial Passport PDF →</h3><p class="mute">Export a concise, caveated financial record.</p></a>{% endif %}
   {% if me.role in ('CHAMA_ADMIN','TREASURER','AUDITOR') %}<a class="card" href="{{ url_for('chama_continuity_vault',chama_id=chama.id) }}" style="color:inherit;text-decoration:none"><h3>Continuity Vault ZIP →</h3><p class="mute">Create a read-only handover snapshot.</p></a>{% endif %}
