@@ -249,6 +249,11 @@ CREATE INDEX IF NOT EXISTS ix_pay_status ON payments(status, completed_at);
 CREATE INDEX IF NOT EXISTS ix_audit_chama ON audit_logs(chama_id, created_at);
 CREATE INDEX IF NOT EXISTS ix_sub_status ON subscriptions(status);
 CREATE INDEX IF NOT EXISTS ix_attempts ON login_attempts(key, at);
+CREATE TABLE IF NOT EXISTS pilot_time_savings(
+  id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), user_id INTEGER NOT NULL REFERENCES users(id),
+  week_start TEXT NOT NULL, minutes_saved INTEGER NOT NULL CHECK(minutes_saved>=0 AND minutes_saved<=10080),
+  note TEXT, submitted_at TEXT NOT NULL, UNIQUE(chama_id,user_id,week_start));
+CREATE INDEX IF NOT EXISTS ix_pilot_time_chama_week ON pilot_time_savings(chama_id,week_start);
 CREATE TABLE IF NOT EXISTS chama_goals(
   id {PK}, chama_id INTEGER NOT NULL REFERENCES chamas(id), name TEXT NOT NULL, description TEXT,
   target_cents BIGINT NOT NULL CHECK(target_cents>0), current_cents BIGINT NOT NULL DEFAULT 0,

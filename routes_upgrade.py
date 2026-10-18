@@ -57,6 +57,38 @@ def register_upgrade_routes(app, db, login_required, ctx):
             health_parts=health_parts,alerts=alerts,pending_loans=pending_loans,overdue=overdue,goals=db().all("SELECT * FROM chama_goals WHERE chama_id=? AND status='ACTIVE' ORDER BY id DESC LIMIT 5",(chama_id,)),
             activities=db().all("""SELECT l.*,u.name FROM ledger_transactions l LEFT JOIN users u ON u.id=l.user_id WHERE l.chama_id=? ORDER BY l.id DESC LIMIT 10""",(chama_id,)))
 
+    @app.route('/chamas/<int:chama_id>/pilot-metrics', methods=['GET','POST'])
+    @login_required
+    def pilot_metrics(chama_id):
+        chama, me, sub = ctx(chama_id, roles=STAFF)
+        today = date.today()
+        week_start = (today - timedelta(days=today.weekday())).isoformat()
+        if request.method == 'POST':
+            minutes = request.form.get('minutes_saved', type=int)
+            note = (request.form.get('note') or '').strip()[:500]
+            if minutes is None or minutes < 0 or minutes > 10080:
+                flash('Enter a realistic number of minutes saved this week (0–10,080).', 'danger')
+            else:
+                db().execute("""INSERT INTO pilot_time_savings(chama_id,user_id,week_start,minutes_saved,note,submitted_at)
+                    VALUES(?,?,?,?,?,?) ON CONFLICT(chama_id,user_id,week_start) DO UPDATE SET
+                    minutes_saved=excluded.minutes_saved,note=excluded.note,submitted_at=excluded.submitted_at""",
+                    (chama_id, me['user_id'], week_start, minutes, note, S.iso(S.now_utc())))
+                audit(db(), me['user_id'], 'PILOT_TIME_SAVING_RECORDED', 'pilot_time_savings', None, chama_id,
+                      {'week_start': week_start, 'minutes_saved': minutes})
+                db().commit()
+                flash('Your weekly time-saved estimate has been recorded.', 'success')
+            return redirect(url_for('pilot_metrics', chama_id=chama_id))
+        active = int(db().val("SELECT COUNT(*) FROM chama_members WHERE chama_id=? AND status='ACTIVE'", (chama_id,), 0) or 0)
+        activated = int(db().val("SELECT COUNT(*) FROM chama_members m JOIN users u ON u.id=m.user_id WHERE m.chama_id=? AND m.status='ACTIVE' AND COALESCE(u.claimed,0)=1", (chama_id,), 0) or 0)
+        weekly_active = int(db().val("SELECT COUNT(DISTINCT actor_id) FROM audit_logs WHERE chama_id=? AND actor_id IS NOT NULL AND created_at>=?", (chama_id, (today-timedelta(days=6)).isoformat()), 0) or 0)
+        paid_chamas = int(db().val("SELECT COUNT(*) FROM payments WHERE chama_id=? AND status IN ('PAID','COMPLETED') AND applied=1 AND is_test_data=0", (chama_id,), 0) or 0)
+        renewed_chamas = 1 if paid_chamas >= 2 else 0
+        avg_saved = db().val("SELECT AVG(minutes_saved) FROM pilot_time_savings WHERE chama_id=? AND week_start=?", (chama_id, week_start), None)
+        mine = db().one("SELECT minutes_saved,note FROM pilot_time_savings WHERE chama_id=? AND user_id=? AND week_start=?", (chama_id, me['user_id'], week_start))
+        return render_template('pilot_metrics.html', chama=chama, me=me, week_start=week_start, active=active,
+            activated=activated, weekly_active=weekly_active, paid_chamas=paid_chamas, renewed_chamas=renewed_chamas,
+            avg_saved=round(float(avg_saved)) if avg_saved is not None else None, mine=mine)
+
     @app.route('/chamas/<int:chama_id>/goals', methods=['GET','POST'])
     @login_required
     def chama_goals(chama_id):

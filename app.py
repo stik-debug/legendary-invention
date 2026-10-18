@@ -506,7 +506,21 @@ def create_app(overrides=None):
             LEFT JOIN subscription_plans p ON p.id=s.plan_id
             WHERE m.user_id=? AND m.status='ACTIVE'
             ORDER BY c.name""", (g.user['id'],))
-        return render_template('dashboard.html', chamas=rows)
+        # Real, per-Chama overview data for the home screen. These are computed
+        # from recorded rows; no demo statistics are injected into the dashboard.
+        period = date.today().isoformat()[:7]
+        summaries = {}
+        for c in rows:
+            cid = int(c['id'])
+            summaries[cid] = {
+                'active_members': int(c['members'] or 0),
+                'paid_members': int(db().val("SELECT COUNT(*) FROM (SELECT user_id,SUM(amount_cents) total FROM contributions WHERE chama_id=? AND period=? AND status='PAID' GROUP BY user_id HAVING SUM(amount_cents)>=(SELECT contribution_cents FROM chamas WHERE id=?)) paid", (cid, period, cid), 0) or 0),
+                'pending_payments': int(db().val("SELECT COUNT(*) FROM payment_requests WHERE chama_id=? AND status='PENDING'", (cid,), 0) or 0),
+                'open_actions': int(db().val("SELECT COUNT(*) FROM meeting_actions WHERE chama_id=? AND status='OPEN'", (cid,), 0) or 0),
+                'overdue_loans': int(db().val("SELECT COUNT(*) FROM loans WHERE chama_id=? AND status='ACTIVE' AND due_date IS NOT NULL AND due_date < ?", (cid, date.today().isoformat()), 0) or 0),
+                'active_goals': int(db().val("SELECT COUNT(*) FROM chama_goals WHERE chama_id=? AND status='ACTIVE'", (cid,), 0) or 0),
+            }
+        return render_template('dashboard.html', chamas=rows, summaries=summaries, current_period=period)
 
     @app.route('/chamas/new', methods=['GET', 'POST'])
     @login_required
