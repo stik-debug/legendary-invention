@@ -894,6 +894,8 @@ def create_app(overrides=None):
     routes_otp.register(app, db, login_required)
     routes_features.register(app, db, ctx, login_required, owner_required)
     routes_strategy.register_strategy_routes(app, db, ctx, login_required)
+    import routes_memory
+    routes_memory.register_memory_routes(app, db, ctx, login_required)
     import routes_trust
     routes_trust.register(app, db, ctx, login_required)
     devtools.register(app)
