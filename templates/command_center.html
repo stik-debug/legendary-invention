@@ -16,6 +16,8 @@
     <a class="quick-action" href="{{ url_for('chama_votes',chama_id=chama.id) }}"><b>Start a vote</b><small>Make a group decision</small></a>
     <a class="quick-action" href="{{ url_for('notices',chama_id=chama.id) }}"><b>Send notice</b><small>Reach every member</small></a>
     <a class="quick-action" href="{{ url_for('reports',chama_id=chama.id) }}"><b>Open reports</b><small>Review the numbers</small></a>
+    <a class="quick-action" href="{{ url_for('chama_memory',chama_id=chama.id) }}"><b>Search Chama Memory</b><small>Find past decisions and commitments</small></a>
+    <a class="quick-action" href="{{ url_for('chama_strategy',chama_id=chama.id) }}"><b>Decision Simulator</b><small>Test assumptions before voting</small></a>
   </div>
 </div>
 <div class="grid">
