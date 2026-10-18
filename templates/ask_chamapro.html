@@ -1,0 +1,7 @@
+{% extends "base.html" %}{% block title %}Ask ChamaPro · {{ chama.name }}{% endblock %}
+{% block content %}<div class="head"><div><h2>Ask ChamaPro</h2><p class="mute">Answers use recorded data and show what was counted.</p></div><a class="btn" href="{{ url_for('chama_command_centre',chama_id=chama.id) }}">Command Centre</a></div>
+{% include '_chama_nav.html' %}
+<div class="card"><form method="get"><label for="ask-q">What would you like to know?</label><input id="ask-q" name="q" value="{{ q }}" maxlength="240" placeholder="e.g. How much have I contributed this year?" required><button class="btn pri" type="submit">Ask</button></form>
+<div class="rowline" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">{% for prompt in ['How much have I contributed this year?','Which payments are awaiting confirmation?','What remains before our savings target is reached?','What did we decide at our last meeting?','What is the outstanding loan balance?'] %}<a class="btn sm" href="{{ url_for('ask_chamapro',chama_id=chama.id,q=prompt) }}">{{ prompt }}</a>{% endfor %}</div></div>
+{% if answer %}<div class="card"><h3>{{ answer.title }}</h3><p style="white-space:pre-line">{{ answer.body }}</p><p class="mute"><b>Source and limits:</b> {{ answer.source }}</p></div>{% endif %}
+{% endblock %}

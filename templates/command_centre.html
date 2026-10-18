@@ -1,0 +1,17 @@
+{% extends "base.html" %}{% block title %}Command Centre · {{ chama.name }}{% endblock %}
+{% block content %}
+<div class="head"><div><h2>Chama Command Centre</h2><p class="mute">{{ chama.name }} · a live, role-aware view of what needs attention.</p></div><a class="btn" href="{{ url_for('chama_home',chama_id=chama.id) }}">Back to Chama</a></div>
+{% include '_chama_nav.html' %}
+<div class="stats"><div class="stat"><small>Open meeting actions</small><b>{{ open_actions }}</b></div><div class="stat"><small>Active savings goals</small><b>{{ goals }}</b></div><div class="stat"><small>Your role</small><b>{{ me.role|replace('_',' ')|title }}</b></div></div>
+<div class="card"><h3>Next actions</h3>{% if actions %}{% for a in actions %}<div class="rowline" style="padding:14px 0;border-bottom:1px solid var(--line,#e4e9e6)"><b>{{ a.title }}</b><p class="mute">{{ a.detail }}</p><a class="btn sm" href="{{ a.url }}">Review</a></div>{% endfor %}{% else %}<p>No matching action items were found in the records checked. This does not mean all records are reconciled.</p>{% endif %}</div>
+<div class="grid cards-grid">
+<div class="card"><h3>Money Truth</h3><p>Review ledger links, duplicate references and statement differences.</p><a class="btn" href="{{ url_for('trust_center',chama_id=chama.id) }}">Open reconciliation</a></div>
+<div class="card"><h3>Ask ChamaPro</h3><p>Ask supported questions answered from records you are permitted to see.</p><a class="btn" href="{{ url_for('ask_chamapro',chama_id=chama.id) }}">Ask a question</a></div>
+<div class="card"><h3>Wealth Builder</h3><p>Track goals and actual recorded progress separately from projections.</p><a class="btn" href="{{ url_for('chama_goals',chama_id=chama.id) }}">Savings goals</a> <a class="btn" href="{{ url_for('assets',chama_id=chama.id) }}">Assets</a></div>
+<div class="card"><h3>Decisions & continuity</h3><p>Keep meeting commitments, scenario assumptions and leadership handovers visible.</p><a class="btn" href="{{ url_for('chama_promises',chama_id=chama.id) }}">Action tracker</a> <a class="btn" href="{{ url_for('chama_strategy',chama_id=chama.id) }}">Decision scenarios</a> <a class="btn" href="{{ url_for('chama_handover',chama_id=chama.id) }}">Handover</a></div>
+<div class="card"><h3>Loans & repayments</h3><p>Review existing loan records and repayment workflows; approvals remain with authorized officials.</p><a class="btn" href="{{ url_for('loans',chama_id=chama.id) }}">Open loans</a></div>
+<div class="card"><h3>Buying Network</h3><p>Browse providers that have actually passed the platform's verification workflow and compare submitted quotes.</p><a class="btn" href="{{ url_for('marketplace') }}">Open marketplace</a></div>
+<div class="card"><h3>Reports & recovery</h3><p>Review reports and export a backup. A backup export is not a verified restore.</p><a class="btn" href="{{ url_for('reports',chama_id=chama.id) }}">Reports</a> <a class="btn" href="{{ url_for('chama_backup',chama_id=chama.id) }}">Download backup</a></div>
+{% if me.role in ['CHAMA_ADMIN','TREASURER','SECRETARY'] %}<div class="card"><h3>Governance & meetings</h3><p>Open the records for meeting minutes, decisions, votes and assigned follow-ups.</p><a class="btn" href="{{ url_for('meetings',chama_id=chama.id) }}">Meetings</a> <a class="btn" href="{{ url_for('votes',chama_id=chama.id) }}">Votes</a></div>{% endif %}
+</div>
+{% endblock %}
