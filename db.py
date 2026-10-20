@@ -493,13 +493,22 @@ CREATE TABLE IF NOT EXISTS chama_power_quotes(
   id {PK}, project_id BIGINT NOT NULL, chama_id BIGINT NOT NULL, supplier_name TEXT NOT NULL,
   supplier_contact TEXT, amount_cents BIGINT NOT NULL CHECK(amount_cents>=0), scope TEXT NOT NULL,
   validity TEXT, evidence_reference TEXT, verification_status TEXT NOT NULL DEFAULT 'UNVERIFIED',
-  added_by BIGINT NOT NULL, created_at TEXT NOT NULL);
+  added_by BIGINT NOT NULL, created_at TEXT NOT NULL, verification_note TEXT, verified_by BIGINT, verified_at TEXT);
 CREATE INDEX IF NOT EXISTS ix_power_quotes_project ON chama_power_quotes(project_id,amount_cents);
 CREATE TABLE IF NOT EXISTS chama_power_updates(
   id {PK}, project_id BIGINT NOT NULL, chama_id BIGINT NOT NULL, user_id BIGINT NOT NULL,
   update_type TEXT NOT NULL, body TEXT NOT NULL, amount_cents BIGINT NOT NULL DEFAULT 0 CHECK(amount_cents>=0),
   evidence_reference TEXT, created_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS ix_power_updates_project ON chama_power_updates(project_id,created_at);
+CREATE TABLE IF NOT EXISTS chama_power_comments(
+ id {PK}, project_id BIGINT NOT NULL, chama_id BIGINT NOT NULL, user_id BIGINT NOT NULL,
+ body TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS ix_power_comments_project ON chama_power_comments(project_id,created_at);
+CREATE TABLE IF NOT EXISTS chama_power_milestones(
+ id {PK}, project_id BIGINT NOT NULL, chama_id BIGINT NOT NULL, title TEXT NOT NULL,
+ due_date TEXT, status TEXT NOT NULL DEFAULT 'OPEN', completion_note TEXT,
+ created_by BIGINT NOT NULL, completed_by BIGINT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS ix_power_milestones_project ON chama_power_milestones(project_id,status,due_date);
 """
 
 DEFAULT_PLANS = [('starter', 'Starter', 50000, 20, 1), ('growth', 'Growth', 150000, 70, 2), ('business', 'Pro', 200000, 100, 3)]
@@ -560,6 +569,9 @@ def init_db(db):
         for stmt in stmts:
             if not stmt.strip().upper().startswith('CREATE TABLE'):
                 db.execute(stmt)
+        ensure_column(db, 'chama_power_quotes', 'verification_note', 'TEXT')
+        ensure_column(db, 'chama_power_quotes', 'verified_by', 'BIGINT')
+        ensure_column(db, 'chama_power_quotes', 'verified_at', 'TEXT')
         ensure_column(db, 'users', 'claimed', 'INTEGER NOT NULL DEFAULT 1')
         ensure_column(db, 'users', 'claim_code_hash', 'TEXT')
         ensure_column(db, 'users', 'claim_fails', 'INTEGER NOT NULL DEFAULT 0')

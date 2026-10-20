@@ -286,3 +286,7 @@ All signed-in users can start community discussions and reply. Common profanity 
 ## ChamaPower (V73)
 
 ChamaPower adds group project proposals, member voting, supplier quote comparison, and delivery/evidence history to the existing chama workspace. It does not move money or mark suppliers as verified automatically. Read `CHAMAPOWER_V73.md` before testing or deploying. Back up the production database and test on staging first.
+
+## ChamaPower V74 completion pass
+
+See `CHANGELOG_V74_CHAMAPOWER_COMPLETION.md` for the current ChamaPower workflows: collective project proposals, constitutional voting quorum, supplier quote comparison and internal evidence review, member discussion, milestones, project progress, and audit events. Project figures remain separate from the finance ledger; actual money movements must use the existing finance workflows.

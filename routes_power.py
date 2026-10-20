@@ -3,7 +3,8 @@
 This module records proposals and evidence only. It does not transfer money, verify suppliers
 automatically, or treat project budgets/quotes as ledger balances.
 """
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from math import ceil
 from flask import abort, flash, g, redirect, render_template, request, url_for
 import finance as F
 from db import audit
@@ -48,6 +49,11 @@ def register(app, db, ctx, login_required):
             description = (request.form.get('description') or '').strip()[:3000]
             deadline = (request.form.get('deadline') or '').strip() or None
             try:
+                if deadline:
+                    try:
+                        date.fromisoformat(deadline)
+                    except ValueError:
+                        raise ValueError('Enter a valid target date.')
                 target = _cents(request.form.get('target', '0'), allow_zero=True)
                 if len(title) < 4:
                     raise ValueError('Give the project a clear title (at least 4 characters).')
@@ -73,19 +79,28 @@ def register(app, db, ctx, login_required):
                 flash('The proposal could not be saved. No financial records were changed.', 'danger')
 
         projects = db().all("""SELECT p.*, u.name proposer,
-            (SELECT COUNT(*) FROM chama_power_votes v WHERE v.project_id=p.id AND v.choice='YES') yes_votes,
-            (SELECT COUNT(*) FROM chama_power_votes v WHERE v.project_id=p.id AND v.choice='NO') no_votes,
-            (SELECT COUNT(*) FROM chama_power_votes v WHERE v.project_id=p.id AND v.choice='ABSTAIN') abstain_votes,
+            (SELECT COUNT(*) FROM chama_power_votes v JOIN chama_members cm ON cm.user_id=v.user_id AND cm.chama_id=v.chama_id AND cm.status='ACTIVE' WHERE v.project_id=p.id AND v.choice='YES') yes_votes,
+            (SELECT COUNT(*) FROM chama_power_votes v JOIN chama_members cm ON cm.user_id=v.user_id AND cm.chama_id=v.chama_id AND cm.status='ACTIVE' WHERE v.project_id=p.id AND v.choice='NO') no_votes,
+            (SELECT COUNT(*) FROM chama_power_votes v JOIN chama_members cm ON cm.user_id=v.user_id AND cm.chama_id=v.chama_id AND cm.status='ACTIVE' WHERE v.project_id=p.id AND v.choice='ABSTAIN') abstain_votes,
+            (SELECT COUNT(*) FROM chama_members cm WHERE cm.chama_id=p.chama_id AND cm.status='ACTIVE') active_members,
             (SELECT choice FROM chama_power_votes v WHERE v.project_id=p.id AND v.user_id=?) my_vote,
             (SELECT COUNT(*) FROM chama_power_quotes q WHERE q.project_id=p.id) quote_count
             FROM chama_power_projects p LEFT JOIN users u ON u.id=p.created_by
             WHERE p.chama_id=? ORDER BY CASE p.status WHEN 'UNDER_REVIEW' THEN 0 WHEN 'APPROVED' THEN 1 WHEN 'IN_PROGRESS' THEN 2 ELSE 3 END,
             p.updated_at DESC,p.id DESC LIMIT 100""", (uid, cid))
+        constitution = db().one('SELECT voting_requirement FROM chama_constitutions WHERE chama_id=?', (cid,)) or {'voting_requirement': 50}
+        quorum_pct = max(0, min(100, int(constitution.get('voting_requirement', 50) or 0)))
         for p in projects:
+            p['votes_cast'] = int(p.get('yes_votes') or 0) + int(p.get('no_votes') or 0) + int(p.get('abstain_votes') or 0)
+            p['required_votes'] = ceil(int(p.get('active_members') or 0) * quorum_pct / 100)
+            p['quorum_pct'] = quorum_pct
             p['status_label'] = STATUS_LABELS.get(p['status'], p['status'])
             p['quotes'] = db().all('SELECT * FROM chama_power_quotes WHERE project_id=? AND chama_id=? ORDER BY amount_cents,id', (p['id'],cid))
             p['updates'] = db().all("""SELECT x.*,u.name actor FROM chama_power_updates x
                 LEFT JOIN users u ON u.id=x.user_id WHERE x.project_id=? AND x.chama_id=? ORDER BY x.id DESC LIMIT 10""",(p['id'],cid))
+            p['comments'] = db().all("""SELECT x.*,u.name author FROM chama_power_comments x
+                LEFT JOIN users u ON u.id=x.user_id WHERE x.project_id=? AND x.chama_id=? ORDER BY x.id ASC LIMIT 100""",(p['id'],cid))
+            p['milestones'] = db().all("SELECT * FROM chama_power_milestones WHERE project_id=? AND chama_id=? ORDER BY CASE status WHEN 'OPEN' THEN 0 ELSE 1 END, due_date, id", (p['id'],cid))
         return render_template('chama_power.html', chama=chama, me=me, staff=staff, projects=projects,
                                categories=CATEGORIES)
 
@@ -165,12 +180,20 @@ def register(app, db, ctx, login_required):
         }
         if new_status not in allowed.get(p['status'], ()): abort(400)
         if new_status == 'APPROVED':
-            yes=int(db().val("SELECT COUNT(*) FROM chama_power_votes WHERE project_id=? AND choice='YES'",(project_id,),0) or 0)
-            no=int(db().val("SELECT COUNT(*) FROM chama_power_votes WHERE project_id=? AND choice='NO'",(project_id,),0) or 0)
-            if yes < 1 or yes <= no:
-                flash('Approval requires at least one YES vote and more YES than NO votes.','danger')
+            yes=int(db().val("SELECT COUNT(*) FROM chama_power_votes v JOIN chama_members cm ON cm.user_id=v.user_id AND cm.chama_id=v.chama_id AND cm.status='ACTIVE' WHERE v.project_id=? AND v.choice='YES'",(project_id,),0) or 0)
+            no=int(db().val("SELECT COUNT(*) FROM chama_power_votes v JOIN chama_members cm ON cm.user_id=v.user_id AND cm.chama_id=v.chama_id AND cm.status='ACTIVE' WHERE v.project_id=? AND v.choice='NO'",(project_id,),0) or 0)
+            abstain=int(db().val("SELECT COUNT(*) FROM chama_power_votes v JOIN chama_members cm ON cm.user_id=v.user_id AND cm.chama_id=v.chama_id AND cm.status='ACTIVE' WHERE v.project_id=? AND v.choice='ABSTAIN'",(project_id,),0) or 0)
+            active=int(db().val("SELECT COUNT(*) FROM chama_members WHERE chama_id=? AND status='ACTIVE'",(cid,),0) or 0)
+            constitution=db().one('SELECT voting_requirement FROM chama_constitutions WHERE chama_id=?',(cid,)) or {'voting_requirement':50}
+            pct=max(0,min(100,int(constitution.get('voting_requirement',50) or 0)))
+            required=ceil(active*pct/100)
+            if yes < 1 or yes <= no or yes+no+abstain < required:
+                flash(f'Approval requires at least one YES vote, more YES than NO, and quorum of {required} votes ({pct}% of active members). Current participation: {yes+no+abstain}.','danger')
                 return redirect(url_for('chama_power',chama_id=cid))
         notes=(request.form.get('outcome_notes') or '').strip()[:2000]
+        if new_status == 'COMPLETED' and len(notes) < 10:
+            flash('Add a meaningful completion note (at least 10 characters).', 'danger')
+            return redirect(url_for('chama_power',chama_id=cid))
         now=_stamp()
         try:
             db().begin()
@@ -214,3 +237,120 @@ def register(app, db, ctx, login_required):
         except Exception:
             db().rollback(); flash('The update could not be saved.','danger')
         return redirect(url_for('chama_power',chama_id=cid))
+
+
+    @app.route('/chamas/<int:chama_id>/power/<int:project_id>/comment', methods=['POST'])
+    @login_required
+    def chama_power_comment(chama_id, project_id):
+        chama, me, sub = ctx(chama_id)
+        cid, uid = chama_id, g.user['id']
+        p = db().one('SELECT id,status FROM chama_power_projects WHERE id=? AND chama_id=?', (project_id,cid))
+        if not p: abort(404)
+        body = (request.form.get('body') or '').strip()
+        if len(body) < 3 or len(body) > 1500:
+            flash('Comments must be between 3 and 1,500 characters.', 'danger')
+            return redirect(url_for('chama_power', chama_id=cid))
+        now = _stamp()
+        try:
+            db().begin()
+            comment_id = db().insert('chama_power_comments', project_id=project_id, chama_id=cid,
+                user_id=uid, body=body, created_at=now)
+            audit(db(), uid, 'CHAMAPOWER_COMMENT_ADDED', 'chama_power_comment', comment_id, cid,
+                  {'project_id': project_id})
+            db().commit()
+            flash('Your project comment was recorded.', 'success')
+        except Exception:
+            db().rollback()
+            flash('Comment could not be saved. Please try again.', 'danger')
+        return redirect(url_for('chama_power', chama_id=cid))
+
+    @app.route('/chamas/<int:chama_id>/power/<int:project_id>/milestone', methods=['POST'])
+    @login_required
+    def chama_power_milestone(chama_id, project_id):
+        chama, me, sub = ctx(chama_id)
+        cid, uid = chama_id, g.user['id']
+        if me['role'] not in STAFF: abort(403)
+        p = db().one('SELECT * FROM chama_power_projects WHERE id=? AND chama_id=?', (project_id,cid))
+        if not p: abort(404)
+        if p['status'] not in ('APPROVED','IN_PROGRESS'): abort(400)
+        title = (request.form.get('title') or '').strip()[:160]
+        due = (request.form.get('due_date') or '').strip() or None
+        try:
+            if len(title) < 3: raise ValueError('Milestone title must be at least 3 characters.')
+            if due:
+                try:
+                    date.fromisoformat(due)
+                except ValueError:
+                    raise ValueError('Enter a valid milestone date.')
+            now = _stamp()
+            db().begin()
+            mid = db().insert('chama_power_milestones', project_id=project_id, chama_id=cid,
+                title=title, due_date=due, status='OPEN', created_by=uid, created_at=now, updated_at=now)
+            audit(db(), uid, 'CHAMAPOWER_MILESTONE_ADDED', 'chama_power_milestone', mid, cid,
+                  {'project_id': project_id, 'due_date': due})
+            db().commit()
+            flash('Milestone added to the project plan.', 'success')
+        except ValueError as e:
+            db().rollback(); flash(str(e) or 'Enter a valid date.', 'danger')
+        except Exception:
+            db().rollback(); flash('Milestone could not be saved.', 'danger')
+        return redirect(url_for('chama_power', chama_id=cid))
+
+    @app.route('/chamas/<int:chama_id>/power/<int:project_id>/milestone/<int:milestone_id>/complete', methods=['POST'])
+    @login_required
+    def chama_power_milestone_complete(chama_id, project_id, milestone_id):
+        chama, me, sub = ctx(chama_id)
+        cid, uid = chama_id, g.user['id']
+        if me['role'] not in STAFF: abort(403)
+        milestone = db().one('SELECT * FROM chama_power_milestones WHERE id=? AND project_id=? AND chama_id=?',
+                             (milestone_id, project_id, cid))
+        if not milestone: abort(404)
+        if milestone['status'] == 'COMPLETED':
+            flash('This milestone is already completed.', 'info')
+            return redirect(url_for('chama_power', chama_id=cid))
+        note = (request.form.get('completion_note') or '').strip()[:1000]
+        if len(note) < 5:
+            flash('Add a short completion note (at least 5 characters).', 'danger')
+            return redirect(url_for('chama_power', chama_id=cid))
+        now = _stamp()
+        try:
+            db().begin()
+            db().execute("UPDATE chama_power_milestones SET status='COMPLETED',completion_note=?,completed_by=?,updated_at=? WHERE id=? AND project_id=? AND chama_id=?",
+                         (note, uid, now, milestone_id, project_id, cid))
+            audit(db(), uid, 'CHAMAPOWER_MILESTONE_COMPLETED', 'chama_power_milestone', milestone_id, cid,
+                  {'project_id': project_id, 'completion_note': note})
+            db().commit()
+            flash('Milestone completion recorded.', 'success')
+        except Exception:
+            db().rollback(); flash('Milestone could not be updated.', 'danger')
+        return redirect(url_for('chama_power', chama_id=cid))
+
+    @app.route('/chamas/<int:chama_id>/power/<int:project_id>/quote/<int:quote_id>/review', methods=['POST'])
+    @login_required
+    def chama_power_quote_review(chama_id, project_id, quote_id):
+        chama, me, sub = ctx(chama_id)
+        cid, uid = chama_id, g.user['id']
+        if me['role'] not in STAFF: abort(403)
+        quote = db().one('SELECT * FROM chama_power_quotes WHERE id=? AND project_id=? AND chama_id=?',
+                         (quote_id, project_id, cid))
+        if not quote: abort(404)
+        decision = (request.form.get('decision') or '').upper()
+        note = (request.form.get('verification_note') or '').strip()[:1200]
+        if decision not in ('VERIFIED','FLAGGED') or len(note) < 15:
+            flash('Choose a review outcome and record what was checked (at least 15 characters).', 'danger')
+            return redirect(url_for('chama_power', chama_id=cid))
+        now = _stamp()
+        try:
+            db().begin()
+            db().execute('UPDATE chama_power_quotes SET verification_status=?,verification_note=?,verified_by=?,verified_at=? WHERE id=? AND project_id=? AND chama_id=?',
+                         (decision, note, uid, now, quote_id, project_id, cid))
+            audit(db(), uid, 'CHAMAPOWER_QUOTE_REVIEWED', 'chama_power_quote', quote_id, cid,
+                  {'project_id': project_id, 'decision': decision, 'verification_note': note})
+            db().commit()
+            if decision == 'VERIFIED':
+                flash('Quote review recorded. This means your official checked the stated evidence; it is not a guarantee of supplier reliability.', 'success')
+            else:
+                flash('Quote flagged for follow-up. Do not rely on it until concerns are resolved.', 'warning')
+        except Exception:
+            db().rollback(); flash('Quote review could not be saved.', 'danger')
+        return redirect(url_for('chama_power', chama_id=cid))
