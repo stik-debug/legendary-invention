@@ -34,20 +34,26 @@
   <div class="goal-number" style="font-size:1.2rem">{% if p.target_cents %}KES {{ p.target_cents|kes }}{% else %}Budget not set{% endif %}</div></div>
   <p style="white-space:pre-line">{{ p.description }}</p>
   <div class="grid">
-    <div class="card"><b>Member vote</b><p>👍 {{ p.yes_votes }} Yes · 👎 {{ p.no_votes }} No · ⏸ {{ p.abstain_votes }} Abstain</p>
+    <div class="card"><b>Member vote</b><p>👍 {{ p.yes_votes }} Yes · 👎 {{ p.no_votes }} No · ⏸ {{ p.abstain_votes }} Abstain</p><p class="mute">Participation: {{ p.votes_cast }} vote(s) · quorum: {{ p.required_votes }} vote(s) ({{ p.quorum_pct }}% of active members)</p>
     {% if p.status=='UNDER_REVIEW' %}
     <form method="POST" action="{{ url_for('chama_power_vote',chama_id=chama.id,project_id=p.id) }}" class="inline-form">{{ csrf_input() }}
       <label for="vote-{{ p.id }}">Your vote</label><select id="vote-{{ p.id }}" name="choice"><option value="YES" {% if p.my_vote=='YES' %}selected{% endif %}>Yes</option><option value="NO" {% if p.my_vote=='NO' %}selected{% endif %}>No</option><option value="ABSTAIN" {% if p.my_vote=='ABSTAIN' %}selected{% endif %}>Abstain</option></select><button class="btn sm pri">Save vote</button>
     </form>{% else %}<p class="mute">Voting closed.</p>{% endif %}
     {% if staff and p.status in ('UNDER_REVIEW','APPROVED','IN_PROGRESS') %}
     <form method="POST" action="{{ url_for('chama_power_status',chama_id=chama.id,project_id=p.id) }}" class="inline-form" style="margin-top:10px">{{ csrf_input() }}
-      {% if p.status=='UNDER_REVIEW' %}<button class="btn sm pri" name="status" value="APPROVED" type="submit">Approve (vote required)</button><button class="btn sm" name="status" value="REJECTED" type="submit">Reject</button>
+      {% if p.status=='UNDER_REVIEW' %}<button class="btn sm pri" name="status" value="APPROVED" type="submit">Approve (quorum + majority required)</button><button class="btn sm" name="status" value="REJECTED" type="submit">Reject</button>
       {% elif p.status=='APPROVED' %}<button class="btn sm pri" name="status" value="IN_PROGRESS" type="submit">Start project</button><button class="btn sm" name="status" value="REJECTED" type="submit">Cancel / reject</button>
       {% elif p.status=='IN_PROGRESS' %}<input name="outcome_notes" maxlength="2000" placeholder="Outcome / completion note" required><button class="btn sm pri" name="status" value="COMPLETED" type="submit">Mark completed</button>{% endif %}
     </form>{% endif %}
     </div>
     <div class="card"><b>Supplier quotes ({{ p.quote_count }})</b>
-      {% if p.quotes %}<div style="overflow-x:auto"><table><thead><tr><th>Supplier</th><th>Amount</th><th>Scope / validity</th><th>Evidence</th><th>Check status</th></tr></thead><tbody>{% for q in p.quotes %}<tr><td>{{ q.supplier_name }}{% if q.supplier_contact %}<br><small>{{ q.supplier_contact }}</small>{% endif %}</td><td>KES {{ q.amount_cents|kes }}</td><td>{{ q.scope }}{% if q.validity %}<br><small>Valid: {{ q.validity }}</small>{% endif %}</td><td>{{ q.evidence_reference or 'Not supplied' }}</td><td><span class="pill">{{ q.verification_status }}</span></td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="mute">No quotes recorded. Only add genuine quotes received by the group.</p>{% endif %}
+      {% if p.quotes %}<div style="overflow-x:auto"><table><thead><tr><th>Supplier</th><th>Amount</th><th>Scope / validity</th><th>Evidence</th><th>Check status</th></tr></thead><tbody>{% for q in p.quotes %}<tr><td>{{ q.supplier_name }}{% if q.supplier_contact %}<br><small>{{ q.supplier_contact }}</small>{% endif %}</td><td>KES {{ q.amount_cents|kes }}</td><td>{{ q.scope }}{% if q.validity %}<br><small>Valid: {{ q.validity }}</small>{% endif %}</td><td>{{ q.evidence_reference or 'Not supplied' }}</td><td><span class="pill {{ 'ok' if q.verification_status=='VERIFIED' else ('danger' if q.verification_status=='FLAGGED' else '') }}">{{ q.verification_status }}</span>{% if q.verification_note %}<br><small>{{ q.verification_note }}</small>{% endif %}{% if q.verified_at %}<br><small>Reviewed {{ q.verified_at[:10] }}</small>{% endif %}</td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="mute">No quotes recorded. Only add genuine quotes received by the group.</p>{% endif %}
+      {% if staff and p.quotes %}<details style="margin-top:12px"><summary>Review a supplier quote</summary>
+        <p class="mute">Only mark VERIFIED after checking the original quotation, supplier identity/contact, scope, expiry and terms. This is an internal review, not a guarantee.</p>
+        {% for q in p.quotes %}<form method="POST" action="{{ url_for('chama_power_quote_review',chama_id=chama.id,project_id=p.id,quote_id=q.id) }}" class="card" style="margin-top:8px">{{ csrf_input() }}
+          <b>{{ q.supplier_name }} · KES {{ q.amount_cents|kes }}</b><div class="field"><label>Review notes for this quote</label><textarea name="verification_note" rows="2" minlength="15" maxlength="1200" required placeholder="What evidence did you check? Record reference and any limits.">{% if q.verification_note %}{{ q.verification_note }}{% endif %}</textarea></div>
+          <button class="btn sm pri" name="decision" value="VERIFIED">Mark reviewed / verified</button> <button class="btn sm" name="decision" value="FLAGGED">Flag concern</button>
+        </form>{% endfor %}</details>{% endif %}
       {% if staff and p.status not in ('COMPLETED','REJECTED') %}
       <details style="margin-top:12px"><summary>Add a received quote</summary><form method="POST" action="{{ url_for('chama_power_quote',chama_id=chama.id,project_id=p.id) }}">{{ csrf_input() }}
         <div class="field"><label>Supplier / provider name</label><input name="supplier_name" required maxlength="160"></div>
@@ -60,6 +66,15 @@
       </form></details>{% endif %}
       <p class="mute" style="font-size:.85em">Quote entries are user-provided and marked UNVERIFIED. Compare scope, delivery, tax, validity and supplier identity—not price alone.</p>
     </div>
+  </div>
+  {% if p.milestones or (staff and p.status in ('APPROVED','IN_PROGRESS')) %}<div class="card" style="margin-top:12px"><h4>Milestones</h4>
+    {% for m in p.milestones %}<div class="card" style="margin-top:8px"><div class="section-head"><div><b>{{ m.title }}</b><p class="mute">{{ m.status }}{% if m.due_date %} · due {{ m.due_date }}{% endif %}</p>{% if m.completion_note %}<p>{{ m.completion_note }}</p>{% endif %}</div></div>
+      {% if staff and m.status=='OPEN' %}<form method="POST" action="{{ url_for('chama_power_milestone_complete',chama_id=chama.id,project_id=p.id,milestone_id=m.id) }}">{{ csrf_input() }}<div class="field"><label>Completion note</label><input name="completion_note" required minlength="5" maxlength="1000"></div><button class="btn sm">Mark milestone complete</button></form>{% endif %}</div>{% endfor %}
+    {% if staff and p.status in ('APPROVED','IN_PROGRESS') %}<details style="margin-top:10px"><summary>Add milestone</summary><form method="POST" action="{{ url_for('chama_power_milestone',chama_id=chama.id,project_id=p.id) }}">{{ csrf_input() }}<div class="grid"><div class="field"><label>Milestone</label><input name="title" required minlength="3" maxlength="160"></div><div class="field"><label>Target date</label><input type="date" name="due_date"></div></div><button class="btn pri">Add milestone</button></form></details>{% endif %}
+  </div>{% endif %}
+  <div class="card" style="margin-top:12px"><h4>Member discussion</h4><p class="mute">Keep questions, alternatives and concerns attached to this project so the decision history is easier to follow.</p>
+    {% if p.comments %}{% for c in p.comments %}<div class="card" style="margin-top:8px"><b>{{ c.author or 'Member' }}</b> <small class="mute">{{ c.created_at[:10] }}</small><p style="white-space:pre-line">{{ c.body }}</p></div>{% endfor %}{% else %}<p class="mute">No comments yet.</p>{% endif %}
+    <form method="POST" action="{{ url_for('chama_power_comment',chama_id=chama.id,project_id=p.id) }}">{{ csrf_input() }}<div class="field"><label>Add a comment</label><textarea name="body" required minlength="3" maxlength="1500" rows="2" placeholder="Ask a question, raise a concern or suggest an alternative"></textarea></div><button class="btn">Post comment</button></form>
   </div>
   {% if staff and p.status in ('APPROVED','IN_PROGRESS','COMPLETED') %}
   <details style="margin-top:12px"><summary>Record project progress / evidence</summary><form method="POST" action="{{ url_for('chama_power_update',chama_id=chama.id,project_id=p.id) }}">{{ csrf_input() }}
