@@ -122,6 +122,14 @@ def create_app(overrides=None):
         if uid:
             u = db().one('SELECT * FROM users WHERE id=? AND is_active=1', (uid,))
             if u and session.get('ep', 0) == u['session_epoch']:
+                # Recover the configured platform owner's privilege if a migration or
+                # manual edit accidentally cleared the database flag. OWNER_EMAIL is
+                # trusted server configuration, never a user-submitted value.
+                configured_owner = (os.environ.get('OWNER_EMAIL') or '').strip().lower()
+                if configured_owner and (u.get('email') or '').strip().lower() == configured_owner and not u['is_super_admin']:
+                    db().execute('UPDATE users SET is_super_admin=1 WHERE id=?', (u['id'],))
+                    db().commit()
+                    u = db().one('SELECT * FROM users WHERE id=? AND is_active=1', (uid,))
                 g.user = u
             else:
                 session.clear()
@@ -213,7 +221,9 @@ def create_app(overrides=None):
         @wraps(f)
         @login_required
         def w(*a, **k):
-            if not g.user['is_super_admin']:
+            configured_owner = (os.environ.get('OWNER_EMAIL') or '').strip().lower()
+            is_configured_owner = bool(configured_owner and (g.user.get('email') or '').strip().lower() == configured_owner)
+            if not g.user['is_super_admin'] and not is_configured_owner:
                 abort(403)
             if app.config['REQUIRE_OWNER_2FA'] and not g.user['totp_enabled'] and request.endpoint not in ('owner_security', 'owner_2fa_start', 'owner_2fa_confirm'):
                 flash('This server requires two-factor login for the owner. Set it up now.', 'warning')
@@ -464,6 +474,13 @@ def create_app(overrides=None):
             phone = S.normalize_phone(ident)
             u = db().one('SELECT * FROM users WHERE is_active=1 AND (email=? OR phone=?)', (ident, phone or '-'))
             if u and u['claimed'] and u['password_hash'] and check_password_hash(u['password_hash'], request.form.get('password', '')):
+                # Restore owner status from the deployment's trusted OWNER_EMAIL if
+                # the persistent flag was accidentally lost in a database migration.
+                configured_owner = (os.environ.get('OWNER_EMAIL') or '').strip().lower()
+                if configured_owner and (u.get('email') or '').strip().lower() == configured_owner and not u['is_super_admin']:
+                    db().execute('UPDATE users SET is_super_admin=1 WHERE id=?', (u['id'],))
+                    db().commit()
+                    u = db().one('SELECT * FROM users WHERE id=? AND is_active=1', (u['id'],))
                 nxt = safe_next(request.args.get('next'))
                 # New/unverified accounts must complete phone verification once before
                 # they can establish a normal password session. After verification,
