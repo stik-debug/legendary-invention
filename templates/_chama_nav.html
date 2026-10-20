@@ -1,6 +1,7 @@
 {% set ep = request.endpoint %}
 <nav class="subnav v21-subnav v22-direct-nav" aria-label="Chama sections">
   <a href="{{ url_for('my_chama_dashboard', chama_id=chama.id) }}" {% if ep=='my_chama_dashboard' %}aria-current="page"{% endif %}>⌂ Dashboard</a>
+  <a href="{{ url_for('chama_command_centre', chama_id=chama.id) }}" {% if ep=='chama_command_centre' %}aria-current="page"{% endif %}>Command Centre</a>
   <a href="{{ url_for('chama_home', chama_id=chama.id) }}" {% if ep=='chama_home' %}aria-current="page"{% endif %}>Home</a>
   <a href="{{ url_for('savings', chama_id=chama.id) }}" {% if ep=='savings' %}aria-current="page"{% endif %}>💰 Savings</a>
   <a href="{{ url_for('loans', chama_id=chama.id) }}" {% if ep=='loans' %}aria-current="page"{% endif %}>💳 Loans</a>
@@ -10,6 +11,7 @@
   <a href="{{ url_for('statement', chama_id=chama.id) }}" {% if ep in ('statement','member_statement') %}aria-current="page"{% endif %}>Statement</a>
   <a href="{{ url_for('mgr_list', chama_id=chama.id) }}" {% if ep in ('mgr_list','mgr_view') %}aria-current="page"{% endif %}>🔄 Merry-go-round</a>
   <a href="{{ url_for('chama_goals', chama_id=chama.id) }}" {% if ep=='chama_goals' %}aria-current="page"{% endif %}>🎯 Goals</a>
+  <a href="{{ url_for('chama_power', chama_id=chama.id) }}" {% if ep in ('chama_power','chama_power_vote','chama_power_quote','chama_power_status','chama_power_update') %}aria-current="page"{% endif %}>⚡ ChamaPower</a>
   <a href="{{ url_for('investments', chama_id=chama.id) }}" {% if ep=='investments' %}aria-current="page"{% endif %}>📈 Investments</a>
   <a href="{{ url_for('assets', chama_id=chama.id) }}" {% if ep=='assets' %}aria-current="page"{% endif %}>🏠 Assets</a>
   <a href="{{ url_for('chama_votes', chama_id=chama.id) }}" {% if ep in ('chama_votes','vote') %}aria-current="page"{% endif %}>Voting</a>

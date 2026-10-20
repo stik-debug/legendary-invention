@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}ChamaPower · {{ chama.name }}{% endblock %}
+{% block content %}
+<div class="head">
+  <div><span class="pill info">CHAMAPAY · COLLECTIVE GROWTH</span><h2>ChamaPower</h2>
+  <p>Turn group goals into researched opportunities, member decisions and trackable outcomes.</p></div>
+  <a class="btn" href="{{ url_for('chama_more',chama_id=chama.id) }}">All functions</a>
+</div>
+{% include '_chama_nav.html' %}
+<div class="banner info"><b>Trust first:</b> proposals, quotes and progress notes are records—not payments. ChamaPower does not move money, guarantee returns, or automatically verify suppliers. Confirm quotes and approvals independently, then record real transactions in your normal finance workflow.</div>
+<div class="grid" style="margin-bottom:18px">
+  <div class="card"><small class="mute">Projects recorded</small><div class="goal-number">{{ projects|length }}</div><p class="mute">Real proposals in this chama; no seeded demo items.</p></div>
+  <div class="card"><small class="mute">Under review</small><div class="goal-number">{{ projects|selectattr('status','equalto','UNDER_REVIEW')|list|length }}</div><p class="mute">Members can review and vote.</p></div>
+  <div class="card"><small class="mute">Approved / active</small><div class="goal-number">{{ projects|selectattr('status','in',['APPROVED','IN_PROGRESS'])|list|length }}</div><p class="mute">Group decisions and delivery tracking.</p></div>
+</div>
+<div class="card" style="margin-bottom:18px">
+  <div class="section-head"><div><h3>Propose a collective opportunity</h3><p class="mute">Bulk buying, land, equipment, farming or another shared goal.</p></div></div>
+  <form method="POST" action="{{ url_for('chama_power',chama_id=chama.id) }}">
+    {{ csrf_input() }}
+    <div class="grid">
+      <div class="field"><label for="power-title">Opportunity title</label><input id="power-title" name="title" required maxlength="140" placeholder="e.g. Compare bulk maize seed suppliers"></div>
+      <div class="field"><label for="power-category">Category</label><select id="power-category" name="category" required>{% for c in categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}</select></div>
+      <div class="field"><label for="power-target">Estimated target / budget (KES, optional)</label><input id="power-target" name="target" type="number" min="0" step="0.01" value="0"></div>
+      <div class="field"><label for="power-deadline">Target decision / completion date</label><input id="power-deadline" name="deadline" type="date"></div>
+    </div>
+    <div class="field"><label for="power-description">Opportunity details</label><textarea id="power-description" name="description" rows="3" maxlength="3000" required placeholder="Explain the need, who benefits, alternatives to compare, risks and what evidence the group should review."></textarea></div>
+    <button class="btn pri" type="submit">Submit proposal for review</button>
+  </form>
+</div>
+<h3>Group opportunities & projects</h3>
+{% for p in projects %}
+<div class="card" style="margin:12px 0">
+  <div class="section-head"><div><span class="pill {{ 'ok' if p.status in ('APPROVED','COMPLETED') else ('danger' if p.status=='REJECTED' else 'info') }}">{{ p.status_label }}</span><h3 style="margin-top:8px">{{ p.title }}</h3><p class="mute">{{ p.category }} · proposed by {{ p.proposer or 'Member' }} · {{ p.created_at[:10] }}{% if p.deadline %} · target date {{ p.deadline }}{% endif %}</p></div>
+  <div class="goal-number" style="font-size:1.2rem">{% if p.target_cents %}KES {{ p.target_cents|kes }}{% else %}Budget not set{% endif %}</div></div>
+  <p style="white-space:pre-line">{{ p.description }}</p>
+  <div class="grid">
+    <div class="card"><b>Member vote</b><p>👍 {{ p.yes_votes }} Yes · 👎 {{ p.no_votes }} No · ⏸ {{ p.abstain_votes }} Abstain</p>
+    {% if p.status=='UNDER_REVIEW' %}
+    <form method="POST" action="{{ url_for('chama_power_vote',chama_id=chama.id,project_id=p.id) }}" class="inline-form">{{ csrf_input() }}
+      <label for="vote-{{ p.id }}">Your vote</label><select id="vote-{{ p.id }}" name="choice"><option value="YES" {% if p.my_vote=='YES' %}selected{% endif %}>Yes</option><option value="NO" {% if p.my_vote=='NO' %}selected{% endif %}>No</option><option value="ABSTAIN" {% if p.my_vote=='ABSTAIN' %}selected{% endif %}>Abstain</option></select><button class="btn sm pri">Save vote</button>
+    </form>{% else %}<p class="mute">Voting closed.</p>{% endif %}
+    {% if staff and p.status in ('UNDER_REVIEW','APPROVED','IN_PROGRESS') %}
+    <form method="POST" action="{{ url_for('chama_power_status',chama_id=chama.id,project_id=p.id) }}" class="inline-form" style="margin-top:10px">{{ csrf_input() }}
+      {% if p.status=='UNDER_REVIEW' %}<button class="btn sm pri" name="status" value="APPROVED" type="submit">Approve (vote required)</button><button class="btn sm" name="status" value="REJECTED" type="submit">Reject</button>
+      {% elif p.status=='APPROVED' %}<button class="btn sm pri" name="status" value="IN_PROGRESS" type="submit">Start project</button><button class="btn sm" name="status" value="REJECTED" type="submit">Cancel / reject</button>
+      {% elif p.status=='IN_PROGRESS' %}<input name="outcome_notes" maxlength="2000" placeholder="Outcome / completion note" required><button class="btn sm pri" name="status" value="COMPLETED" type="submit">Mark completed</button>{% endif %}
+    </form>{% endif %}
+    </div>
+    <div class="card"><b>Supplier quotes ({{ p.quote_count }})</b>
+      {% if p.quotes %}<div style="overflow-x:auto"><table><thead><tr><th>Supplier</th><th>Amount</th><th>Scope / validity</th><th>Evidence</th><th>Check status</th></tr></thead><tbody>{% for q in p.quotes %}<tr><td>{{ q.supplier_name }}{% if q.supplier_contact %}<br><small>{{ q.supplier_contact }}</small>{% endif %}</td><td>KES {{ q.amount_cents|kes }}</td><td>{{ q.scope }}{% if q.validity %}<br><small>Valid: {{ q.validity }}</small>{% endif %}</td><td>{{ q.evidence_reference or 'Not supplied' }}</td><td><span class="pill">{{ q.verification_status }}</span></td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="mute">No quotes recorded. Only add genuine quotes received by the group.</p>{% endif %}
+      {% if staff and p.status not in ('COMPLETED','REJECTED') %}
+      <details style="margin-top:12px"><summary>Add a received quote</summary><form method="POST" action="{{ url_for('chama_power_quote',chama_id=chama.id,project_id=p.id) }}">{{ csrf_input() }}
+        <div class="field"><label>Supplier / provider name</label><input name="supplier_name" required maxlength="160"></div>
+        <div class="field"><label>Contact (optional)</label><input name="supplier_contact" maxlength="180"></div>
+        <div class="field"><label>Quoted amount (KES)</label><input name="amount" type="number" min="0.01" step="0.01" required></div>
+        <div class="field"><label>What's included</label><textarea name="scope" rows="2" required maxlength="1200"></textarea></div>
+        <div class="field"><label>Quote validity / expiry (optional)</label><input name="validity" maxlength="100" placeholder="e.g. valid until 30 Nov 2026"></div>
+        <div class="field"><label>Evidence reference (optional)</label><input name="evidence_reference" maxlength="240" placeholder="Invoice/quotation reference or document location"></div>
+        <button class="btn pri">Save quote</button>
+      </form></details>{% endif %}
+      <p class="mute" style="font-size:.85em">Quote entries are user-provided and marked UNVERIFIED. Compare scope, delivery, tax, validity and supplier identity—not price alone.</p>
+    </div>
+  </div>
+  {% if staff and p.status in ('APPROVED','IN_PROGRESS','COMPLETED') %}
+  <details style="margin-top:12px"><summary>Record project progress / evidence</summary><form method="POST" action="{{ url_for('chama_power_update',chama_id=chama.id,project_id=p.id) }}">{{ csrf_input() }}
+    <div class="grid"><div class="field"><label>Update type</label><select name="update_type"><option value="PROGRESS">Progress</option><option value="DECISION">Decision</option><option value="DELIVERY">Delivery</option><option value="RECEIPT">Receipt / evidence</option><option value="MAINTENANCE">Maintenance</option></select></div><div class="field"><label>Related amount (KES, optional)</label><input name="amount" type="number" min="0" step="0.01" value="0"></div><div class="field"><label>Evidence reference (optional)</label><input name="evidence_reference" maxlength="240"></div></div>
+    <div class="field"><label>What happened?</label><textarea name="body" required minlength="5" maxlength="2000" rows="2"></textarea></div><button class="btn">Record update</button>
+  </form></details>{% endif %}
+  {% if p.updates %}<div style="margin-top:12px"><b>Project history</b>{% for x in p.updates %}<div class="card" style="margin-top:8px"><p><b>{{ x.update_type }}</b> · {{ x.created_at[:10] }} · {{ x.actor or 'Official' }}</p><p style="white-space:pre-line">{{ x.body }}</p>{% if x.amount_cents %}<p>Related amount recorded: KES {{ x.amount_cents|kes }} <small>(not a ledger transaction)</small></p>{% endif %}{% if x.evidence_reference %}<p class="mute">Evidence: {{ x.evidence_reference }}</p>{% endif %}</div>{% endfor %}</div>{% endif %}
+  {% if p.outcome_notes %}<div class="banner info" style="margin-top:10px"><b>Outcome:</b> {{ p.outcome_notes }}</div>{% endif %}
+</div>
+{% else %}
+<div class="card empty"><h3>No projects recorded yet</h3><p>Start with a real group need or a genuine opportunity. ChamaPower does not create sample suppliers, fake quotes or demo financial figures.</p></div>
+{% endfor %}
+{% endblock %}
