@@ -281,3 +281,8 @@ See `CHANGELOG_V45.md` for the three new community modules and their safety boun
 ## v47 — Community discussions and moderation
 
 All signed-in users can start community discussions and reply. Common profanity and obvious spam patterns are blocked server-side, and members can report posts or replies for owner review. See `CHANGELOG_V47.md`.
+
+
+## ChamaPower (V73)
+
+ChamaPower adds group project proposals, member voting, supplier quote comparison, and delivery/evidence history to the existing chama workspace. It does not move money or mark suppliers as verified automatically. Read `CHAMAPOWER_V73.md` before testing or deploying. Back up the production database and test on staging first.

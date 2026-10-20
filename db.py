@@ -477,6 +477,29 @@ CREATE TABLE IF NOT EXISTS post_likes(
   id {PK}, post_id BIGINT NOT NULL, user_id BIGINT NOT NULL, created_at TEXT NOT NULL, UNIQUE(post_id,user_id));
 CREATE TABLE IF NOT EXISTS provider_saves(
   id {PK}, provider_id BIGINT NOT NULL, user_id BIGINT NOT NULL, created_at TEXT NOT NULL, UNIQUE(provider_id,user_id));
+CREATE TABLE IF NOT EXISTS chama_power_projects(
+  id {PK}, chama_id BIGINT NOT NULL, title TEXT NOT NULL, category TEXT NOT NULL,
+  description TEXT NOT NULL, target_cents BIGINT NOT NULL DEFAULT 0 CHECK(target_cents>=0),
+  deadline TEXT, status TEXT NOT NULL DEFAULT 'UNDER_REVIEW',
+  created_by BIGINT NOT NULL, approved_by BIGINT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  outcome_notes TEXT);
+CREATE INDEX IF NOT EXISTS ix_power_projects_chama ON chama_power_projects(chama_id,status,created_at);
+CREATE TABLE IF NOT EXISTS chama_power_votes(
+  id {PK}, project_id BIGINT NOT NULL, chama_id BIGINT NOT NULL, user_id BIGINT NOT NULL,
+  choice TEXT NOT NULL CHECK(choice IN ('YES','NO','ABSTAIN')), created_at TEXT NOT NULL,
+  UNIQUE(project_id,user_id));
+CREATE INDEX IF NOT EXISTS ix_power_votes_project ON chama_power_votes(project_id,choice);
+CREATE TABLE IF NOT EXISTS chama_power_quotes(
+  id {PK}, project_id BIGINT NOT NULL, chama_id BIGINT NOT NULL, supplier_name TEXT NOT NULL,
+  supplier_contact TEXT, amount_cents BIGINT NOT NULL CHECK(amount_cents>=0), scope TEXT NOT NULL,
+  validity TEXT, evidence_reference TEXT, verification_status TEXT NOT NULL DEFAULT 'UNVERIFIED',
+  added_by BIGINT NOT NULL, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS ix_power_quotes_project ON chama_power_quotes(project_id,amount_cents);
+CREATE TABLE IF NOT EXISTS chama_power_updates(
+  id {PK}, project_id BIGINT NOT NULL, chama_id BIGINT NOT NULL, user_id BIGINT NOT NULL,
+  update_type TEXT NOT NULL, body TEXT NOT NULL, amount_cents BIGINT NOT NULL DEFAULT 0 CHECK(amount_cents>=0),
+  evidence_reference TEXT, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS ix_power_updates_project ON chama_power_updates(project_id,created_at);
 """
 
 DEFAULT_PLANS = [('starter', 'Starter', 50000, 20, 1), ('growth', 'Growth', 150000, 70, 2), ('business', 'Pro', 200000, 100, 3)]
