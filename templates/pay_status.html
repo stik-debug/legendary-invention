@@ -4,7 +4,7 @@
 {% include '_chama_nav.html' %}
 <div class="card"><h3>KES {{ p.amount_cents|kes }} · {{ names[p.purpose] }}</h3>
 <p><span class="pill {{ {'SUCCESS':'ok','PENDING':'info','CLAIMED':'warn','REVIEW':'warn'}.get(p.status,'bad') }}">{{ p.status|title }}</span></p>
-{% if p.status=='SUCCESS' %}<p>Paid and recorded{% if p.receipt %} (M-Pesa {{ p.receipt }}){% endif %}. It is in your statement.</p>
+{% if p.status=='SUCCESS' and p.applied %}<p>Paid and recorded{% if p.receipt %} (M-Pesa {{ p.receipt }}){% endif %}. It is in your statement.</p><p><a class="btn" href="{{ url_for('pay_receipt', chama_id=chama.id, pid=p.id) }}">Download PDF receipt</a></p>
 {% elif p.status in ('CLAIMED','REVIEW') %}<p>Received. It is recorded as soon as it matches the chama's M-Pesa records, or when an official confirms it.{% if p.result_desc %}<br><b>{{ p.result_desc }}</b>{% endif %}</p>
 {% else %}<p>This payment was not completed{% if p.result_desc %}: {{ p.result_desc }}{% endif %}. You were not recorded as paid. If the money did leave your M-Pesa, paste your message again on the Pay page.</p>{% endif %}</div>
 {% endblock %}
