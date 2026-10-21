@@ -23,6 +23,13 @@
 .notification-onboarding{position:fixed;inset:0;z-index:10020;display:grid;place-items:center;padding:20px;background:rgba(4,24,18,.68);backdrop-filter:blur(5px)}
 .notification-onboarding[hidden]{display:none!important}.notification-onboarding-card{width:min(440px,100%);padding:26px 22px;border-radius:22px;background:#fff;color:#18352a;text-align:center;box-shadow:0 24px 80px rgba(0,0,0,.3)}.notification-onboarding-icon{display:grid;place-items:center;width:62px;height:62px;margin:0 auto 14px;border-radius:20px;background:#e0f7e9;font-size:30px}.notification-onboarding-card h2{margin:0 0 10px;font-size:23px;line-height:1.2}.notification-onboarding-card p{margin:0 0 13px;line-height:1.55;font-size:14px}.notification-onboarding-card .notification-onboarding-note{font-size:12px;color:#62746a}.notification-onboarding-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:18px}.notification-onboarding-actions .btn{min-height:44px}.notification-onboarding-actions a{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
 
+
+/* V75 owner recovery: keep essential owner/logout controls outside the collapsible menu. */
+.header-logout{display:inline-flex;margin:0;align-items:center}
+.header-logout button{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.owner-direct-link{white-space:nowrap;border-color:rgba(224,179,67,.65)!important}
+@media(max-width:700px){.header-logout button{padding:8px 10px;min-height:40px}.owner-direct-link{padding:8px 10px;min-height:40px}.top .links{gap:5px}}
+
 </style>
 </head>
 <body>
@@ -52,6 +59,8 @@
     <form method="POST" action="{{ url_for('logout') }}" class="menu-logout">{{ csrf_input() }}<button type="submit"><span class="menu-icon">↪</span><span><b>Log out</b><small>Sign out of ChamaPay</small></span></button></form>
   </div>
 </details>
+{% if user.is_super_admin %}<a class="btn sm owner-direct-link" href="{{ url_for('owner_home') }}" aria-label="Open owner Control Center">◆ Control Center</a>{% endif %}
+<form method="POST" action="{{ url_for('logout') }}" class="header-logout">{{ csrf_input() }}<button class="btn sm" type="submit" aria-label="Log out of ChamaPay">↪ <span>Log out</span></button></form>
 {% else %}
 <a class="btn sm" href="{{ url_for('login') }}">Log in</a><a class="btn sm pri hide-sm" href="{{ url_for('register') }}">Start free</a>
 {% endif %}
