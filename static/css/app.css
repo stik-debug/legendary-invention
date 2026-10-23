@@ -553,3 +553,39 @@ body:has(.hero) footer{color:#a8d4c7;border-top:1px solid var(--glass-line);padd
 body:has(.hero) footer a{color:#ffdc7c}
 @media(max-width:760px){body:has(.hero) .hero{padding:23px 18px;border-radius:23px}body:has(.hero) .hero:after{animation:none}body:has(.hero) .features a.card:hover{transform:translateY(-2px)}}
 @media(prefers-reduced-motion:reduce){body:has(.hero) .hero:after{animation:none!important}body:has(.hero) .features a.card{transition:none!important}}
+
+
+/* V79 accessibility and installation improvements: high contrast, larger type, calm glass surfaces. */
+:root{--cp-readable-ink:#17372d;--cp-readable-muted:#435d53;--cp-readable-border:#b7c9bf;--cp-readable-gold:#8a5b00}
+html{font-size:17px;text-size-adjust:100%;-webkit-text-size-adjust:100%}
+body{line-height:1.6}
+p,li,label,input,select,textarea,button,.btn,.mute,small{line-height:1.55}
+button,.btn,a,input,select,textarea,summary{touch-action:manipulation}
+:where(a,button,input,select,textarea,summary,[tabindex]):focus-visible{outline:3px solid #d89d18!important;outline-offset:3px!important}
+/* Pricing is intentionally opaque and dark-text-on-light for older eyes. */
+body:has(.hero) #pricing{color:var(--cp-readable-ink)}
+body:has(.hero) #pricing h2{color:#123d30!important;text-shadow:none!important}
+body:has(.hero) #pricing>p,body:has(.hero) #pricing .mute{color:var(--cp-readable-muted)!important}
+body:has(.hero) #pricing .plans .card,
+body:has(.hero) #pricing .plans .card.best{background:#fffdf6!important;color:#183b30!important;border:2px solid #c6d8cc!important;box-shadow:0 10px 28px rgba(9,46,34,.13)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+body:has(.hero) #pricing .plans .card h3,
+body:has(.hero) #pricing .plans .card .price{color:#123d30!important;text-shadow:none!important}
+body:has(.hero) #pricing .plans .card .price small{color:#435d53!important}
+body:has(.hero) #pricing .plans .card p,
+body:has(.hero) #pricing .plans .card li{color:#344f44!important}
+body:has(.hero) #pricing .plans .card li:before{color:#8a5b00!important}
+body:has(.hero) #pricing .plans .card .btn{font-size:1rem;min-height:48px}
+body:has(.hero) #pricing .badge{color:#332300!important;background:#ffd46a!important;border:1px solid #8a5b00!important}
+/* Reduce glass translucency behind small text while keeping the premium visual style. */
+body:has(.hero) .hero .lead{color:#f3fff9!important;font-size:clamp(1.05rem,1.5vw,1.22rem);line-height:1.65}
+body:has(.hero) .hero .mute{color:#e1f3ec!important}
+body:has(.hero) .features a.card{background:linear-gradient(145deg,rgba(8,68,52,.96),rgba(6,49,41,.96))!important;border-color:rgba(226,255,244,.45)!important}
+body:has(.hero) .features a.card p,body:has(.hero) .features a.card .mute{color:#e5f6ef!important}
+/* Global text and controls: comfortable sizes and clear boundaries. */
+.card,fieldset,dialog{border-color:var(--cp-readable-border)}
+input,select,textarea{font-size:1rem!important;min-height:46px}
+button,.btn{font-size:1rem;min-height:44px}
+label,.form-label{font-size:1rem}
+.mute{color:#435d53}
+@media(max-width:700px){html{font-size:17px}body{line-height:1.65}.btn,button{min-height:48px}body:has(.hero) #pricing .plans .card{padding:22px 18px}body:has(.hero) #pricing .plans .card .price{font-size:clamp(2rem,9vw,2.7rem)}}
+@media(prefers-contrast:more){body:has(.hero) #pricing .plans .card{border:3px solid #17372d!important}body:has(.hero) .hero .lead,body:has(.hero) .hero .mute{color:#fff!important}}
