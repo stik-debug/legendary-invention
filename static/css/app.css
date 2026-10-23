@@ -589,3 +589,22 @@ label,.form-label{font-size:1rem}
 .mute{color:#435d53}
 @media(max-width:700px){html{font-size:17px}body{line-height:1.65}.btn,button{min-height:48px}body:has(.hero) #pricing .plans .card{padding:22px 18px}body:has(.hero) #pricing .plans .card .price{font-size:clamp(2rem,9vw,2.7rem)}}
 @media(prefers-contrast:more){body:has(.hero) #pricing .plans .card{border:3px solid #17372d!important}body:has(.hero) .hero .lead,body:has(.hero) .hero .mute{color:#fff!important}}
+
+
+/* V81 accessibility: increase contrast on the public feature overview. */
+.section h2 { color: #123b2b !important; text-shadow: none !important; }
+.features a.card {
+  background: #ffffff !important;
+  color: #14231d !important;
+  border: 1px solid #c5d7cd !important;
+  box-shadow: 0 8px 22px rgba(6,56,42,.10) !important;
+  text-shadow: none !important;
+}
+.features a.card h3 { color: #123b2b !important; font-weight: 800; line-height: 1.25; }
+.features a.card p, .features a.card .mute { color: #43584d !important; opacity: 1 !important; line-height: 1.55; }
+.features a.card:hover { border-color: #0e8a5f !important; box-shadow: 0 12px 28px rgba(6,56,42,.16) !important; transform: translateY(-2px); }
+.features a.card:focus-visible { outline: 3px solid #b98212 !important; outline-offset: 3px; }
+@media (prefers-contrast: more) {
+  .features a.card { border: 2px solid #123b2b !important; }
+  .features a.card p, .features a.card .mute { color: #14231d !important; }
+}
