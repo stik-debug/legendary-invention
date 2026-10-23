@@ -1,13 +1,20 @@
 {% extends "base.html" %}{% block title %}Install ChamaPay{% endblock %}
 {% block content %}
-<div class="head"><div><h2>Install ChamaPay on your phone</h2><p>It opens like an app, with no app store needed.</p></div></div>
-<div class="card" style="line-height:1.6">
-<h3>Android (Chrome)</h3>
-<ol><li>Open ChamaPay in Chrome.</li><li>Tap the <b>three dots</b> menu at the top right.</li><li>Tap <b>Install app</b> (or <b>Add to Home screen</b>) and confirm.</li></ol>
-<h3>iPhone (Safari)</h3>
-<ol><li>Open ChamaPay in Safari.</li><li>Tap the <b>Share</b> button.</li><li>Tap <b>Add to Home Screen</b>, then <b>Add</b>.</li></ol>
-<h3>Computer</h3>
-<p>In Chrome or Edge, click the install icon at the right end of the address bar.</p>
-</div>
-<p style="text-align:center"><a class="btn pri" href="{{ url_for('index') }}">Back to home</a></p>
+<section class="install-page" aria-labelledby="install-title">
+  <div class="install-intro">
+    <p class="install-kicker">CHAMAPAY · YOUR CHAMA, IN YOUR POCKET</p>
+    <h1 id="install-title">Install ChamaPay</h1>
+    <p class="install-lead">Add ChamaPay to your phone or computer for quick access. <strong>No Google Play Store or app-store payment is needed.</strong></p>
+    <div class="install-benefits"><span>✓ Opens from your home screen</span><span>✓ No app-store download required</span><span>✓ Updates when you visit online</span></div>
+  </div>
+  <div class="install-options">
+    <article class="card install-option"><div class="install-icon" aria-hidden="true">📱</div><h2>Android phone</h2><ol><li>Open this website in <strong>Chrome</strong>.</li><li>Tap the browser menu <strong>⋮</strong>.</li><li>Choose <strong>Install app</strong> or <strong>Add to Home screen</strong>.</li><li>Confirm. Look for ChamaPay on your home screen.</li></ol></article>
+    <article class="card install-option"><div class="install-icon" aria-hidden="true">🍎</div><h2>iPhone or iPad</h2><ol><li>Open this website in <strong>Safari</strong>.</li><li>Tap the <strong>Share</strong> button.</li><li>Choose <strong>Add to Home Screen</strong>.</li><li>Tap <strong>Add</strong>.</li></ol></article>
+    <article class="card install-option"><div class="install-icon" aria-hidden="true">💻</div><h2>Computer</h2><ol><li>Open ChamaPay in <strong>Chrome or Edge</strong>.</li><li>Look for the install icon in the address bar, or open the browser menu.</li><li>Choose <strong>Install ChamaPay</strong> and confirm.</li></ol></article>
+  </div>
+  <div class="card install-help"><h2>Can't see an install option?</h2><p>Make sure you are online and using a supported browser. On some phones, use the browser's <strong>Add to Home screen</strong> option. If your browser does not support installation, you can still save this website as a home-screen shortcut.</p><a class="btn pri" href="{{ url_for('index') }}">Back to ChamaPay</a></div>
+</section>
+<style>
+.install-page{max-width:1100px;margin:0 auto;padding:clamp(18px,4vw,42px) 0;color:#17372d}.install-intro{padding:clamp(22px,4vw,40px);border-radius:24px;background:linear-gradient(135deg,#06382a,#087b5b);color:#fff;box-shadow:0 16px 40px rgba(5,57,41,.18)}.install-kicker{font-weight:800;letter-spacing:.08em;color:#ffdf83;font-size:.9rem}.install-intro h1{font-size:clamp(2rem,5vw,3.1rem);line-height:1.15;margin:.3em 0}.install-lead{font-size:1.15rem;max-width:780px;line-height:1.7;color:#f5fff9}.install-benefits{display:flex;flex-wrap:wrap;gap:10px 22px;font-size:1rem;margin-top:20px;color:#fff}.install-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin:22px 0}.install-option{background:#fffdf6!important;color:#17372d!important;border:2px solid #c6d8cc!important;padding:22px!important;box-shadow:0 8px 24px rgba(9,46,34,.1)!important}.install-option h2,.install-help h2{font-size:1.35rem;line-height:1.3;color:#123d30;margin:.4em 0}.install-option ol{padding-left:1.35em;margin-bottom:0}.install-option li{margin:.65em 0;line-height:1.65;color:#344f44}.install-icon{font-size:2.2rem}.install-help{padding:24px;background:#eef7f0!important;color:#17372d!important;border:2px solid #b7c9bf!important}.install-help p{font-size:1.02rem;line-height:1.7;color:#344f44}.install-help .btn{margin-top:8px}@media(max-width:760px){.install-options{grid-template-columns:1fr}.install-page{padding-top:12px}.install-intro{border-radius:18px}.install-benefits{display:grid;gap:8px}}
+</style>
 {% endblock %}
