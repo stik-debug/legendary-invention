@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Create Chama — ChamaPay</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Outfit:wght@700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <div class="auth-page">
+    <div class="auth-card" style="width:min(480px,100%)">
+      <a href="/" class="logo">Chama<span>Pay</span></a>
+      <h1>Create your Chama</h1>
+      <p class="sub">You’ll be the Chama Admin. Starts with a 7-day free trial.</p>
+      <div class="form-error" id="err"></div>
+      <form id="form">
+        <div class="form-group">
+          <label for="name">Chama name</label>
+          <input id="name" required minlength="2" placeholder="e.g. Umoja Savings Group" />
+        </div>
+        <div class="form-group">
+          <label for="location">Location (optional)</label>
+          <input id="location" placeholder="Nairobi" />
+        </div>
+        <div class="form-group">
+          <label for="description">Description (optional)</label>
+          <textarea id="description" rows="2" placeholder="Weekly contributions, merry-go-round…"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="planCode">Plan</label>
+          <select id="planCode">
+            <option value="STARTER">Starter — KES 500/mo · up to 15 members</option>
+            <option value="GROWTH">Growth — KES 1,500/mo · up to 70 members</option>
+            <option value="BUSINESS">Business — KES 2,000/mo · up to 100 members</option>
+          </select>
+        </div>
+        <p style="font-size:0.8rem;color:var(--slate-500);margin-bottom:1rem">Pricing is <strong>per Chama / month</strong>, not per member.</p>
+        <button class="btn btn-primary btn-block" type="submit" id="btn">Create Chama & start trial</button>
+      </form>
+    </div>
+  </div>
+  <script src="/js/api.js"></script>
+  <script>
+    if (!API.requireAuth()) throw new Error('auth');
+    const params = new URLSearchParams(location.search);
+    if (params.get('plan')) document.getElementById('planCode').value = params.get('plan');
+    const err = document.getElementById('err');
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      err.classList.remove('show');
+      const btn = document.getElementById('btn');
+      btn.disabled = true;
+      btn.textContent = 'Creating…';
+      try {
+        const { data } = await API.createChama({
+          name: document.getElementById('name').value.trim(),
+          location: document.getElementById('location').value.trim() || undefined,
+          description: document.getElementById('description').value.trim() || undefined,
+          planCode: document.getElementById('planCode').value,
+        });
+        API.chamaId = data.chamaId;
+        // Refresh profile so membership is visible
+        try {
+          const me = await API.me();
+          API.user = me.data;
+        } catch (_) {}
+        location.href = '/app/dashboard.html';
+      } catch (ex) {
+        err.textContent = ex.message || 'Could not create Chama';
+        err.classList.add('show');
+        btn.disabled = false;
+        btn.textContent = 'Create Chama & start trial';
+      }
+    });
+  </script>
+</body>
+</html>

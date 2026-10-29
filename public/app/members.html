@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Members — ChamaPay</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Outfit:wght@700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="logo">Chama<span>Pay</span></div>
+      <nav class="side-nav">
+        <a href="/app/dashboard.html">Dashboard</a>
+        <a class="active" href="/app/members.html">Members</a>
+      </nav>
+      <button class="btn btn-secondary" style="margin-top:1rem;width:100%" id="logout">Log out</button>
+    </aside>
+    <div class="main-area">
+      <header class="topbar">
+        <h2>Members</h2>
+        <span class="badge badge-trial" id="limitBadge">—</span>
+      </header>
+      <div class="content">
+        <div class="panel">
+          <h3>Add existing user to this Chama</h3>
+          <p style="font-size:0.85rem;color:var(--slate-500);margin-bottom:1rem">
+            They must already have a ChamaPay account. Server enforces your plan’s member limit.
+          </p>
+          <div class="form-error" id="err"></div>
+          <div class="form-success" id="ok"></div>
+          <form id="addForm" style="display:grid;gap:0.75rem;max-width:420px">
+            <div class="form-group" style="margin:0">
+              <label for="userId">User ID</label>
+              <input id="userId" required placeholder="Paste user UUID from their account" />
+            </div>
+            <div class="form-group" style="margin:0">
+              <label for="role">Role</label>
+              <select id="role">
+                <option value="MEMBER">Member</option>
+                <option value="SECRETARY">Secretary</option>
+                <option value="TREASURER">Treasurer</option>
+                <option value="CHAMA_ADMIN">Chama Admin</option>
+              </select>
+            </div>
+            <button class="btn btn-primary" type="submit">Add member</button>
+          </form>
+        </div>
+        <div class="panel">
+          <h3>Current members</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Role</th><th>Contact</th><th></th></tr></thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <nav class="mobile-nav">
+    <a href="/app/dashboard.html">Home</a>
+    <a class="active" href="/app/members.html">Members</a>
+    <a href="/app/create-chama.html">Chama</a>
+    <a href="#" id="logoutMobile">Logout</a>
+  </nav>
+  <script src="/js/api.js"></script>
+  <script>
+    if (!API.requireAuth()) throw new Error('auth');
+    document.getElementById('logout').onclick = () => API.logout();
+    document.getElementById('logoutMobile').onclick = (e) => { e.preventDefault(); API.logout(); };
+    const chamaId = API.chamaId;
+    if (!chamaId) location.href = '/app/dashboard.html';
+
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    async function refresh() {
+      const { data: chama } = await API.getChama(chamaId);
+      const sub = chama.subscription || {};
+      document.getElementById('limitBadge').textContent =
+        `${chama.memberCount || 0} / ${sub.max_members || '—'} members · ${sub.plan_code || ''}`;
+      const { data: members } = await API.members(chamaId);
+      document.getElementById('rows').innerHTML = (members || []).map(m => `
+        <tr>
+          <td><strong>${esc(m.full_name)}</strong></td>
+          <td>${esc(m.role)}</td>
+          <td style="font-size:0.85rem">${esc(m.phone)}<br/>${esc(m.email)}</td>
+          <td>${m.role !== 'CHAMA_ADMIN' ? `<button class="btn btn-secondary" style="padding:0.35rem 0.7rem;font-size:0.8rem" data-remove="${esc(m.member_id)}">Remove</button>` : ''}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="4" class="empty-state">No members</td></tr>';
+      document.querySelectorAll('[data-remove]').forEach(btn => {
+        btn.onclick = async () => {
+          if (!confirm('Remove this member? Financial history is preserved.')) return;
+          try {
+            await API.removeMember(chamaId, btn.getAttribute('data-remove'));
+            refresh();
+          } catch (e) { alert(e.message); }
+        };
+      });
+    }
+
+    document.getElementById('addForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const err = document.getElementById('err');
+      const ok = document.getElementById('ok');
+      err.classList.remove('show'); ok.classList.remove('show');
+      try {
+        await API.addMember(chamaId, {
+          userId: document.getElementById('userId').value.trim(),
+          role: document.getElementById('role').value,
+        });
+        ok.textContent = 'Member added.';
+        ok.classList.add('show');
+        document.getElementById('userId').value = '';
+        refresh();
+      } catch (ex) {
+        err.textContent = ex.message || 'Failed';
+        err.classList.add('show');
+      }
+    });
+
+    refresh().catch(e => { if (e.status === 401) API.logout(); else alert(e.message); });
+  </script>
+</body>
+</html>

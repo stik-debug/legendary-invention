@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chama operations — ChamaPay</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Outfit:wght@700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/app.css" />
+  <style>
+    .tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 1rem; }
+    .tabs button {
+      border: 1.5px solid var(--slate-300); background: #fff; border-radius: 999px;
+      padding: 0.45rem 0.9rem; font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+    }
+    .tabs button.active { background: var(--emerald-800); color: #fff; border-color: var(--emerald-800); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .row-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+    .row-actions button { font-size: 0.75rem; padding: 0.3rem 0.55rem; }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="logo">Chama<span>Pay</span></div>
+      <nav class="side-nav">
+        <a href="/app/dashboard.html">Dashboard</a>
+        <a href="/app/members.html">Members</a>
+        <a class="active" href="/app/ops.html">Operations</a>
+        <a href="/app/admin.html" id="adminLink" style="display:none">SUPER_ADMIN</a>
+      </nav>
+      <button class="btn btn-secondary" style="margin-top:1rem;width:100%" id="logout">Log out</button>
+    </aside>
+    <div class="main-area">
+      <header class="topbar"><h2>Operations</h2><span id="hint" style="font-size:0.85rem;color:var(--slate-500)"></span></header>
+      <div class="content">
+        <div class="tabs" id="tabs">
+          <button type="button" data-tab="contrib" class="active">Contributions</button>
+          <button type="button" data-tab="loans">Loans</button>
+          <button type="button" data-tab="fines">Fines</button>
+          <button type="button" data-tab="meetings">Meetings</button>
+          <button type="button" data-tab="messages">Messages</button>
+          <button type="button" data-tab="billing">Billing</button>
+        </div>
+
+        <div class="tab-panel active" id="tab-contrib">
+          <div class="panel">
+            <h3>Record contribution</h3>
+            <div class="form-error" id="cErr"></div>
+            <form id="cForm" style="display:grid;gap:0.6rem;max-width:420px">
+              <div class="form-group" style="margin:0"><label>Member</label><select id="cMember"></select></div>
+              <div class="form-group" style="margin:0"><label>Amount (KES)</label><input id="cAmount" type="number" min="1" required /></div>
+              <div class="form-group" style="margin:0"><label>Method</label><input id="cMethod" placeholder="M-Pesa / Cash" /></div>
+              <button class="btn btn-primary" type="submit">Save contribution</button>
+            </form>
+          </div>
+          <div class="panel"><h3>Recent contributions</h3><div class="table-wrap"><table><thead><tr><th>Date</th><th>Member</th><th>Amount</th><th>Method</th></tr></thead><tbody id="cRows"></tbody></table></div></div>
+        </div>
+
+        <div class="tab-panel" id="tab-loans">
+          <div class="panel">
+            <h3>Apply for loan</h3>
+            <form id="lForm" style="display:grid;gap:0.6rem;max-width:420px">
+              <div class="form-group" style="margin:0"><label>Member</label><select id="lMember"></select></div>
+              <div class="form-group" style="margin:0"><label>Amount (KES)</label><input id="lAmount" type="number" min="1" required /></div>
+              <div class="form-group" style="margin:0"><label>Purpose</label><input id="lPurpose" /></div>
+              <button class="btn btn-primary" type="submit">Submit application</button>
+            </form>
+          </div>
+          <div class="panel"><h3>Loans</h3><div class="table-wrap"><table><thead><tr><th>Member</th><th>Amount</th><th>Outstanding</th><th>Status</th><th></th></tr></thead><tbody id="lRows"></tbody></table></div></div>
+        </div>
+
+        <div class="tab-panel" id="tab-fines">
+          <div class="panel">
+            <h3>Create fine</h3>
+            <form id="fForm" style="display:grid;gap:0.6rem;max-width:420px">
+              <div class="form-group" style="margin:0"><label>Member</label><select id="fMember"></select></div>
+              <div class="form-group" style="margin:0"><label>Amount (KES)</label><input id="fAmount" type="number" min="1" required /></div>
+              <div class="form-group" style="margin:0"><label>Reason</label><input id="fReason" required /></div>
+              <button class="btn btn-primary" type="submit">Create fine</button>
+            </form>
+          </div>
+          <div class="panel"><h3>Fines</h3><div class="table-wrap"><table><thead><tr><th>Member</th><th>Reason</th><th>Outstanding</th><th>Status</th><th></th></tr></thead><tbody id="fRows"></tbody></table></div></div>
+        </div>
+
+        <div class="tab-panel" id="tab-meetings">
+          <div class="panel">
+            <h3>Schedule meeting</h3>
+            <form id="mForm" style="display:grid;gap:0.6rem;max-width:420px">
+              <div class="form-group" style="margin:0"><label>Title</label><input id="mTitle" required /></div>
+              <div class="form-group" style="margin:0"><label>Date</label><input id="mDate" type="date" required /></div>
+              <div class="form-group" style="margin:0"><label>Location</label><input id="mLoc" /></div>
+              <div class="form-group" style="margin:0"><label>Agenda</label><textarea id="mAgenda" rows="2"></textarea></div>
+              <button class="btn btn-primary" type="submit">Create meeting</button>
+            </form>
+          </div>
+          <div class="panel"><h3>Meetings</h3><div id="mList"></div></div>
+        </div>
+
+        <div class="tab-panel" id="tab-messages">
+          <div class="panel">
+            <h3>Chama messages</h3>
+            <form id="msgForm" style="display:flex;gap:0.5rem;margin-bottom:1rem">
+              <input id="msgBody" style="flex:1;padding:0.7rem;border-radius:10px;border:1.5px solid var(--slate-300)" placeholder="Write a message…" required />
+              <button class="btn btn-primary" type="submit">Send</button>
+            </form>
+            <div id="msgList"></div>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="tab-billing">
+          <div class="panel">
+            <h3>Pay subscription with M-Pesa</h3>
+            <p style="font-size:0.9rem;color:var(--slate-500);margin-bottom:1rem">
+              Paystack sends an <strong>M-Pesa prompt</strong> to this number. Open the prompt on your phone and enter your <strong>M-Pesa PIN</strong>.
+              We only mark the subscription paid after Paystack confirms the payment.
+            </p>
+            <form id="payForm" style="display:grid;gap:0.6rem;max-width:420px">
+              <div class="form-group" style="margin:0">
+                <label>M-Pesa phone (Safaricom)</label>
+                <input id="payPhone" placeholder="2547XXXXXXXX" required inputmode="tel" />
+              </div>
+              <button class="btn btn-gold" type="submit" id="payBtn">Send M-Pesa prompt</button>
+            </form>
+            <div id="payStatus" style="display:none;margin-top:1.25rem;padding:1rem;border-radius:12px;background:var(--emerald-50);border:1px solid var(--emerald-100)">
+              <strong id="payStatusTitle">Waiting for PIN…</strong>
+              <p id="payStatusBody" style="margin:0.5rem 0 0;font-size:0.9rem;color:var(--slate-700)"></p>
+            </div>
+            <div id="payActions" style="margin-top:1rem;display:none;gap:0.5rem;flex-wrap:wrap"></div>
+            <pre id="payOut" style="margin-top:1rem;font-size:0.75rem;background:var(--slate-100);padding:1rem;border-radius:10px;overflow:auto;display:none"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <nav class="mobile-nav">
+    <a href="/app/dashboard.html">Home</a>
+    <a href="/app/members.html">Members</a>
+    <a class="active" href="/app/ops.html">Ops</a>
+    <a href="#" id="logoutMobile">Logout</a>
+  </nav>
+  <script src="/js/api.js"></script>
+  <script>
+    if (!API.requireAuth()) throw 0;
+    const chamaId = API.chamaId;
+    if (!chamaId) location.href = '/app/dashboard.html';
+    document.getElementById('logout').onclick = () => API.logout();
+    document.getElementById('logoutMobile').onclick = (e) => { e.preventDefault(); API.logout(); };
+
+    document.querySelectorAll('.tabs button').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+      };
+    });
+
+    function esc(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+    let members = [];
+    async function loadMembers() {
+      const { data } = await API.members(chamaId);
+      members = data || [];
+      const opts = members.map(m => `<option value="${esc(m.member_id)}">${esc(m.full_name)} (${esc(m.role)})</option>`).join('');
+      ['cMember','lMember','fMember'].forEach(id => { document.getElementById(id).innerHTML = opts; });
+    }
+
+    async function loadContrib() {
+      const { data } = await API.contributions(chamaId);
+      document.getElementById('cRows').innerHTML = (data||[]).map(r =>
+        `<tr><td>${esc(r.contribution_date)}</td><td>${esc(r.member_name)}</td><td>KES ${Number(r.amount_kes).toLocaleString()}</td><td>${esc(r.payment_method||'—')}</td></tr>`
+      ).join('') || '<tr><td colspan="4">No contributions yet</td></tr>';
+    }
+
+    async function loadLoans() {
+      const { data } = await API.loans(chamaId);
+      document.getElementById('lRows').innerHTML = (data||[]).map(r => {
+        let actions = '';
+        if (r.status === 'PENDING') actions = `<button data-a="approve" data-id="${r.id}">Approve</button><button data-a="reject" data-id="${r.id}">Reject</button>`;
+        if (r.status === 'APPROVED') actions = `<button data-a="disburse" data-id="${r.id}">Disburse</button>`;
+        if (r.status === 'DISBURSED' || r.status === 'REPAYING') actions = `<button data-a="repay" data-id="${r.id}" data-out="${r.outstanding_kes}">Repay</button>`;
+        return `<tr><td>${esc(r.member_name)}</td><td>KES ${Number(r.amount_kes).toLocaleString()}</td><td>KES ${Number(r.outstanding_kes).toLocaleString()}</td><td>${esc(r.status)}</td><td class="row-actions">${actions}</td></tr>`;
+      }).join('') || '<tr><td colspan="5">No loans</td></tr>';
+      document.querySelectorAll('#lRows button').forEach(btn => {
+        btn.onclick = async () => {
+          try {
+            const id = btn.dataset.id;
+            if (btn.dataset.a === 'approve') await API.approveLoan(chamaId, id, true);
+            if (btn.dataset.a === 'reject') await API.approveLoan(chamaId, id, false);
+            if (btn.dataset.a === 'disburse') await API.disburseLoan(chamaId, id);
+            if (btn.dataset.a === 'repay') {
+              const amt = prompt('Repayment amount (KES)', btn.dataset.out);
+              if (!amt) return;
+              await API.repayLoan(chamaId, id, { amountKes: Number(amt) });
+            }
+            loadLoans();
+          } catch (e) { alert(e.message); }
+        };
+      });
+    }
+
+    async function loadFines() {
+      const { data } = await API.fines(chamaId);
+      document.getElementById('fRows').innerHTML = (data||[]).map(r => {
+        const pay = r.status !== 'PAID' && r.status !== 'WAIVED'
+          ? `<button data-pay="${r.id}" data-out="${r.outstanding_kes}">Pay</button>` : '';
+        return `<tr><td>${esc(r.member_name)}</td><td>${esc(r.reason)}</td><td>KES ${Number(r.outstanding_kes).toLocaleString()}</td><td>${esc(r.status)}</td><td class="row-actions">${pay}</td></tr>`;
+      }).join('') || '<tr><td colspan="5">No fines</td></tr>';
+      document.querySelectorAll('#fRows [data-pay]').forEach(btn => {
+        btn.onclick = async () => {
+          const amt = prompt('Pay amount (KES)', btn.dataset.out);
+          if (!amt) return;
+          try { await API.payFine(chamaId, btn.dataset.pay, Number(amt)); loadFines(); }
+          catch (e) { alert(e.message); }
+        };
+      });
+    }
+
+    async function loadMeetings() {
+      const { data } = await API.meetings(chamaId);
+      document.getElementById('mList').innerHTML = (data||[]).map(m =>
+        `<div style="padding:0.75rem 0;border-bottom:1px solid var(--slate-100)"><strong>${esc(m.title)}</strong> · ${esc(m.meeting_date)}<br/><span style="font-size:0.85rem;color:var(--slate-500)">${esc(m.location||'')} ${esc(m.agenda||'')}</span></div>`
+      ).join('') || '<p class="empty-state">No meetings</p>';
+    }
+
+    async function loadMessages() {
+      const res = await API.messages(chamaId);
+      document.getElementById('msgList').innerHTML = (res.data||[]).map(m =>
+        `<div style="padding:0.65rem 0;border-bottom:1px solid var(--slate-100)"><strong>${esc(m.sender_name)}</strong> <span style="font-size:0.75rem;color:var(--slate-500)">${esc(m.created_at)}</span><div>${esc(m.body)}</div></div>`
+      ).join('') || '<p class="empty-state">No messages</p>';
+      document.getElementById('hint').textContent = res.unread ? `${res.unread} unread` : '';
+    }
+
+    document.getElementById('cForm').onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await API.addContribution(chamaId, {
+          memberId: document.getElementById('cMember').value,
+          amountKes: Number(document.getElementById('cAmount').value),
+          paymentMethod: document.getElementById('cMethod').value || undefined,
+        });
+        document.getElementById('cAmount').value = '';
+        loadContrib();
+      } catch (ex) {
+        const el = document.getElementById('cErr'); el.textContent = ex.message; el.classList.add('show');
+      }
+    };
+    document.getElementById('lForm').onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await API.applyLoan(chamaId, {
+          memberId: document.getElementById('lMember').value,
+          amountKes: Number(document.getElementById('lAmount').value),
+          purpose: document.getElementById('lPurpose').value,
+        });
+        loadLoans();
+      } catch (ex) { alert(ex.message); }
+    };
+    document.getElementById('fForm').onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await API.addFine(chamaId, {
+          memberId: document.getElementById('fMember').value,
+          amountKes: Number(document.getElementById('fAmount').value),
+          reason: document.getElementById('fReason').value,
+        });
+        loadFines();
+      } catch (ex) { alert(ex.message); }
+    };
+    document.getElementById('mForm').onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await API.addMeeting(chamaId, {
+          title: document.getElementById('mTitle').value,
+          meetingDate: document.getElementById('mDate').value,
+          location: document.getElementById('mLoc').value,
+          agenda: document.getElementById('mAgenda').value,
+        });
+        loadMeetings();
+      } catch (ex) { alert(ex.message); }
+    };
+    document.getElementById('msgForm').onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await API.sendMessage(chamaId, document.getElementById('msgBody').value);
+        document.getElementById('msgBody').value = '';
+        loadMessages();
+      } catch (ex) { alert(ex.message); }
+    };
+    document.getElementById('payForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const out = document.getElementById('payOut');
+      const actions = document.getElementById('payActions');
+      const statusBox = document.getElementById('payStatus');
+      const btn = document.getElementById('payBtn');
+      btn.disabled = true;
+      btn.textContent = 'Sending prompt…';
+      actions.style.display = 'none';
+      actions.innerHTML = '';
+      statusBox.style.display = 'none';
+      let pollTimer = null;
+      try {
+        const { data } = await API.pay(chamaId, document.getElementById('payPhone').value.trim());
+        out.style.display = 'block';
+        out.textContent = JSON.stringify(data, null, 2);
+        statusBox.style.display = 'block';
+        document.getElementById('payStatusTitle').textContent =
+          data.status === 'SUCCESS' ? 'Payment confirmed' : 'Check your phone';
+        document.getElementById('payStatusBody').textContent =
+          data.displayText || data.message ||
+          'Enter your M-Pesa PIN on the prompt. This page will update when payment is confirmed.';
+        actions.style.display = 'flex';
+
+        if (data.authorizationUrl) {
+          const a = document.createElement('a');
+          a.className = 'btn btn-primary';
+          a.href = data.authorizationUrl;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.textContent = 'Open Paystack page';
+          actions.appendChild(a);
+        }
+
+        if (data.paymentId && data.status !== 'SUCCESS') {
+          const v = document.createElement('button');
+          v.className = 'btn btn-secondary';
+          v.type = 'button';
+          v.textContent = 'I entered PIN — check status';
+          const check = async () => {
+            try {
+              const r = await API.verifyPayment(data.paymentId);
+              out.textContent = JSON.stringify(r, null, 2);
+              if (r.data?.status === 'SUCCESS') {
+                document.getElementById('payStatusTitle').textContent = 'Payment confirmed';
+                document.getElementById('payStatusBody').textContent =
+                  'Subscription is ACTIVE. You can return to the dashboard.';
+                if (pollTimer) clearInterval(pollTimer);
+                btn.textContent = 'Paid';
+              }
+            } catch (err) { /* still pending */ }
+          };
+          v.onclick = check;
+          actions.appendChild(v);
+          // Auto-poll every 5s for 2 minutes
+          let n = 0;
+          pollTimer = setInterval(async () => {
+            n += 1;
+            if (n > 24) { clearInterval(pollTimer); return; }
+            await check();
+          }, 5000);
+        }
+
+        if (data.status === 'SUCCESS') {
+          document.getElementById('payStatusTitle').textContent = 'Payment confirmed';
+          document.getElementById('payStatusBody').textContent = 'Subscription is ACTIVE.';
+        }
+
+        if (data.testCallbackHint) {
+          const tbtn = document.createElement('button');
+          tbtn.className = 'btn btn-secondary';
+          tbtn.type = 'button';
+          tbtn.textContent = 'Simulate test success';
+          tbtn.onclick = async () => {
+            const cb = await API.paymentCallback(data.testCallbackHint.body);
+            out.textContent = JSON.stringify(cb, null, 2);
+            document.getElementById('payStatusTitle').textContent = 'Test payment confirmed';
+          };
+          actions.appendChild(tbtn);
+        }
+      } catch (ex) {
+        statusBox.style.display = 'block';
+        document.getElementById('payStatusTitle').textContent = 'Could not start payment';
+        document.getElementById('payStatusBody').textContent = ex.message || 'Try again';
+        statusBox.style.background = '#fef2f2';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Send M-Pesa prompt';
+      }
+    };
+
+    
+    (async () => {
+      try {
+        const me = await API.me();
+        API.user = me.data;
+        if (me.data.memberships?.some?.(m => false)) {}
+        // show admin link if token roles include SUPER_ADMIN — check via stats call
+        try {
+          await API.adminStats();
+          document.getElementById('adminLink').style.display = 'block';
+        } catch (_) {}
+        await loadMembers();
+        await Promise.all([loadContrib(), loadLoans(), loadFines(), loadMeetings(), loadMessages()]);
+      } catch (e) {
+        if (e.status === 401) API.logout();
+        else alert(e.message);
+      }
+    })();
+  </script>
+</body>
+</html>

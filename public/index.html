@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ChamaPay — Manage Your Chama. Save Together. Grow Together.</title>
+  <meta name="description" content="ChamaPay helps Kenyan savings groups manage members, contributions, loans, fines, meetings, and M-Pesa payments." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <nav class="site-nav">
+    <div class="inner">
+      <a href="/" class="logo">Chama<span>Pay</span></a>
+      <div class="nav-links">
+        <a class="nav-text" href="#features">Features</a>
+        <a class="nav-text" href="#pricing">Pricing</a>
+        <a class="nav-text" href="/login.html">Log in</a>
+        <a class="btn btn-primary" href="/register.html">Start Your Chama</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="hero-grid">
+      <div>
+        <h1>Manage Your Chama.<br /><em>Save Together.</em><br />Grow Together.</h1>
+        <p class="lead">
+          ChamaPay helps Kenyan savings groups manage members, contributions, loans, fines, meetings, payments, and records — in one secure place.
+        </p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="/register.html">Start Your Chama</a>
+          <a class="btn btn-secondary" href="#features">Explore ChamaPay</a>
+        </div>
+        <div class="hero-meta">
+          <span><strong>Per Chama</strong> pricing — not per member</span>
+          <span><strong>7-day</strong> free trial</span>
+          <span><strong>M-Pesa</strong> ready architecture</span>
+        </div>
+      </div>
+      <div class="hero-visual" aria-hidden="true">
+        <div class="stack-card card-back">
+          <div style="opacity:0.85;font-size:0.8rem;margin-bottom:0.5rem">Umoja Savings</div>
+          <div style="font-size:1.5rem;font-weight:700">KES 248,500</div>
+          <div style="opacity:0.7;font-size:0.8rem;margin-top:0.5rem">15 members · Starter plan</div>
+        </div>
+        <div class="stack-card card-main">
+          <div class="label">Total savings</div>
+          <div class="amount">KES 248,500</div>
+          <div class="progress-track"><div class="progress-fill"></div></div>
+          <div class="mini-stats">
+            <div><span>This month</span><strong>KES 32,000</strong></div>
+            <div><span>Outstanding loans</span><strong>KES 10,000</strong></div>
+          </div>
+        </div>
+        <div class="float-coin">KSh</div>
+      </div>
+    </div>
+  </header>
+
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section-head">
+        <h2>Everything your Chama needs</h2>
+        <p>Built for Kenyan savings groups — mobile-first, secure, and priced per Chama.</p>
+      </div>
+      <div class="feature-grid">
+        <article class="feature-card">
+          <div class="feature-icon">👥</div>
+          <h3>Members & roles</h3>
+          <p>Invite members, assign Admin, Treasurer, Secretary, or Member — with server-side permissions.</p>
+        </article>
+        <article class="feature-card">
+          <div class="feature-icon">💰</div>
+          <h3>Contributions & ledger</h3>
+          <p>Record contributions with a proper financial ledger. Integer KES — no floating-point errors.</p>
+        </article>
+        <article class="feature-card">
+          <div class="feature-icon">📋</div>
+          <h3>Loans & fines</h3>
+          <p>Apply, approve, disburse, and repay loans. Track fines and outstanding balances.</p>
+        </article>
+        <article class="feature-card">
+          <div class="feature-icon">📅</div>
+          <h3>Meetings & announcements</h3>
+          <p>Schedule meetings, take attendance, and publish announcements to your Chama.</p>
+        </article>
+        <article class="feature-card">
+          <div class="feature-icon">📱</div>
+          <h3>M-Pesa payments</h3>
+          <p>Subscription payments with server-side verification. Never trust the frontend alone.</p>
+        </article>
+        <article class="feature-card">
+          <div class="feature-icon">🔒</div>
+          <h3>Multi-tenant security</h3>
+          <p>Your Chama’s data is isolated. Cross-Chama access is blocked at the API layer.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="pricing" style="background: var(--emerald-50);">
+    <div class="container">
+      <div class="section-head">
+        <h2>Simple pricing</h2>
+        <p><strong>Per Chama / month</strong> — not per member. 7-day free trial on every plan.</p>
+      </div>
+      <div class="pricing-grid" id="plans">
+        <!-- filled from API -->
+        <div class="price-card"><div class="skeleton" style="height:8rem"></div></div>
+        <div class="price-card"><div class="skeleton" style="height:8rem"></div></div>
+        <div class="price-card"><div class="skeleton" style="height:8rem"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container" style="text-align:center">
+      <h2 style="margin-bottom:0.75rem">Ready to run your Chama better?</h2>
+      <p style="color:var(--slate-500);margin-bottom:1.5rem">Create your account and start a 7-day trial. No card required to explore.</p>
+      <a class="btn btn-primary" href="/register.html">Start Your Chama</a>
+    </div>
+  </section>
+
+  <footer class="site-footer">
+    <div class="inner">
+      <div>
+        <div class="logo">Chama<span>Pay</span></div>
+        <p style="font-size:0.9rem;max-width:28ch">Modern Chama management for Kenyan savings groups.</p>
+      </div>
+      <div>
+        <h4>Product</h4>
+        <ul>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#pricing">Pricing</a></li>
+          <li><a href="/register.html">Start trial</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Account</h4>
+        <ul>
+          <li><a href="/login.html">Log in</a></li>
+          <li><a href="/register.html">Register</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© ChamaPay. Built for Kenyan Chamas.</span>
+      <span>Status: core product vertical live — more features shipping continuously.</span>
+    </div>
+  </footer>
+
+  <script src="/js/api.js"></script>
+  <script>
+    API.plans().then(({ data }) => {
+      const el = document.getElementById('plans');
+      if (!data?.length) {
+        el.innerHTML = '<p class="empty-state">Plans loading failed. Try refresh.</p>';
+        return;
+      }
+      const featured = 'GROWTH';
+      el.innerHTML = data.map(p => `
+        <article class="price-card ${p.code === featured ? 'featured' : ''}">
+          ${p.code === featured ? '<span class="tag">Popular</span>' : ''}
+          <h3>${p.name}</h3>
+          <div class="price">KES ${Number(p.price_kes).toLocaleString()}<small>/mo</small></div>
+          <div class="per">Per Chama / month</div>
+          <ul>
+            <li>Up to <strong>${p.max_members}</strong> members</li>
+            <li>7-day free trial</li>
+            <li>Members, roles & records</li>
+            <li>Mobile-friendly dashboard</li>
+          </ul>
+          <a class="btn ${p.code === featured ? 'btn-primary' : 'btn-secondary'} btn-block" href="/register.html?plan=${p.code}">Choose ${p.name}</a>
+        </article>
+      `).join('');
+    }).catch(() => {
+      document.getElementById('plans').innerHTML = `
+        <article class="price-card"><h3>Starter</h3><div class="price">KES 500<small>/mo</small></div><div class="per">Per Chama / month</div><ul><li>Up to 15 members</li></ul><a class="btn btn-secondary btn-block" href="/register.html">Start</a></article>
+        <article class="price-card featured"><span class="tag">Popular</span><h3>Growth</h3><div class="price">KES 1,500<small>/mo</small></div><div class="per">Per Chama / month</div><ul><li>Up to 70 members</li></ul><a class="btn btn-primary btn-block" href="/register.html">Start</a></article>
+        <article class="price-card"><h3>Business</h3><div class="price">KES 2,000<small>/mo</small></div><div class="per">Per Chama / month</div><ul><li>Up to 100 members</li></ul><a class="btn btn-secondary btn-block" href="/register.html">Start</a></article>`;
+    });
+  </script>
+</body>
+</html>

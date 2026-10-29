@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Log in — ChamaPay</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Outfit:wght@700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <div class="auth-page">
+    <div class="auth-card">
+      <a href="/" class="logo">Chama<span>Pay</span></a>
+      <h1>Welcome back</h1>
+      <p class="sub">Log in to manage your Chama.</p>
+      <div class="form-error" id="err"></div>
+      <form id="form">
+        <div class="form-group">
+          <label for="emailOrPhone">Email or phone</label>
+          <input id="emailOrPhone" required autocomplete="username" placeholder="you@example.com or 2547…" />
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input id="password" type="password" required minlength="8" autocomplete="current-password" />
+        </div>
+        <button class="btn btn-primary btn-block" type="submit" id="btn">Log in</button>
+      </form>
+      <p class="auth-footer">No account? <a href="/register.html">Register</a></p>
+    </div>
+  </div>
+  <script src="/js/api.js"></script>
+  <script>
+    if (API.token) location.href = '/app/dashboard.html';
+    const err = document.getElementById('err');
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      err.classList.remove('show');
+      const btn = document.getElementById('btn');
+      btn.disabled = true;
+      btn.textContent = 'Signing in…';
+      try {
+        const { data } = await API.login({
+          emailOrPhone: document.getElementById('emailOrPhone').value.trim(),
+          password: document.getElementById('password').value,
+        });
+        API.token = data.token;
+        const me = await API.me();
+        API.user = me.data;
+        if (data.chamaIds?.length) {
+          API.chamaId = data.chamaIds[0];
+          location.href = '/app/dashboard.html';
+        } else if (me.data.memberships?.length) {
+          API.chamaId = me.data.memberships[0].chama_id;
+          location.href = '/app/dashboard.html';
+        } else {
+          location.href = '/app/create-chama.html';
+        }
+      } catch (ex) {
+        err.textContent = ex.message || 'Login failed';
+        err.classList.add('show');
+        btn.disabled = false;
+        btn.textContent = 'Log in';
+      }
+    });
+  </script>
+</body>
+</html>

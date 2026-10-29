@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard — ChamaPay</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Outfit:wght@700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="logo">Chama<span>Pay</span></div>
+      <nav class="side-nav">
+        <a class="active" href="/app/dashboard.html">Dashboard</a>
+        <a href="/app/members.html">Members</a>
+        <a href="/app/ops.html">Operations</a>
+        <a href="/app/admin.html">Admin</a>
+      </nav>
+      <button class="btn btn-secondary" style="margin-top:1rem;width:100%" id="logout">Log out</button>
+    </aside>
+    <div class="main-area">
+      <header class="topbar">
+        <h2 id="chamaName">Your Chama</h2>
+        <div style="display:flex;align-items:center;gap:0.75rem">
+          <span class="badge" id="statusBadge">—</span>
+          <span style="font-size:0.85rem;color:var(--slate-500)" id="userName"></span>
+        </div>
+      </header>
+      <div class="content">
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="label">Members</div>
+            <div class="value" id="memberCount">—</div>
+            <div class="hint" id="memberLimit">of plan limit</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Plan</div>
+            <div class="value" id="planName" style="font-size:1.15rem">—</div>
+            <div class="hint" id="planPrice">Per Chama / month</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Subscription</div>
+            <div class="value" id="subStatus" style="font-size:1.15rem">—</div>
+            <div class="hint" id="subEnd">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Contributions</div>
+            <div class="value" id="contribTotal" style="font-size:1.15rem">—</div>
+            <div class="hint">All recorded contributions</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.75rem;margin-bottom:1rem">
+            <h3 style="margin:0">Members</h3>
+            <a class="btn btn-primary" href="/app/members.html" style="padding:0.55rem 1rem;font-size:0.85rem">Manage members</a>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Role</th><th>Phone</th><th>Joined</th></tr></thead>
+              <tbody id="memberRows"><tr><td colspan="4"><div class="skeleton" style="height:1.2rem"></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>Quick links</h3>
+          <p style="margin:0">
+            <a class="btn btn-primary" href="/app/ops.html" style="margin-right:0.5rem">Open Operations</a>
+            <a class="btn btn-secondary" href="/app/members.html">Members</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <nav class="mobile-nav">
+    <a class="active" href="/app/dashboard.html">Home</a>
+    <a href="/app/members.html">Members</a>
+    <a href="/app/ops.html">Ops</a>
+    <a href="#" id="logoutMobile">Logout</a>
+  </nav>
+  <script src="/js/api.js"></script>
+  <script>
+    if (!API.requireAuth()) throw new Error('auth');
+    document.getElementById('logout').onclick = () => API.logout();
+    document.getElementById('logoutMobile').onclick = (e) => { e.preventDefault(); API.logout(); };
+
+    async function load() {
+      const me = await API.me();
+      API.user = me.data;
+      document.getElementById('userName').textContent = me.data.full_name || me.data.email;
+
+      let chamaId = API.chamaId;
+      if (!chamaId && me.data.memberships?.length) {
+        chamaId = me.data.memberships[0].chama_id;
+        API.chamaId = chamaId;
+      }
+      if (!chamaId) {
+        location.href = '/app/create-chama.html';
+        return;
+      }
+
+      const { data: chama } = await API.getChama(chamaId);
+      document.getElementById('chamaName').textContent = chama.name;
+      document.getElementById('memberCount').textContent = chama.memberCount ?? '—';
+      const sub = chama.subscription || {};
+      document.getElementById('planName').textContent = sub.plan_name || sub.plan_code || '—';
+      document.getElementById('planPrice').textContent = sub.price_kes != null
+        ? `KES ${Number(sub.price_kes).toLocaleString()} / mo · max ${sub.max_members}`
+        : 'Per Chama / month';
+      document.getElementById('memberLimit').textContent = sub.max_members
+        ? `of ${sub.max_members} on ${sub.plan_code || 'plan'}`
+        : 'of plan limit';
+      document.getElementById('subStatus').textContent = sub.status || '—';
+      document.getElementById('subEnd').textContent = sub.current_period_end
+        ? `Period ends ${String(sub.current_period_end).slice(0, 10)}`
+        : '';
+      const badge = document.getElementById('statusBadge');
+      badge.textContent = sub.status || '—';
+      badge.className = 'badge badge-' + String(sub.status || '').toLowerCase().replace('_', '-');
+      if (sub.status === 'TRIAL') badge.className = 'badge badge-trial';
+      if (sub.status === 'ACTIVE') badge.className = 'badge badge-active';
+      if (sub.status === 'SUSPENDED') badge.className = 'badge badge-suspended';
+
+      try {
+        const sum = await API.summary(chamaId);
+        const s = sum.data || {};
+        document.getElementById('contribTotal').textContent = 'KES ' + Number(s.contributionsTotal||0).toLocaleString();
+      } catch (_) {}
+
+      const { data: members } = await API.members(chamaId);
+      const tbody = document.getElementById('memberRows');
+      if (!members?.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No members yet</td></tr>';
+      } else {
+        tbody.innerHTML = members.map(m => `
+          <tr>
+            <td><strong>${escapeHtml(m.full_name)}</strong><br/><span style="font-size:0.8rem;color:var(--slate-500)">${escapeHtml(m.email)}</span></td>
+            <td>${escapeHtml(m.role)}</td>
+            <td>${escapeHtml(m.phone)}</td>
+            <td>${String(m.joined_at || '').slice(0, 10)}</td>
+          </tr>
+        `).join('');
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    load().catch((e) => {
+      if (e.status === 401) API.logout();
+      else document.getElementById('memberRows').innerHTML =
+        `<tr><td colspan="4" style="color:var(--danger)">${escapeHtml(e.message)}</td></tr>`;
+    });
+  </script>
+</body>
+</html>

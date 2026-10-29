@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SUPER_ADMIN — ChamaPay</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Outfit:wght@700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="logo">Chama<span>Pay</span></div>
+      <nav class="side-nav">
+        <a href="/app/dashboard.html">Dashboard</a>
+        <a class="active" href="/app/admin.html">SUPER_ADMIN</a>
+      </nav>
+      <button class="btn btn-secondary" style="margin-top:1rem;width:100%" id="logout">Log out</button>
+    </aside>
+    <div class="main-area">
+      <header class="topbar"><h2>Platform control</h2><span class="badge badge-active">SUPER_ADMIN</span></header>
+      <div class="content">
+        <div class="stat-grid" id="stats"></div>
+        <div class="panel">
+          <h3>Chamas</h3>
+          <form id="search" style="display:flex;gap:0.5rem;margin-bottom:1rem">
+            <input id="q" placeholder="Search name…" style="flex:1;padding:0.65rem;border-radius:10px;border:1.5px solid var(--slate-300)" />
+            <button class="btn btn-secondary" type="submit">Search</button>
+          </form>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Plan</th><th>Status</th><th>Members</th><th>Actions</th></tr></thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+        </div>
+        <p style="font-size:0.8rem;color:var(--slate-500)">Revenue counts only <strong>SUCCESS</strong> verified payments. Zero customers ⇒ zero revenue.</p>
+      </div>
+    </div>
+  </div>
+  <script src="/js/api.js"></script>
+  <script>
+    if (!API.requireAuth()) throw 0;
+    document.getElementById('logout').onclick = () => API.logout();
+    function esc(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+    async function loadStats() {
+      const { data } = await API.adminStats();
+      document.getElementById('stats').innerHTML = [
+        ['Chamas', data.totalChamas],
+        ['Users', data.totalUsers],
+        ['Trial', data.trial],
+        ['Active', data.active],
+        ['Grace', data.grace],
+        ['Suspended', data.suspended],
+        ['Payments OK', data.successfulPayments],
+        ['Revenue KES', data.revenueKes],
+      ].map(([l,v]) => `<div class="stat-card"><div class="label">${l}</div><div class="value">${Number(v).toLocaleString()}</div></div>`).join('');
+    }
+
+    async function loadChamas(q) {
+      const { data } = await API.adminChamas(q);
+      document.getElementById('rows').innerHTML = (data||[]).map(c => `
+        <tr>
+          <td><strong>${esc(c.name)}</strong><br/><span style="font-size:0.75rem;color:var(--slate-500)">${esc(c.id)}</span></td>
+          <td>${esc(c.plan_code||'—')}</td>
+          <td>${esc(c.sub_status||'—')}</td>
+          <td>${c.member_count}</td>
+          <td class="row-actions" style="display:flex;flex-wrap:wrap;gap:0.25rem">
+            <button class="btn btn-secondary" style="padding:0.3rem 0.5rem;font-size:0.75rem" data-a="suspend" data-id="${c.id}">Suspend</button>
+            <button class="btn btn-secondary" style="padding:0.3rem 0.5rem;font-size:0.75rem" data-a="reactivate" data-id="${c.id}">Reactivate</button>
+            <button class="btn btn-secondary" style="padding:0.3rem 0.5rem;font-size:0.75rem" data-a="extend" data-id="${c.id}">+30d</button>
+            <button class="btn btn-secondary" style="padding:0.3rem 0.5rem;font-size:0.75rem" data-a="pay" data-id="${c.id}">Manual pay</button>
+          </td>
+        </tr>
+      `).join('') || '<tr><td colspan="5">No chamas</td></tr>';
+      document.querySelectorAll('#rows button').forEach(btn => {
+        btn.onclick = async () => {
+          try {
+            const id = btn.dataset.id;
+            if (btn.dataset.a === 'suspend') {
+              const reason = prompt('Suspension reason');
+              if (!reason) return;
+              await API.adminSuspend(id, reason);
+            }
+            if (btn.dataset.a === 'reactivate') await API.adminReactivate(id);
+            if (btn.dataset.a === 'extend') await API.adminExtend(id, 30);
+            if (btn.dataset.a === 'pay') {
+              const amountKes = Number(prompt('Amount KES', '500'));
+              if (!amountKes) return;
+              await API.adminManualPay(id, { amountKes, method: 'manual', notes: 'admin manual' });
+            }
+            await loadStats();
+            await loadChamas(document.getElementById('q').value);
+          } catch (e) { alert(e.message); }
+        };
+      });
+    }
+
+    document.getElementById('search').onsubmit = (e) => {
+      e.preventDefault();
+      loadChamas(document.getElementById('q').value);
+    };
+
+    loadStats().then(() => loadChamas()).catch(e => {
+      if (e.status === 401 || e.status === 403) {
+        alert('SUPER_ADMIN only. Set SUPER_ADMIN_EMAIL to your login email on the server, then log in again.');
+        location.href = '/app/dashboard.html';
+      } else alert(e.message);
+    });
+  </script>
+</body>
+</html>
