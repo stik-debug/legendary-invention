@@ -9,15 +9,15 @@
 </div>
 <div class="scene" aria-hidden="true">
 <div class="stack"><div class="coin"></div><div class="coin"></div><div class="coin"></div><div class="coin"></div><div class="coin"></div></div>
-<div class="float a"><small>This month</small>{{ month_saved|kes }} saved</div>
-<div class="float b"><small>Loans approved</small>{{ loans_approved|kes }}</div>
-<div class="float c"><small>Members paid</small>{{ paid_members }} of {{ total_members }}</div>
+<div class="float a"><small>Contribution activity · this month</small>{% if month_saved %}{{ month_saved|kes }} recorded{% else %}No contributions recorded yet{% endif %}</div>
+<div class="float b"><small>Loans approved · this month</small>{% if loans_approved %}{{ loans_approved|kes }} recorded{% else %}No loans recorded yet{% endif %}</div>
+<div class="float c"><small>Contribution progress · this month</small>{% if total_members %}{{ paid_members }} of {{ total_members }} members{% else %}Your chama's real records appear here{% endif %}</div>
 </div>
 </section>
 <section class="section">
 <h2>Everything your chama needs.</h2>
 <div class="features">
-{% set cards = [('Command Center','See group wealth, attention alerts, health and goals in one place.','M3 3h18v18H3zM7 15l3-3 3 2 5-6', url_for('go_feature', feature='command')),('Smart Loans','Applications, eligibility, guarantors, repayment progress and overdue tracking.','M4 5h16v14H4zM8 9h8M8 13h5', url_for('go_feature', feature='loans')),('Goals & Wealth','Track goals, investments, assets and your Chama wealth journey.','M12 3v18M3 12h18', url_for('go_feature', feature='goals')),('Voting & Constitution','Turn proposals into transparent votes and enforce group rules.','M5 4h14v16H5zM8 8h8M8 12h8M8 16h5', url_for('go_feature', feature='votes')),('Meetings','Manage agendas, attendance, minutes, decisions and action items.','M4 5h16v14H4zM8 3v4M16 3v4', url_for('go_feature', feature='meetings')),('Member Passport','Give every member a clear record of savings, participation and loans.','M12 12a4 4 0 100-8 4 4 0 000 8M4 21a8 8 0 0116 0', url_for('go_feature', feature='passport')),('ChamaPay AI','Ask authorized questions about the actual data in your Chama.','M12 3a7 7 0 017 7v4a7 7 0 01-7 7 7 7 0 01-7-7v-4a7 7 0 017-7z', url_for('go_feature', feature='ai')),('Strategy & Continuity','Stress-test decisions, review consistency, track promises and prepare safe handovers.','M4 5h16v14H4zM8 9h8M8 13h5', url_for('go_feature', feature='strategy')),('PWA + Mobile','Install ChamaPay on your phone and manage your group anywhere.','M7 2h10v20H7zM11 18h2', url_for('install_app'))] %}
+{% set cards = [('Command Center','See group wealth, attention alerts, health and goals in one place.','M3 3h18v18H3zM7 15l3-3 3 2 5-6', url_for('go_feature', feature='command')),('Smart Loans','Applications, eligibility, guarantors, repayment progress and overdue tracking.','M4 5h16v14H4zM8 9h8M8 13h5', url_for('go_feature', feature='loans')),('Goals & Wealth','Track goals, investments, assets and your Chama wealth journey.','M12 3v18M3 12h18', url_for('go_feature', feature='goals')),('Voting & Constitution','Turn proposals into transparent votes and enforce group rules.','M5 4h14v16H5zM8 8h8M8 12h8M8 16h5', url_for('go_feature', feature='votes')),('Meetings','Manage agendas, attendance, minutes, decisions and action items.','M4 5h16v14H4zM8 3v4M16 3v4', url_for('go_feature', feature='meetings')),('Member Passport','Give every member a clear record of savings, participation and loans.','M12 12a4 4 0 100-8 4 4 0 000 8M4 21a8 8 0 0116 0', url_for('go_feature', feature='passport')),('ChamaPay AI','Ask authorized questions about the actual data in your Chama.','M12 3a7 7 0 017 7v4a7 7 0 01-7 7 7 7 0 01-7-7v-4a7 7 0 017-7z', url_for('go_feature', feature='ai')),('Strategy & Continuity','Stress-test decisions, review consistency, track promises and prepare safe handovers.','M4 5h16v14H4zM8 9h8M8 13h5', url_for('go_feature', feature='strategy')),('ChamaPower','Connect approved group projects to budgets, responsibilities, receipts, milestones and outcome reporting.','M3 12h18M12 3v18M5 5l14 14', url_for('dashboard')),('Chama Health & Trust','Spot missing records, reconciliation issues and actions that need attention.','M12 3l8 4v5c0 5-3 8-8 9-5-1-8-4-8-9V7z', url_for('go_feature', feature='command')),('Marketplace','Discover providers, compare quotations and track supplier decisions transparently.','M3 7h18M5 7l1 14h12l1-14M9 7V4h6v3', '/marketplace'),('PWA + Mobile','Install ChamaPay on your phone and manage your group anywhere.','M7 2h10v20H7zM11 18h2', url_for('install_app'))] %}
 {% for t, d, p, href in cards if t != 'Command Center' or show_command %}
 <a class="card tilt" href="{{ href }}"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{ p }}"/></svg></div><h3>{{ t }}</h3><p class="mute" style="margin:0">{{ d }}</p></a>
 {% endfor %}
@@ -34,7 +34,15 @@
 <h3>{{ p.name|upper }}</h3>
 <div class="price">KES {{ p.price_cents|kes }}<small class="mute" style="font:500 16px 'DM Sans'">/chama/month</small></div>
 <p class="mute" style="margin:2px 0 0">Up to {{ p.max_members }} members · paid once by the chama</p>
-<ul><li>One group subscription covers all members</li><li>Roles for your officials</li><li>Statements, reports and audit history</li><li>Financial history kept, always</li></ul>
+<ul>
+{% if p.code == 'starter' %}
+<li>Core contributions, savings and expense records</li><li>Member statements and essential reports</li><li>Loan tracking and meeting records</li><li>One group subscription covers up to 20 members</li>
+{% elif p.code == 'growth' %}
+<li>Everything in Starter, for up to 70 members</li><li>Expanded group administration and role workflows</li><li>Financial reports, audit history and member oversight</li><li>Goals, meetings, voting and ChamaPower workflows where enabled</li>
+{% else %}
+<li>Everything in Growth, for up to 100 members</li><li>Full supported owner/officer administration tools</li><li>Expanded reporting, audit visibility and group oversight</li><li>ChamaPower, marketplace and governance workflows where enabled</li>
+{% endif %}
+<li>Financial history is retained when a subscription is suspended</li></ul>
 <a class="btn block {{ 'gold' if p.code=='growth' else 'pri' }}" href="{{ url_for('register') }}">Start free trial</a>
 </div>
 {% endfor %}
