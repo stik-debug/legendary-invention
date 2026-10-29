@@ -1,11 +1,12 @@
 """Payment providers.
 
-- TEST: development only (never in real production when configured correctly)
-- MPESA: Safaricom Daraja STK (existing)
-- PAYSTACK: Paystack Kenya — M-Pesa STK/USSD prompt via mobile_money charge
+TEST  — development simulation only
+MPESA — Safaricom Daraja STK (existing)
+PAYSTACK — M-Pesa PIN prompt via Paystack /charge (Kenya)
 
-Existing call sites use: configured(), initiate(payment, phone) -> {ok, checkout_id|error},
-and for MPESA: parse_callback(data). Paystack adds parse_webhook(data).
+Interface used by app.py:
+  configured() -> bool
+  initiate(payment, phone) -> {ok: True, checkout_id, display_text?} | {ok: False, error}
 """
 import base64
 import hashlib
@@ -36,12 +37,16 @@ class TestPaymentProvider:
         return True
 
     def initiate(self, payment, phone):
-        return {'ok': True, 'checkout_id': 'TEST-CHK-' + uuid.uuid4().hex[:12].upper()}
+        return {
+            'ok': True,
+            'checkout_id': 'TEST-CHK-' + uuid.uuid4().hex[:12].upper(),
+            'display_text': 'Test mode: use the simulate buttons under Payments.',
+        }
 
 
 class MpesaPaymentProvider:
     name = 'MPESA'
-    label = 'M-Pesa (Safaricom Daraja)'
+    label = 'M-Pesa (Safaricom)'
     REQUIRED = (
         'MPESA_CONSUMER_KEY', 'MPESA_CONSUMER_SECRET', 'MPESA_SHORTCODE',
         'MPESA_PASSKEY', 'MPESA_CALLBACK_URL', 'MPESA_CALLBACK_SECRET',
@@ -98,7 +103,11 @@ class MpesaPaymentProvider:
             with urllib.request.urlopen(req, timeout=25) as r:
                 data = json.loads(r.read())
             if data.get('ResponseCode') == '0':
-                return {'ok': True, 'checkout_id': data['CheckoutRequestID']}
+                return {
+                    'ok': True,
+                    'checkout_id': data['CheckoutRequestID'],
+                    'display_text': 'M-Pesa prompt sent. Enter your PIN on the phone.',
+                }
             return {
                 'ok': False,
                 'error': data.get('errorMessage')
@@ -110,7 +119,6 @@ class MpesaPaymentProvider:
 
     @staticmethod
     def parse_callback(data):
-        """Turns Safaricom's callback JSON into our event. Malformed input is ignored."""
         try:
             cb = data['Body']['stkCallback']
             items = {i['Name']: i.get('Value') for i in (cb.get('CallbackMetadata') or {}).get('Item', [])}
@@ -127,26 +135,26 @@ class MpesaPaymentProvider:
 
 
 class PaystackPaymentProvider:
-    """Paystack (Kenya): sends an M-Pesa prompt to the customer's phone via /charge."""
+    """Kenya M-Pesa PIN prompt through Paystack charge API."""
 
     name = 'PAYSTACK'
-    label = 'Paystack (M-Pesa prompt)'
+    label = 'Paystack M-Pesa'
     REQUIRED = ('PAYSTACK_SECRET_KEY',)
     base = 'https://api.paystack.co'
 
     def configured(self):
-        return bool(os.environ.get('PAYSTACK_SECRET_KEY'))
+        return bool((os.environ.get('PAYSTACK_SECRET_KEY') or '').strip())
 
     def _request(self, path, body=None):
         data = None if body is None else json.dumps(body).encode()
         req = urllib.request.Request(
             self.base + path,
             data=data,
+            method='POST' if body is not None else 'GET',
             headers={
                 'Authorization': 'Bearer ' + os.environ['PAYSTACK_SECRET_KEY'],
                 'Content-Type': 'application/json',
             },
-            method='POST' if body is not None else 'GET',
         )
         try:
             with urllib.request.urlopen(req, timeout=30) as r:
@@ -154,65 +162,49 @@ class PaystackPaymentProvider:
         except urllib.error.HTTPError as e:
             try:
                 err = json.loads(e.read().decode())
-                msg = err.get('message') or str(e)
+                raise RuntimeError(err.get('message') or str(e)) from e
+            except RuntimeError:
+                raise
             except Exception:
-                msg = str(e)
-            raise RuntimeError(msg) from e
+                raise RuntimeError(str(e)) from e
 
     def initiate(self, payment, phone):
-        """Send M-Pesa STK/USSD prompt via Paystack mobile_money charge."""
         phone = _normalize_phone(phone)
         if not (phone.startswith('254') and len(phone) == 12):
-            return {'ok': False, 'error': 'Enter a valid Safaricom number (2547XXXXXXXX).'}
+            return {'ok': False, 'error': 'Enter a valid Safaricom number (2547XXXXXXXX or 07XXXXXXXX).'}
         amount = int(payment['amount_cents'])
         if amount <= 0:
             return {'ok': False, 'error': 'Invalid payment amount.'}
         reference = f"CP{payment['chama_id']}P{payment['id']}{uuid.uuid4().hex[:8]}".upper()[:50]
-        email = (
-            os.environ.get('PAYSTACK_DEFAULT_EMAIL')
-            or f"chama{payment['chama_id']}@subscribers.chamapay.app"
+        email = (os.environ.get('PAYSTACK_DEFAULT_EMAIL') or '').strip() or (
+            f"chama{payment['chama_id']}@subscribers.chamapay.app"
         )
         try:
             data = self._request('/charge', {
                 'email': email,
-                'amount': amount,  # already in KES cents / subunit
+                'amount': amount,
                 'currency': 'KES',
                 'reference': reference,
-                'mobile_money': {
-                    'phone': phone,
-                    'provider': 'mpesa',
-                },
+                'mobile_money': {'phone': phone, 'provider': 'mpesa'},
                 'metadata': {
                     'chama_id': payment['chama_id'],
                     'payment_id': payment['id'],
-                    'custom_fields': [
-                        {
-                            'display_name': 'Purpose',
-                            'variable_name': 'purpose',
-                            'value': 'ChamaPay subscription',
-                        },
-                    ],
                 },
             })
             d = data.get('data') or {}
             ref = str(d.get('reference') or reference)
-            # Paystack may return pay_offline / pending while customer enters PIN
-            return {
-                'ok': True,
-                'checkout_id': ref,
-                'display_text': (
-                    d.get('display_text')
-                    or d.get('gateway_response')
-                    or 'Check your phone and enter your M-Pesa PIN to complete payment.'
-                ),
-            }
+            text = (
+                d.get('display_text')
+                or d.get('gateway_response')
+                or 'Check your phone for the M-Pesa prompt and enter your PIN.'
+            )
+            return {'ok': True, 'checkout_id': ref, 'display_text': text}
         except RuntimeError as e:
-            return {'ok': False, 'error': str(e)[:200]}
+            return {'ok': False, 'error': str(e)[:220]}
         except Exception:
             return {'ok': False, 'error': 'Could not reach Paystack. Please try again.'}
 
     def verify_transaction(self, reference):
-        """Server-side verify (used by webhook + optional poll)."""
         data = self._request(f'/transaction/verify/{urllib.parse.quote(str(reference))}')
         d = data.get('data') or {}
         status = str(d.get('status') or '').lower()
@@ -223,12 +215,10 @@ class PaystackPaymentProvider:
             'result_code': 0 if status == 'success' else 1,
             'amount_cents': int(amount) if amount is not None else None,
             'receipt': str(d.get('reference') or reference),
-            'raw_status': status,
         }
 
     @staticmethod
     def parse_webhook(data):
-        """Map Paystack webhook JSON to process_webhook event shape."""
         try:
             event = str(data.get('event') or '')
             d = data.get('data') or {}
@@ -239,7 +229,7 @@ class PaystackPaymentProvider:
             status = str(d.get('status') or '').lower()
             success = status == 'success' or 'success' in event.lower()
             return {
-                'event_id': ref + ':' + event,
+                'event_id': ref + ':' + (event or 'webhook'),
                 'checkout_id': ref,
                 'result_code': 0 if success else 1,
                 'amount_cents': int(amount) if amount is not None else None,
@@ -250,10 +240,11 @@ class PaystackPaymentProvider:
 
     @staticmethod
     def verify_signature(raw_body, signature):
-        secret = os.environ.get('PAYSTACK_SECRET_KEY') or ''
+        secret = (os.environ.get('PAYSTACK_SECRET_KEY') or '').encode()
         if not secret or not signature:
             return False
-        digest = hmac.new(secret.encode(), raw_body if isinstance(raw_body, bytes) else raw_body.encode(), hashlib.sha512).hexdigest()
+        body = raw_body if isinstance(raw_body, bytes) else str(raw_body).encode()
+        digest = hmac.new(secret, body, hashlib.sha512).hexdigest()
         try:
             return hmac.compare_digest(digest, str(signature))
         except Exception:
@@ -262,29 +253,24 @@ class PaystackPaymentProvider:
 
 def get_provider(is_production):
     """
-    Choose provider without mixing test into production accidentally.
-    Order:
-      1. PAYMENT_PROVIDER=paystack → Paystack if configured
-      2. PAYMENT_PROVIDER=mpesa → Daraja if configured
-      3. Production default: Daraja if configured, else Paystack if configured, else None
-      4. Non-production default: TEST (unless forced to mpesa/paystack)
+    Priority:
+      PAYMENT_PROVIDER=paystack → Paystack (if key set)
+      PAYMENT_PROVIDER=mpesa    → Daraja (if keys set)
+      PAYMENT_PROVIDER=test     → TEST (blocked in production)
+      else production: Daraja if configured, else Paystack if configured, else None
+      else development: Paystack if key set, else TEST
     """
     mode = (os.environ.get('PAYMENT_PROVIDER') or '').strip().lower()
 
     if mode == 'paystack':
         p = PaystackPaymentProvider()
         return p if p.configured() else None
-
     if mode == 'mpesa':
         p = MpesaPaymentProvider()
         return p if p.configured() else None
-
     if mode == 'test':
-        if is_production:
-            return None
-        return TestPaymentProvider()
+        return None if is_production else TestPaymentProvider()
 
-    # No explicit mode
     if is_production:
         mpesa = MpesaPaymentProvider()
         if mpesa.configured():
@@ -294,7 +280,6 @@ def get_provider(is_production):
             return paystack
         return None
 
-    # Development: prefer Paystack if keys present, else TEST
     paystack = PaystackPaymentProvider()
     if paystack.configured():
         return paystack

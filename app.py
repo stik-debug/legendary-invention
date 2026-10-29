@@ -417,6 +417,9 @@ def create_app(overrides=None):
 
     @app.route('/register', methods=['GET', 'POST'])
     def register():
+        # Already signed in — do not force a second account
+        if session.get('uid'):
+            return redirect(url_for('chama_new' if request.args.get('next') == 'new' else 'dashboard'))
         if request.method == 'POST':
             f = request.form
             if len(f.get('password', '')) < 8:
@@ -465,6 +468,8 @@ def create_app(overrides=None):
 
     @app.route('/login', methods=['GET', 'POST'])
     def login():
+        if session.get('uid') and request.method == 'GET':
+            return redirect(url_for('dashboard'))
         if request.method == 'POST':
             ident = (request.form.get('login') or '').strip().lower()
             key = f'{ident}|{request.remote_addr}'
@@ -853,11 +858,7 @@ def create_app(overrides=None):
         res = prov.initiate(p, phone)
         if res['ok']:
             db().execute('UPDATE payments SET provider_txn_id=? WHERE id=?', (res['checkout_id'], pid)); db().commit()
-            msg = res.get('display_text') or (
-                'Payment prompt sent. Enter your M-Pesa PIN on your phone. '
-                'Your chama unlocks when payment is confirmed.'
-            )
-            flash(msg, 'success')
+            flash(res.get('display_text') or 'Payment prompt sent. Enter your M-Pesa PIN on your phone. Your chama unlocks when payment is confirmed.', 'success')
         else:
             db().execute("UPDATE payments SET status='FAILED', notes=?, completed_at=? WHERE id=?", (res['error'][:200], S.iso(S.now_utc()), pid)); db().commit()
             flash(res['error'], 'danger')
@@ -889,26 +890,23 @@ def create_app(overrides=None):
 
     @app.route('/webhooks/paystack', methods=['POST'])
     def paystack_webhook():
-        """Paystack webhook for subscription M-Pesa charges. Does not alter other payment paths."""
+        """Paystack confirms subscription M-Pesa charges. Signature required."""
         raw = request.get_data(cache=True, as_text=False) or b''
         signature = request.headers.get('X-Paystack-Signature', '')
         if not PaystackPaymentProvider.verify_signature(raw, signature):
             abort(401)
         body = request.get_json(silent=True) or {}
         event_name = str(body.get('event') or '')
-        # Only act on success/failure charge events
         if event_name and not any(x in event_name.lower() for x in ('success', 'failed', 'fail', 'abandon')):
             return jsonify(status='ignored', event=event_name)
         ev = PaystackPaymentProvider.parse_webhook(body)
-        # Prefer live verify so amount/status are authoritative
         try:
             prov = app.config.get('PROVIDER')
-            if prov and prov.name == 'PAYSTACK' and ev.get('checkout_id'):
+            if prov and getattr(prov, 'name', None) == 'PAYSTACK' and ev.get('checkout_id'):
                 ev = prov.verify_transaction(ev['checkout_id'])
-                # unique event id for idempotency table
                 ev['event_id'] = ev.get('event_id') or ev.get('checkout_id')
         except Exception:
-            app.logger.exception('paystack verify_transaction failed; using webhook payload')
+            app.logger.exception('paystack verify_transaction failed; using webhook body')
         try:
             S.process_webhook(db(), 'PAYSTACK', ev)
         except Exception:
