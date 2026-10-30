@@ -59,6 +59,7 @@
     <form method="POST" action="{{ url_for('logout') }}" class="menu-logout">{{ csrf_input() }}<button type="submit"><span class="menu-icon">↪</span><span><b>Log out</b><small>Sign out of ChamaPay</small></span></button></form>
   </div>
 </details>
+<form method="POST" action="{{ url_for('logout') }}" class="header-logout">{{ csrf_input() }}<button class="btn sm" type="submit" aria-label="Log out of ChamaPay"><span aria-hidden="true">↪</span> Log out</button></form>
 {% if user.is_super_admin %}<a class="btn sm owner-direct-link" href="{{ url_for('owner_home') }}" aria-label="Open owner Control Center">◆ Control Center</a>{% endif %}
 {% else %}
 <a class="btn sm" href="{{ url_for('login') }}">Log in</a><a class="btn sm pri hide-sm" href="{{ url_for('register') }}">Start free</a>

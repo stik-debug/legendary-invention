@@ -12,6 +12,6 @@
 <div class="card"><h3>Loans & repayments</h3><p>Review existing loan records and repayment workflows; approvals remain with authorized officials.</p><a class="btn" href="{{ url_for('loans',chama_id=chama.id) }}">Open loans</a></div>
 <div class="card"><h3>Buying Network</h3><p>Browse providers that have actually passed the platform's verification workflow and compare submitted quotes.</p><a class="btn" href="{{ url_for('marketplace') }}">Open marketplace</a></div>
 <div class="card"><h3>Reports & recovery</h3><p>Review reports and export a backup. A backup export is not a verified restore.</p><a class="btn" href="{{ url_for('reports',chama_id=chama.id) }}">Reports</a> <a class="btn" href="{{ url_for('chama_backup',chama_id=chama.id) }}">Download backup</a></div>
-{% if me.role in ['CHAMA_ADMIN','TREASURER','SECRETARY'] %}<div class="card"><h3>Governance & meetings</h3><p>Open the records for meeting minutes, decisions, votes and assigned follow-ups.</p><a class="btn" href="{{ url_for('meetings',chama_id=chama.id) }}">Meetings</a> <a class="btn" href="{{ url_for('votes',chama_id=chama.id) }}">Votes</a></div>{% endif %}
+{% if me.role in ['CHAMA_ADMIN','TREASURER','SECRETARY'] %}<div class="card"><h3>Governance & meetings</h3><p>Open the records for meeting minutes, decisions, votes and assigned follow-ups.</p><a class="btn" href="{{ url_for('meetings',chama_id=chama.id) }}">Meetings</a> <a class="btn" href="{{ url_for('chama_votes',chama_id=chama.id) }}">Votes</a></div>{% endif %}
 </div>
 {% endblock %}
