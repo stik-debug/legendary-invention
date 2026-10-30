@@ -140,10 +140,10 @@ class MpesaPaymentProvider:
 
 
 class PaystackPaymentProvider:
-    """Paystack Kenya — M-Pesa STK via Charge API."""
+    """Paystack Kenya — hosted checkout page (M-Pesa / card). No STK prompt from our app."""
 
     name = "PAYSTACK"
-    label = "Paystack M-Pesa STK"
+    label = "Paystack (secure page)"
     base = "https://api.paystack.co"
 
     def configured(self) -> bool:
@@ -186,17 +186,8 @@ class PaystackPaymentProvider:
                 ) from e
             raise RuntimeError(f"Paystack error {e.code}: {msg}") from e
 
-    def initiate(self, payment, phone):
-        """Send M-Pesa STK prompt via Paystack Charge API (not hosted page)."""
-        phone254 = _normalize_phone(phone)
-        if not (phone254.startswith("254") and len(phone254) == 12):
-            return {
-                "ok": False,
-                "error": "Enter a valid Safaricom number (07XXXXXXXX or 2547XXXXXXXX).",
-            }
-        # Paystack Kenya accepts local 07… and international 254…
-        phone_local = "0" + phone254[3:]
-
+    def initiate(self, payment, phone=None):
+        """Create a Paystack hosted checkout session. User pays on Paystack's page."""
         if not self.configured():
             return {
                 "ok": False,
@@ -210,79 +201,50 @@ class PaystackPaymentProvider:
         email = (os.environ.get("PAYSTACK_DEFAULT_EMAIL") or "").strip() or (
             f"chama{payment['chama_id']}@subscribers.chamapay.app"
         )
+        phone254 = _normalize_phone(phone) if phone else ""
         meta = {
             "chama_id": str(payment["chama_id"]),
             "payment_id": str(payment["id"]),
-            "phone": phone254,
         }
+        if phone254:
+            meta["phone"] = phone254
 
-        # --- Primary: Charge API → real M-Pesa STK push on the phone ---
-        charge_body = {
-            "email": email,
-            "amount": amount,
-            "currency": "KES",
-            "reference": reference,
-            "mobile_money": {
-                "phone": phone_local,
-                "provider": "mpesa",
-            },
-            "metadata": meta,
-        }
+        app_url = (
+            os.environ.get("APP_URL") or os.environ.get("RENDER_EXTERNAL_URL") or ""
+        ).rstrip("/")
+        callback = (os.environ.get("PAYSTACK_CALLBACK_URL") or "").strip()
+        if not callback and app_url:
+            callback = app_url + "/subscription/paystack-return"
+
         try:
-            data = self._request("/charge", charge_body)
+            body = {
+                "email": email,
+                "amount": amount,
+                "currency": "KES",
+                "reference": reference,
+                "channels": ["mobile_money", "card"],
+                "metadata": meta,
+            }
+            if callback:
+                body["callback_url"] = callback
+            data = self._request("/transaction/initialize", body)
+            d = data.get("data") or {}
+            ref = str(d.get("reference") or reference)
+            url = d.get("authorization_url")
+            if not url:
+                return {
+                    "ok": False,
+                    "error": "Paystack did not return a payment page. Confirm KES is enabled on your Paystack account.",
+                }
+            return {
+                "ok": True,
+                "checkout_id": ref,
+                "authorization_url": str(url),
+                "display_text": "Your secure Paystack payment page is ready.",
+                "amount_cents": amount,
+            }
         except RuntimeError as e:
-            err = str(e)
-            # Retry once with 254 format if local rejected
-            if "phone" in err.lower() or "mobile" in err.lower() or "invalid" in err.lower():
-                charge_body["mobile_money"]["phone"] = phone254
-                try:
-                    data = self._request("/charge", charge_body)
-                except RuntimeError as e2:
-                    return {"ok": False, "error": str(e2)[:400]}
-            else:
-                return {"ok": False, "error": err[:400]}
-
-        if not data.get("status"):
-            msg = data.get("message") or "Paystack did not accept the charge."
-            return {"ok": False, "error": str(msg)[:400]}
-
-        d = data.get("data") or {}
-        ref = str(d.get("reference") or reference)
-        status = str(d.get("status") or "").lower()
-        display = data.get("message") or d.get("display_text") or ""
-
-        # pay_offline / send_otp / pending = prompt sent or waiting on phone
-        if status in ("pay_offline", "pending", "send_otp", "ongoing", "open"):
-            return {
-                "ok": True,
-                "checkout_id": ref,
-                "authorization_url": None,  # STK on phone — no redirect
-                "display_text": (
-                    display
-                    or f"M-Pesa prompt sent to {phone_local}. Enter your PIN on the phone to complete payment."
-                ),
-            }
-        if status == "success":
-            return {
-                "ok": True,
-                "checkout_id": ref,
-                "authorization_url": None,
-                "display_text": "Payment completed successfully.",
-            }
-        if status in ("failed", "false", "abandoned"):
-            return {
-                "ok": False,
-                "error": display or f"Paystack charge status: {status}",
-            }
-
-        # Unknown status — still treat as initiated if we have a reference
-        return {
-            "ok": True,
-            "checkout_id": ref,
-            "authorization_url": None,
-            "display_text": display
-            or f"Payment started ({status or 'pending'}). Check your phone for the M-Pesa prompt.",
-        }
+            return {"ok": False, "error": str(e)[:400]}
 
     def verify_transaction(self, reference):
         data = self._request(f"/transaction/verify/{urllib.parse.quote(str(reference))}")
