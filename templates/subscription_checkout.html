@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Secure payment · {{ chama.name }}{% endblock %}
+{% block content %}
+<style>
+  .ck-wrap { max-width: 440px; margin: 24px auto; padding: 0 12px; }
+  .ck-card {
+    background: #fff; border-radius: 24px; overflow: hidden;
+    box-shadow: 0 16px 48px rgba(13,92,69,.14);
+    border: 1px solid rgba(13,92,69,.08);
+  }
+  .ck-top {
+    background: linear-gradient(145deg, #0A3D2E, #0D5C45 50%, #1A7A5C);
+    color: #fff; padding: 28px 24px 32px; text-align: center;
+  }
+  .ck-top .badge {
+    display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; opacity: .9; margin-bottom: 10px;
+    padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,.15);
+  }
+  .ck-top h1 { margin: 0; font-size: 1.5rem; font-weight: 800; }
+  .ck-top .amount {
+    margin-top: 16px; font-size: 2.25rem; font-weight: 800; letter-spacing: -0.02em;
+  }
+  .ck-top .amount span { font-size: 1rem; font-weight: 600; opacity: .85; }
+  .ck-body { padding: 24px; }
+  .ck-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 0; border-bottom: 1px solid #eef2f0; font-size: .95rem;
+  }
+  .ck-row:last-of-type { border-bottom: none; }
+  .ck-row .k { color: #6b7c76; }
+  .ck-row .v { font-weight: 700; color: #1a2421; text-align: right; }
+  .ck-btn {
+    display: block; width: 100%; margin-top: 20px; padding: 16px 18px;
+    border: none; border-radius: 14px; cursor: pointer; text-align: center;
+    text-decoration: none; font-weight: 800; font-size: 1.05rem;
+    background: linear-gradient(135deg, #0D5C45, #1A7A5C); color: #fff !important;
+    box-shadow: 0 8px 24px rgba(13,92,69,.3);
+  }
+  .ck-btn:active { transform: scale(0.98); }
+  .ck-note {
+    margin-top: 14px; text-align: center; font-size: .8rem; color: #6b7c76; line-height: 1.45;
+  }
+  .ck-secure {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin-top: 18px; font-size: .75rem; color: #6b7c76;
+  }
+  .ck-secure span { width: 8px; height: 8px; border-radius: 50%; background: #1A7A5C; }
+  .ck-back {
+    display: block; text-align: center; margin-top: 16px; font-size: .9rem;
+    color: #0D5C45; font-weight: 600; text-decoration: none;
+  }
+  .ck-steps {
+    margin: 0; padding: 0 0 0 18px; font-size: .85rem; color: #4a5c56; line-height: 1.55;
+  }
+</style>
+
+<div class="ck-wrap">
+  <div class="ck-card">
+    <div class="ck-top">
+      <div class="badge">Secure checkout</div>
+      <h1>{{ chama.name }}</h1>
+      <div class="amount"><span>KES</span> {{ payment.amount_cents|kes }}</div>
+    </div>
+    <div class="ck-body">
+      <div class="ck-row"><span class="k">Plan</span><span class="v">{{ plan.name if plan else 'Subscription' }}</span></div>
+      <div class="ck-row"><span class="k">Period</span><span class="v">{{ payment.period_days }} days</span></div>
+      <div class="ck-row"><span class="k">Reference</span><span class="v" style="font-size:.8rem;font-weight:600">{{ payment.provider_txn_id or ('#' ~ payment.id) }}</span></div>
+      <div class="ck-row"><span class="k">Status</span><span class="v">{{ payment.status }}</span></div>
+
+      {% if pay_url %}
+      <a class="ck-btn" href="{{ pay_url }}" rel="noopener">
+        Continue to Paystack →
+      </a>
+      <p class="ck-note">
+        You will open Paystack’s secure page. Pay with <b>M-Pesa</b> or <b>card</b>, then you return here automatically.
+      </p>
+      <ol class="ck-steps">
+        <li>Tap the green button above</li>
+        <li>On Paystack, choose M-Pesa or card</li>
+        <li>Complete payment</li>
+        <li>You will be brought back to ChamaPay</li>
+      </ol>
+      {% else %}
+      <p class="ck-note" style="color:#b45309">Payment link expired or missing. Go back and start payment again.</p>
+      <a class="ck-btn" href="{{ url_for('subscription', chama_id=chama.id) }}">Back to subscription</a>
+      {% endif %}
+
+      <div class="ck-secure"><span></span> Encrypted · Powered by Paystack</div>
+    </div>
+  </div>
+  <a class="ck-back" href="{{ url_for('subscription', chama_id=chama.id) }}">← Cancel and return</a>
+</div>
+{% endblock %}
