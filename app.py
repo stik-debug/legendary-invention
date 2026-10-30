@@ -840,7 +840,14 @@ def create_app(overrides=None):
         chama, me, sub = ctx(chama_id, roles=('CHAMA_ADMIN', 'TREASURER'), allow_inactive=True)
         prov = app.config['PROVIDER']
         if not prov:
-            flash('M-Pesa is not configured yet. ' + app.config['PAY_INSTRUCTIONS'], 'warning')
+            mode = (os.environ.get('PAYMENT_PROVIDER') or '').strip().lower()
+            if mode == 'paystack':
+                flash('Paystack is selected but PAYSTACK_SECRET_KEY is missing or invalid on the server. Add sk_test_… or sk_live_… in environment variables.', 'danger')
+            else:
+                flash('Payments are not configured yet. ' + app.config['PAY_INSTRUCTIONS'], 'warning')
+            return redirect(url_for('subscription', chama_id=chama_id))
+        if getattr(prov, 'name', None) == 'PAYSTACK' and not prov.configured():
+            flash('Paystack secret key is missing or invalid (must start with sk_test_ or sk_live_). Check Render environment variables.', 'danger')
             return redirect(url_for('subscription', chama_id=chama_id))
         phone = S.normalize_phone(request.form.get('phone'))
         try:
@@ -904,16 +911,20 @@ def create_app(overrides=None):
     def paystack_return():
         """Browser return from Paystack hosted checkout — verify reference if present."""
         ref = (request.args.get('reference') or request.args.get('trxref') or '').strip()
+        checkout = session.get('paystack_checkout') or {}
+        chama_id = checkout.get('chama_id')
         if ref and app.config.get('PROVIDER') and getattr(app.config['PROVIDER'], 'name', None) == 'PAYSTACK':
             try:
                 ev = app.config['PROVIDER'].verify_transaction(ref)
                 S.process_webhook(db(), 'PAYSTACK', ev)
-                flash('Payment check complete. If M-Pesa succeeded, your subscription is now active.', 'success')
+                session.pop('paystack_checkout', None)
+                flash('Payment verified. Your subscription should now be active.', 'success')
             except Exception:
-                flash('Payment is still processing. Refresh your subscription page in a minute.', 'info')
+                flash('Payment is still processing. Refresh this page in a minute.', 'info')
         else:
-            flash('Return from payment. Check your subscription status below.', 'info')
-        # Best effort: go home; user can open subscription from chama
+            flash('Returned from payment. Check status below — or wait for the webhook to confirm.', 'info')
+        if chama_id:
+            return redirect(url_for('subscription', chama_id=chama_id))
         return redirect(url_for('dashboard'))
 
     @app.route('/webhooks/paystack', methods=['POST'])
