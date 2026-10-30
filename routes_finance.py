@@ -10,6 +10,7 @@ import approvals as A
 import features as X
 import json
 import notify as N
+from db import audit
 
 PAGE = 25
 FIN, VIEW, FINE = F.FINANCE_ROLES, F.VIEW_ROLES, F.FINE_ROLES

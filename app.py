@@ -194,7 +194,7 @@ def create_app(overrides=None):
         r.headers['X-Frame-Options'] = 'DENY'
         r.headers['Referrer-Policy'] = 'same-origin'
         r.headers['Content-Security-Policy'] = ("default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-                                                "font-src https://fonts.gstatic.com; img-src 'self' data:; script-src 'self'; frame-ancestors 'none'; form-action 'self'")
+                                                "font-src https://fonts.gstatic.com; img-src 'self' data:; script-src 'self'; frame-ancestors 'none'; form-action 'self' https://checkout.paystack.com https://*.paystack.com")
         if app.config['IS_PRODUCTION']:
             r.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
         if request.endpoint == 'static':
@@ -781,7 +781,8 @@ def create_app(overrides=None):
                                members=members, member_price=S.setting(db(), 'price_per_member_cents', S.DEFAULT_MEMBER_PRICE_CENTS),
                                monthly_cost=int(plan['price_cents']),
                                value_report=value_report, provider=app.config['PROVIDER'], dev=(app.config['PROVIDER'] and app.config['PROVIDER'].name == 'TEST'),
-                               can_pay=me['role'] in ('CHAMA_ADMIN', 'TREASURER'), active=sub['status'] in S.ACCESS_OK, trial_days=S.setting(db(), 'trial_days', 30), paystack_checkout=session.get('paystack_checkout') if (session.get('paystack_checkout') or {}).get('chama_id') == chama_id else None)
+                               can_pay=me['role'] in ('CHAMA_ADMIN', 'TREASURER'), active=sub['status'] in S.ACCESS_OK, trial_days=S.setting(db(), 'trial_days', 30), paystack_checkout=session.get('paystack_checkout') if (session.get('paystack_checkout') or {}).get('chama_id') == chama_id else None,
+                               pending_payment=db().one("SELECT id,amount_cents,created_at FROM payments WHERE chama_id=? AND status='PENDING' AND method!='MANUAL' AND created_at>=? ORDER BY id DESC LIMIT 1", (chama_id, S.iso(S.now_utc() - timedelta(minutes=30)))))
 
     @app.route('/chamas/<int:chama_id>/trust-and-planning', methods=['GET', 'POST'])
     @login_required
@@ -834,56 +835,102 @@ def create_app(overrides=None):
             flash('Thank you. Your feedback has been recorded.', 'success')
         return redirect(url_for('subscription', chama_id=chama_id))
 
+    def _wants_json():
+        return request.headers.get('X-Requested-With') == 'fetch' or 'application/json' in (request.headers.get('Accept') or '')
+
+    def _sync_provider_payment(p):
+        """Ask Paystack what really happened to a PENDING payment and apply it. Pending stays pending."""
+        prov = app.config.get('PROVIDER')
+        if not (p and p['status'] == 'PENDING' and p.get('provider') == 'PAYSTACK' and p.get('provider_txn_id')
+                and prov and getattr(prov, 'name', None) == 'PAYSTACK'):
+            return
+        try:
+            ev = prov.verify_transaction(p['provider_txn_id'])
+            if ev.get('result_code') is not None:
+                S.process_webhook(db(), 'PAYSTACK', ev)
+        except Exception:
+            app.logger.exception('paystack verify failed for payment %s', p.get('id'))
+
     @app.route('/chamas/<int:chama_id>/subscription/pay', methods=['POST'])
     @login_required
     def subscription_pay(chama_id):
         chama, me, sub = ctx(chama_id, roles=('CHAMA_ADMIN', 'TREASURER'), allow_inactive=True)
+        as_json = _wants_json()
+
+        def fail(msg, code=400):
+            if as_json:
+                return jsonify(ok=False, error=msg), code
+            flash(msg, 'danger')
+            return redirect(url_for('subscription', chama_id=chama_id))
+
         prov = app.config['PROVIDER']
         if not prov:
-            mode = (os.environ.get('PAYMENT_PROVIDER') or '').strip().lower()
-            if mode == 'paystack':
-                flash('Paystack is selected but PAYSTACK_SECRET_KEY is missing or invalid.', 'danger')
-            else:
-                flash('Payments are not configured yet. ' + app.config['PAY_INSTRUCTIONS'], 'warning')
-            return redirect(url_for('subscription', chama_id=chama_id))
-        if getattr(prov, 'name', None) == 'PAYSTACK' and hasattr(prov, 'configured') and not prov.configured():
-            flash('Paystack secret key is missing or invalid (must start with sk_test_ or sk_live_).', 'danger')
-            return redirect(url_for('subscription', chama_id=chama_id))
-        raw_phone = (request.form.get('phone') or '').strip()
-        phone = S.normalize_phone(raw_phone) if raw_phone else None
+            return fail('Online payment is not set up yet. ' + app.config['PAY_INSTRUCTIONS'], 503)
+        phone = S.normalize_phone(request.form.get('phone'))
         try:
             plan_id, months = int(request.form.get('plan_id')), int(request.form.get('months', 1))
         except (TypeError, ValueError):
-            abort(400)
-        if prov.name != 'PAYSTACK' and not phone:
-            flash('Enter a valid M-Pesa phone number.', 'danger')
-            return redirect(url_for('subscription', chama_id=chama_id))
+            return fail('Choose a plan and billing period.')
+        if not phone:
+            return fail('Enter a valid Safaricom M-Pesa number, e.g. 0712 345 678.')
         try:
             pid = S.create_payment(db(), chama_id, plan_id, months, prov.name, prov.name, phone, g.user['id'], is_test=prov.name == 'TEST')
         except S.BusinessError as e:
-            flash(str(e), 'danger')
-            return redirect(url_for('subscription', chama_id=chama_id))
+            return fail(str(e))
         p = db().one('SELECT * FROM payments WHERE id=?', (pid,))
-        res = prov.initiate(p, phone)
-        if res.get('ok'):
-            db().execute('UPDATE payments SET provider_txn_id=? WHERE id=?', (res['checkout_id'], pid)); db().commit()
-            url = res.get('authorization_url')
-            if url:
-                session['paystack_checkout'] = {
-                    'url': url, 'chama_id': chama_id, 'payment_id': pid,
-                    'amount_cents': p['amount_cents'], 'reference': res.get('checkout_id'),
-                }
-                return redirect(url_for('subscription_checkout', chama_id=chama_id, payment_id=pid))
-            flash(res.get('display_text') or 'Payment started.', 'success')
-        else:
+        extra = {}
+        if prov.name == 'PAYSTACK':
+            extra = {'email': g.user.get('email'), 'mode': (request.form.get('mode') or '').strip().lower() or None}
+        res = prov.initiate(p, phone, **extra)
+        status_url = url_for('subscription_payment', chama_id=chama_id, payment_id=pid)
+        if not res.get('ok'):
             err = (res.get('error') or 'Payment could not be started')[:400]
-            db().execute(
-                "UPDATE payments SET status='FAILED', notes=?, completed_at=? WHERE id=?",
-                (err[:200], S.iso(S.now_utc()), pid),
-            )
+            db().execute("UPDATE payments SET status='FAILED', notes=?, completed_at=? WHERE id=?", (err[:200], S.iso(S.now_utc()), pid))
             db().commit()
-            flash(err, 'danger')
-        return redirect(url_for('subscription', chama_id=chama_id))
+            return fail(err, 502)
+        db().execute('UPDATE payments SET provider_txn_id=? WHERE id=?', (res['checkout_id'], pid))
+        db().commit()
+        if res.get('fallback_reason'):
+            app.logger.warning('paystack stk unavailable, used hosted checkout: %s', res['fallback_reason'])
+        url = res.get('authorization_url')
+        if url:
+            session['paystack_checkout'] = {'url': url, 'chama_id': chama_id, 'payment_id': pid}
+            if as_json:
+                return jsonify(ok=True, mode='checkout', redirect_url=url, status_url=status_url, message=res.get('display_text'))
+            return redirect(url)
+        msg = res.get('display_text') or 'Payment prompt sent. Enter your M-Pesa PIN on your phone.'
+        if as_json:
+            return jsonify(ok=True, mode='stk' if prov.name == 'PAYSTACK' else 'prompt', status_url=status_url, message=msg)
+        flash(msg, 'success')
+        return redirect(status_url if prov.name == 'PAYSTACK' else url_for('subscription', chama_id=chama_id))
+
+    @app.route('/chamas/<int:chama_id>/subscription/payment/<int:payment_id>')
+    @login_required
+    def subscription_payment(chama_id, payment_id):
+        chama, me, sub = ctx(chama_id, roles=('CHAMA_ADMIN', 'TREASURER'), allow_inactive=True)
+        p = db().one('SELECT * FROM payments WHERE id=? AND chama_id=?', (payment_id, chama_id))
+        if not p:
+            abort(404)
+        _sync_provider_payment(p)
+        p = db().one('SELECT * FROM payments WHERE id=?', (payment_id,))
+        sub = S.sync_subscription(db(), chama_id)
+        co = session.get('paystack_checkout') or {}
+        checkout_url = co.get('url') if co.get('payment_id') == payment_id and p['status'] == 'PENDING' else None
+        return render_template('subscription_payment.html', chama=chama, me=me, sub=sub, pay=p, checkout_url=checkout_url,
+                               plan=S.get_plan(db(), p['plan_id']))
+
+    @app.route('/chamas/<int:chama_id>/subscription/payment/<int:payment_id>/status')
+    @login_required
+    def subscription_payment_status(chama_id, payment_id):
+        ctx(chama_id, roles=('CHAMA_ADMIN', 'TREASURER'), allow_inactive=True)
+        p = db().one('SELECT * FROM payments WHERE id=? AND chama_id=?', (payment_id, chama_id))
+        if not p:
+            abort(404)
+        _sync_provider_payment(p)
+        p = db().one('SELECT status FROM payments WHERE id=?', (payment_id,))
+        resp = jsonify(status=p['status'], done=p['status'] != 'PENDING')
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
 
     @app.route('/chamas/<int:chama_id>/subscription/checkout/<int:payment_id>')
     @login_required
@@ -929,39 +976,37 @@ def create_app(overrides=None):
 
     @app.route('/subscription/paystack-return')
     def paystack_return():
-        """Browser return from Paystack hosted checkout — verify reference if present."""
-        ref = (request.args.get('reference') or request.args.get('trxref') or '').strip()
-        if ref and app.config.get('PROVIDER') and getattr(app.config['PROVIDER'], 'name', None) == 'PAYSTACK':
-            try:
-                ev = app.config['PROVIDER'].verify_transaction(ref)
-                S.process_webhook(db(), 'PAYSTACK', ev)
-                flash('Payment check complete. If M-Pesa succeeded, your subscription is now active.', 'success')
-            except Exception:
-                flash('Payment is still processing. Refresh your subscription page in a minute.', 'info')
-        else:
-            flash('Return from payment. Check your subscription status below.', 'info')
-        # Best effort: go home; user can open subscription from chama
-        return redirect(url_for('dashboard'))
+        """Browser comes back from Paystack hosted checkout: confirm with Paystack, then show the result."""
+        ref = (request.args.get('reference') or request.args.get('trxref') or '').strip()[:100]
+        p = db().one("SELECT * FROM payments WHERE provider='PAYSTACK' AND provider_txn_id=?", (ref,)) if ref else None
+        if not p:
+            flash('We could not find that payment. Check your subscription status below.', 'info')
+            return redirect(url_for('dashboard'))
+        _sync_provider_payment(p)
+        return redirect(url_for('subscription_payment', chama_id=p['chama_id'], payment_id=p['id']))
 
     @app.route('/webhooks/paystack', methods=['POST'])
     def paystack_webhook():
-        """Paystack confirms subscription M-Pesa charges. Signature required."""
+        """Paystack confirms charges. The HMAC signature is mandatory; the state is re-verified with Paystack."""
         raw = request.get_data(cache=True, as_text=False) or b''
         signature = request.headers.get('X-Paystack-Signature', '')
         if not PaystackPaymentProvider.verify_signature(raw, signature):
             abort(401)
         body = request.get_json(silent=True) or {}
         event_name = str(body.get('event') or '')
-        if event_name and not any(x in event_name.lower() for x in ('success', 'failed', 'fail', 'abandon')):
+        if not event_name.lower().startswith('charge.'):
             return jsonify(status='ignored', event=event_name)
         ev = PaystackPaymentProvider.parse_webhook(body)
+        if not ev.get('checkout_id'):
+            return jsonify(status='ignored', event=event_name)
+        prov = app.config.get('PROVIDER')
         try:
-            prov = app.config.get('PROVIDER')
-            if prov and getattr(prov, 'name', None) == 'PAYSTACK' and ev.get('checkout_id'):
+            if prov and getattr(prov, 'name', None) == 'PAYSTACK':
                 ev = prov.verify_transaction(ev['checkout_id'])
-                ev['event_id'] = ev.get('event_id') or ev.get('checkout_id')
         except Exception:
-            app.logger.exception('paystack verify_transaction failed; using webhook body')
+            app.logger.exception('paystack verify_transaction failed; using signed webhook body')
+        if ev.get('result_code') is None:
+            return jsonify(status='pending')
         try:
             S.process_webhook(db(), 'PAYSTACK', ev)
         except Exception:

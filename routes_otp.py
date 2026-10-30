@@ -51,8 +51,8 @@ def register(app, db, login_required):
             if not u:
                 session.pop('otp_flow',None); flash('That verification is no longer valid.','danger'); return redirect(url_for('login'))
             if purpose in ('signup','login_email_verify'):
-                OTP.mark_verified(db,uid)
-                with db().tx(): audit(db,uid,'USER_REGISTERED' if purpose=='signup' else 'LOGIN_EMAIL_VERIFIED','user',uid)
+                OTP.mark_verified(db(),uid)
+                with db().tx(): audit(db(),uid,'USER_REGISTERED' if purpose=='signup' else 'LOGIN_EMAIL_VERIFIED','user',uid)
                 session.clear(); session['uid']=uid; session['ep']=u['session_epoch']; session.permanent=True
                 return redirect(safe_next_local(flow.get('next')) or url_for('dashboard'))
             if purpose=='forgot_password':
@@ -65,7 +65,7 @@ def register(app, db, login_required):
                 if db().val('SELECT COUNT(*) FROM users WHERE phone=? AND id!=?',(new_phone,uid),0):
                     session.pop('otp_flow',None); flash('That phone number is already linked to another account.','danger'); return redirect(url_for('phone_change'))
                 with db().tx():
-                    db().execute('UPDATE users SET phone=?,phone_verified_at=? WHERE id=?',(new_phone,S.iso(S.now_utc()),uid)); audit(db,uid,'PHONE_CHANGED','user',uid,None,{'email_otp':True})
+                    db().execute('UPDATE users SET phone=?,phone_verified_at=? WHERE id=?',(new_phone,S.iso(S.now_utc()),uid)); audit(db(),uid,'PHONE_CHANGED','user',uid,None,{'email_otp':True})
                 session.pop('otp_flow',None); flash('Your phone number has been changed and verified.','success'); return redirect(url_for('security_privacy'))
             if purpose=='password_change':
                 session['otp_flow']={'purpose':'password_change_verified','user_id':uid}; return redirect(url_for('password_change'))
@@ -84,7 +84,7 @@ def register(app, db, login_required):
                 elif not new: flash('Enter a valid Kenyan phone number.','danger')
                 elif db().val('SELECT COUNT(*) FROM users WHERE phone=? AND id!=?',(new,g.user['id']),0): flash('That phone number is already linked to another account.','danger')
                 else:
-                    with db().tx(): db().execute('UPDATE users SET phone=?,phone_verified_at=NULL WHERE id=?',(new,g.user['id'])); audit(db,g.user['id'],'PHONE_CHANGED','user',g.user['id'])
+                    with db().tx(): db().execute('UPDATE users SET phone=?,phone_verified_at=NULL WHERE id=?',(new,g.user['id'])); audit(db(),g.user['id'],'PHONE_CHANGED','user',g.user['id'])
                     flash('Your phone number has been changed.','success'); return redirect(url_for('security_privacy'))
             return render_template('phone_change.html',stage='simple',flow={})
         flow=session.get('otp_flow') or {}
@@ -115,7 +115,7 @@ def register(app, db, login_required):
                 elif len(password)<8: flash('Password must be at least 8 characters.','danger')
                 elif password!=confirm: flash('Passwords do not match.','danger')
                 else:
-                    with db().tx(): db().execute('UPDATE users SET password_hash=?,session_epoch=session_epoch+1 WHERE id=?',(generate_password_hash(password),g.user['id'])); audit(db,g.user['id'],'PASSWORD_CHANGED','user',g.user['id'],None,{'email_otp':False})
+                    with db().tx(): db().execute('UPDATE users SET password_hash=?,session_epoch=session_epoch+1 WHERE id=?',(generate_password_hash(password),g.user['id'])); audit(db(),g.user['id'],'PASSWORD_CHANGED','user',g.user['id'],None,{'email_otp':False})
                     session.clear(); flash('Your password was changed. Please log in again.','success'); return redirect(url_for('login'))
             return render_template('password_change.html',verified=False,simple=True)
         flow=session.get('otp_flow') or {}
@@ -125,7 +125,7 @@ def register(app, db, login_required):
                 if len(password)<8: flash('Password must be at least 8 characters.','danger')
                 elif password!=confirm: flash('Passwords do not match.','danger')
                 else:
-                    with db().tx(): db().execute('UPDATE users SET password_hash=?,session_epoch=session_epoch+1 WHERE id=?',(generate_password_hash(password),g.user['id'])); audit(db,g.user['id'],'PASSWORD_CHANGED','user',g.user['id'],None,{'email_otp':True})
+                    with db().tx(): db().execute('UPDATE users SET password_hash=?,session_epoch=session_epoch+1 WHERE id=?',(generate_password_hash(password),g.user['id'])); audit(db(),g.user['id'],'PASSWORD_CHANGED','user',g.user['id'],None,{'email_otp':True})
                     session.clear(); flash('Your password was changed. Please log in again.','success'); return redirect(url_for('login'))
             else:
                 ok,msg,oid=OTP.request_otp(app,db(),g.user['id'],g.user['email'],'password_change',request.remote_addr)
@@ -153,7 +153,7 @@ def register(app, db, login_required):
                 elif password!=confirm: flash('Passwords do not match.','danger')
                 else:
                     uid=flow['user_id']
-                    with db().tx(): db().execute('UPDATE users SET password_hash=?,reset_hash=NULL,reset_expires=NULL,reset_fails=0,session_epoch=session_epoch+1 WHERE id=?',(generate_password_hash(password),uid)); audit(db,uid,'PASSWORD_RESET_DONE','user',uid,None,{'email_otp':True})
+                    with db().tx(): db().execute('UPDATE users SET password_hash=?,reset_hash=NULL,reset_expires=NULL,reset_fails=0,session_epoch=session_epoch+1 WHERE id=?',(generate_password_hash(password),uid)); audit(db(),uid,'PASSWORD_RESET_DONE','user',uid,None,{'email_otp':True})
                     session.clear(); flash('Your password was reset. You can now log in.','success'); return redirect(url_for('login'))
             else:
                 email=(request.form.get('email') or '').strip().lower(); u=db().one('SELECT id,email FROM users WHERE email=? AND is_active=1 AND claimed=1',(email or '-',))

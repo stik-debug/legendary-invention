@@ -27,16 +27,21 @@ services:
         sync: false
       - key: AT_SENDER_ID
         sync: false
-      - key: PAY_INSTRUCTIONS
-        value: Contact ChamaPay support to pay. Your payment will be confirmed in the app.
+      # --- Subscription payments via Paystack (M-Pesa prompt, card fallback) ---
       - key: PAYMENT_PROVIDER
         value: paystack
       - key: PAYSTACK_SECRET_KEY
         sync: false
       - key: PAYSTACK_PUBLIC_KEY
         sync: false
+      # Your public URL, e.g. https://chamapay.onrender.com (used for the Paystack return link)
       - key: APP_URL
         sync: false
+      # "stk" (default) sends the M-Pesa prompt straight to the phone; "checkout" always uses Paystack's page.
+      - key: PAYSTACK_MODE
+        value: stk
+      - key: PAY_INSTRUCTIONS
+        value: Contact ChamaPay support to pay. Your payment will be confirmed in the app.
       - key: REQUIRE_OWNER_2FA
         value: "0"
       - key: SMS_OTP_ENABLED

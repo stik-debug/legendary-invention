@@ -335,7 +335,10 @@ def process_webhook(db, provider, event, now=None):
         if not p:
             db.execute("UPDATE payment_webhooks SET result='UNKNOWN_PAYMENT', processed=1 WHERE id=?", (wid,))
             return 'UNKNOWN'
-        if p['status'] != 'PENDING':
+        # Paystack only: a payment our own timer closed (TIMEOUT) can still be confirmed by Paystack's
+        # verify API later. The customer's money was taken, so that trusted success must still activate the plan.
+        late_success = provider == 'PAYSTACK' and p['status'] == 'TIMEOUT' and event.get('result_code') == 0
+        if p['status'] != 'PENDING' and not late_success:
             db.execute("UPDATE payment_webhooks SET result='ALREADY_FINAL', payment_id=?, processed=1 WHERE id=?", (p['id'], wid))
             return 'DUPLICATE'
         code = event.get('result_code')
