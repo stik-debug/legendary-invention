@@ -781,7 +781,7 @@ def create_app(overrides=None):
                                members=members, member_price=S.setting(db(), 'price_per_member_cents', S.DEFAULT_MEMBER_PRICE_CENTS),
                                monthly_cost=int(plan['price_cents']),
                                value_report=value_report, provider=app.config['PROVIDER'], dev=(app.config['PROVIDER'] and app.config['PROVIDER'].name == 'TEST'),
-                               can_pay=me['role'] in ('CHAMA_ADMIN', 'TREASURER'), active=sub['status'] in S.ACCESS_OK, trial_days=S.setting(db(), 'trial_days', 30))
+                               can_pay=me['role'] in ('CHAMA_ADMIN', 'TREASURER'), active=sub['status'] in S.ACCESS_OK, trial_days=S.setting(db(), 'trial_days', 30), paystack_checkout=session.get('paystack_checkout') if (session.get('paystack_checkout') or {}).get('chama_id') == chama_id else None)
 
     @app.route('/chamas/<int:chama_id>/trust-and-planning', methods=['GET', 'POST'])
     @login_required
@@ -859,14 +859,20 @@ def create_app(overrides=None):
         res = prov.initiate(p, phone)
         if res.get('ok'):
             db().execute('UPDATE payments SET provider_txn_id=? WHERE id=?', (res['checkout_id'], pid)); db().commit()
-            msg = res.get('display_text') or 'Payment prompt sent. Enter your M-Pesa PIN on your phone.'
-            flash(msg, 'success')
-            # Hosted Paystack checkout fallback (when STK charge is blocked)
-            if res.get('authorization_url'):
-                return redirect(res['authorization_url'])
+            url = res.get('authorization_url')
+            if url:
+                # Remember link so user can open it again from subscription page
+                session['paystack_checkout'] = {'url': url, 'chama_id': chama_id, 'payment_id': pid}
+                flash(res.get('display_text') or 'Complete payment on the Paystack page.', 'success')
+                return redirect(url)
+            flash(res.get('display_text') or 'Payment prompt sent. Enter your M-Pesa PIN on your phone.', 'success')
         else:
             err = (res.get('error') or 'Payment could not be started')[:400]
-            db().execute("UPDATE payments SET status='FAILED', notes=?, completed_at=? WHERE id=?", (err[:200], S.iso(S.now_utc()), pid)); db().commit()
+            db().execute(
+                "UPDATE payments SET status='FAILED', notes=?, completed_at=? WHERE id=?",
+                (err[:200], S.iso(S.now_utc()), pid),
+            )
+            db().commit()
             flash(err, 'danger')
         return redirect(url_for('subscription', chama_id=chama_id))
 
