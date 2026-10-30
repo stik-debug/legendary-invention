@@ -868,11 +868,23 @@ def create_app(overrides=None):
             db().execute('UPDATE payments SET provider_txn_id=? WHERE id=?', (res['checkout_id'], pid)); db().commit()
             url = res.get('authorization_url')
             if url:
-                # Remember link so user can open it again from subscription page
+                # Hosted checkout fallback (rare)
                 session['paystack_checkout'] = {'url': url, 'chama_id': chama_id, 'payment_id': pid}
                 flash(res.get('display_text') or 'Complete payment on the Paystack page.', 'success')
                 return redirect(url)
-            flash(res.get('display_text') or 'Payment prompt sent. Enter your M-Pesa PIN on your phone.', 'success')
+            # STK push: stay on page — user enters PIN on their phone
+            session['paystack_checkout'] = {
+                'url': None,
+                'chama_id': chama_id,
+                'payment_id': pid,
+                'reference': res.get('checkout_id'),
+                'awaiting_stk': True,
+            }
+            flash(
+                res.get('display_text')
+                or 'M-Pesa prompt sent to your phone. Enter your PIN to complete payment.',
+                'success',
+            )
         else:
             err = (res.get('error') or 'Payment could not be started')[:400]
             db().execute(
