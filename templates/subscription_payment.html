@@ -1,0 +1,32 @@
+{% extends "base.html" %}{% block title %}Payment - {{ chama.name }}{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/subpay.css') }}?v=84">{% endblock %}
+{% block content %}
+{% set st = pay.status %}
+<div class="head"><div><h2>Payment</h2><p>{{ chama.name }}</p></div><a class="btn" href="{{ url_for('subscription', chama_id=chama.id) }}">Back to subscription</a></div>
+<section class="pp-result {{ 'ok' if st=='SUCCESS' else ('wait' if st=='PENDING' else 'bad') }}" data-pp-status data-status="{{ st }}"
+ data-status-url="{{ url_for('subscription_payment_status', chama_id=chama.id, payment_id=pay.id) }}">
+{% if st == 'SUCCESS' %}
+<div class="pp-icon ok" aria-hidden="true">&#10003;</div>
+<h3>Payment received</h3>
+<p>Thank you. <b>{{ plan.name }}</b> is active for {{ chama.name }} until <b>{{ sub.due_at|date }}</b>.</p>
+{% elif st == 'PENDING' %}
+<div class="pp-spin" aria-hidden="true"></div>
+<h3>Waiting for your payment</h3>
+<p>Check your phone and enter your <b>M-Pesa PIN</b> to approve <b>KES {{ pay.amount_cents|kes }}</b>. This page updates by itself, so you can keep it open.</p>
+<p class="pp-help" data-pp-note>Checking with Paystack&hellip;</p>
+{% if checkout_url %}<p><a class="btn pri" href="{{ checkout_url }}">Open Paystack payment page</a></p>{% endif %}
+{% else %}
+<div class="pp-icon bad" aria-hidden="true">!</div>
+<h3>{{ 'Payment cancelled' if st=='CANCELLED' else ('Payment timed out' if st=='TIMEOUT' else 'Payment did not go through') }}</h3>
+<p>No money was added to your plan.{% if pay.notes %} <small class="mute">({{ pay.notes }})</small>{% endif %} If M-Pesa already took the money, it is confirmed automatically within a few minutes; otherwise please try again.</p>
+<p><a class="btn pri" href="{{ url_for('subscription', chama_id=chama.id) }}#payment-box">Try again</a></p>
+{% endif %}
+<dl class="pp-facts">
+<div><dt>Amount</dt><dd>KES {{ pay.amount_cents|kes }}</dd></div>
+<div><dt>Period</dt><dd>{{ pay.period_days }} days</dd></div>
+<div><dt>Started</dt><dd>{{ pay.created_at|datetime }}</dd></div>
+{% if pay.provider_receipt %}<div><dt>Reference</dt><dd>{{ pay.provider_receipt }}</dd></div>{% endif %}
+</dl>
+</section>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/subpay.js') }}?v=84" defer></script>{% endblock %}
