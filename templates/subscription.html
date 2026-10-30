@@ -48,7 +48,17 @@
 <div class="field"><label for="mo">Billing period</label><select id="mo" name="months"><option value="1">1 month</option><option value="3">3 months</option><option value="6">6 months</option><option value="12">12 months</option></select></div>
 <div class="field"><label for="ph">Payment phone number</label><input id="ph" type="tel" name="phone" value="{{ user.phone }}" required></div>
 <p class="mute">Total group payment for <span id="billing-month-label">1 month</span>: <b id="billing-total">KES {{ monthly_cost|kes }}</b>. One authorized chama official pays for everyone. The amount is calculated from the active member count when you submit.</p><button class="btn pri block">{% if provider and provider.name in ('PAYSTACK','MPESA') %}Send M-Pesa prompt{% else %}Continue to payment{% endif %}</button><small class="mute">Your plan changes only after the payment provider confirms successful payment.</small></form>
-{% else %}<div class="card"><h3>Payment configuration required</h3><p class="mute">{{ config.PAY_INSTRUCTIONS }}</p><p>Choose a plan above, then contact support to arrange payment.</p></div>{% endif %}
+{% else %}<div class="card"><h3>Payment configuration required</h3>
+<p class="mute">Online M-Pesa (Paystack) is not active on this server yet.</p>
+<p><b>On Render → Environment, add these three variables, then redeploy:</b></p>
+<ol>
+<li><code>PAYMENT_PROVIDER</code> = <code>paystack</code></li>
+<li><code>PAYSTACK_SECRET_KEY</code> = from Paystack dashboard (starts with <code>sk_test_</code> or <code>sk_live_</code>)</li>
+<li><code>PAYSTACK_PUBLIC_KEY</code> = from Paystack dashboard (starts with <code>pk_</code>)</li>
+</ol>
+<p class="mute">After deploy, this box is replaced by <b>Send M-Pesa prompt</b>.</p>
+<p class="mute">Manual fallback for now: {{ config.PAY_INSTRUCTIONS }}</p>
+</div>{% endif %}
 {% else %}<div class="card"><p class="mute" style="margin:0">Ask your chairperson or treasurer to manage the subscription.</p></div>{% endif %}
 <div class="card"><h3>Help us improve</h3><p class="mute">If your group is considering leaving or not upgrading, tell us the main reason. This does not cancel your subscription.</p><form method="POST" action="{{ url_for('subscription_feedback',chama_id=chama.id) }}">{{ csrf_input() }}<div class="field"><label for="reason">Main reason</label><select id="reason" name="reason" required><option value="">Choose a reason</option><option value="PRICE">Price / affordability</option><option value="NOT_ENOUGH_VALUE">Not enough value yet</option><option value="TOO_COMPLEX">Too difficult to use</option><option value="PAYMENT_DIFFICULTY">Payment difficulty</option><option value="GROUP_INACTIVE">Our group is inactive</option><option value="OTHER">Other</option></select></div><div class="field"><label for="detail">Optional details</label><textarea id="detail" name="detail" rows="2" maxlength="500" placeholder="What would make ChamaPay more useful?"></textarea></div><button class="btn">Send feedback</button></form></div>
 <div class="card tight"><h3 style="padding:18px 20px 0">Payments</h3><ul class="list">
