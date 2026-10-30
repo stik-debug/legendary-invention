@@ -69,9 +69,10 @@ class LandingAndRounds(Base):
             for k in ('loans', 'goals', 'votes', 'meetings', 'passport', 'ai'):
                 self.assertIn(f'href="/go/{k}"', h)
             self.assertIn('href="/install"', h)
-        self.assertNotIn('href="/go/command"', anon)
-        self.assertNotIn('href="/go/command"', member)
-        self.assertIn('href="/go/command"', owner)
+        # The V82 homepage shows the Command Center card to everyone; access is enforced by the
+        # /go/command route itself (see test_go_command_is_for_the_creator_only).
+        for h in (anon, member, owner):
+            self.assertIn('href="/go/command"', h)
 
     def test_go_sends_a_signed_out_visitor_to_log_in_then_on_to_the_feature(self):
         r = self.client().get('/go/loans')
@@ -123,7 +124,7 @@ class LandingAndRounds(Base):
                 resp = c.get(url)
                 if resp.status_code >= 500:
                     problems.append(f'{who} {url} -> {resp.status_code}')
-                elif resp.status_code == 200:
+                elif resp.status_code == 200 and 'html' in (resp.mimetype or ''):  # skip PDF/CSV/zip downloads
                     h = resp.get_data(as_text=True)
                     miss = set(re.findall(r'data-open="([^"]+)"', h)) - set(re.findall(r'<dialog[^>]*id="([^"]+)"', h))
                     if miss:

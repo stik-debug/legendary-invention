@@ -160,7 +160,7 @@ class PayWeb(_tf.FinWeb):
         self.manual(); self.add_contrib('m1', 5000); self.add_contrib('m2', 5000)
         F.update_chama_settings(self.db, self.cid, 100000, '10', 3, 1)
         self.post(self.m1, self.base() + '/loans/apply', {'amount': '10000', 'purpose': 'stock'}); lid = self.db.val('SELECT id FROM loans')
-        self.post(self.treas, self.base() + f'/loans/{lid}/approve'); self.post(self.admin, self.base() + f'/loans/{lid}/disburse')
+        self.post(self.treas, self.base() + f'/loans/{lid}/approve'); self.post(self.admin, self.base() + f'/loans/{lid}/disburse'); self.approve_all(self.treas)
         self.records(self.treas, self.received('LON1234ABC', '4,000.00'))
         self.paste(self.m1, self.sms('LON1234ABC', '4,000.00'), what=f'LOAN:{lid}'); self.assertEqual(self.last()['status'], 'SUCCESS')
         self.assertEqual(self.db.val('SELECT paid_cents FROM loans WHERE id=?', (lid,)), 400000)
@@ -224,7 +224,7 @@ class PayWeb(_tf.FinWeb):
         self.trust(); self.add_contrib('m1', 5000); self.add_contrib('m2', 5000)
         F.update_chama_settings(self.db, self.cid, 100000, '10', 3, 1)
         self.post(self.m1, self.base() + '/loans/apply', {'amount': '10000', 'purpose': 'stock'}); lid = self.db.val('SELECT id FROM loans')
-        self.post(self.treas, self.base() + f'/loans/{lid}/approve'); self.post(self.admin, self.base() + f'/loans/{lid}/disburse')
+        self.post(self.treas, self.base() + f'/loans/{lid}/approve'); self.post(self.admin, self.base() + f'/loans/{lid}/disburse'); self.approve_all(self.treas)
         self.paste(self.m1, self.fresh_sms('LOAN1234AB', '2,500.00'), what=f'LOAN:{lid}')
         self.assertEqual(self.last()['status'], 'SUCCESS'); self.assertEqual(self.db.val('SELECT paid_cents FROM loans WHERE id=?', (lid,)), 250000)
 

@@ -89,12 +89,14 @@ class SmsOn(_tw.Web):
         super().setUp()
         self.app = create_app({'DATABASE_URL': self.url, 'SECRET_KEY': 'k' * 48, 'TESTING': True, 'SMS_OTP_ENABLED': True})
 
+    @unittest.skip('SMS_OTP_ENABLED is no longer read by the app: the SMS verification step was removed (see EMAIL_OTP_DISABLED_V30.md)')
     def test_signup_does_not_log_in_directly_when_on(self):
         c = self.client()
         self.post(c, '/register', {'name': 'On Person', 'email': 'on@example.test', 'phone': '0722000999',
                                    'password': 'Password123', 'confirm': 'Password123'})
         self.assertEqual(c.get('/dashboard').status_code, 302)  # still logged out: the code step comes first
 
+    @unittest.skip('SMS_OTP_ENABLED is no longer read by the app: the SMS verification step was removed (see EMAIL_OTP_DISABLED_V30.md)')
     def test_login_of_unverified_user_is_held_back_when_on(self):
         S = _tw.S
         S.create_user(self.db, 'Held Back', 'held@example.test', '0722000888', _tw.generate_password_hash('Password123'))

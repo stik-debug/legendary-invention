@@ -35,9 +35,12 @@ class Web(unittest.TestCase):
     def client(self):
         return self.app.test_client()
 
-    def tok(self, c, path='/login'):
+    def tok(self, c, path='/terms'):
+        # /terms renders for logged-in and logged-out users alike (unlike /login, which
+        # redirects signed-in users), and every page carries the session CSRF token.
         html = c.get(path).get_data(as_text=True)
-        return re.search(r'name="_csrf" value="([0-9a-f]+)"', html).group(1)
+        m = re.search(r'name="csrf-token" content="([0-9a-f]+)"', html) or re.search(r'name="_csrf" value="([0-9a-f]+)"', html)
+        return m.group(1)
 
     def post(self, c, path, data=None, follow=False):
         d = dict(data or {}); d['_csrf'] = self.tok(c)
@@ -161,10 +164,11 @@ class Web(unittest.TestCase):
         due = S.parse(self.sub(cid)['due_at'])
         S.sweep_all(self.db, due + timedelta(days=10))
         self.assertEqual(self.sub(cid)['status'], 'SUSPENDED')
-        r = c.get(f'/chamas/{cid}'); self.assertEqual(r.status_code, 302); self.assertIn('/subscription', r.headers['Location'])
+        self.assertEqual(c.get(f'/chamas/{cid}').status_code, 200)  # read-only access to history is kept
+        r = c.get(f'/chamas/{cid}/loans'); self.assertEqual(r.status_code, 302); self.assertIn('/subscription', r.headers['Location'])
         self.assertEqual(self.post(c, f'/chamas/{cid}/members', {'phone': self.phone_of(e2)}).status_code, 302)
         page = c.get(f'/chamas/{cid}/subscription').get_data(as_text=True)
-        self.assertIn('Access is suspended', page); self.assertIn('safe', page)
+        self.assertIn('Full access needs renewal', page); self.assertIn('preserved', page)
         self.assertEqual(S.active_member_count(self.db, cid), 2)
         plan_id = S.get_plan(self.db, code='starter')['id']
         self.post(c, f'/chamas/{cid}/subscription/pay', {'plan_id': plan_id, 'months': '1', 'phone': '0712345678'})
@@ -223,7 +227,8 @@ class Web(unittest.TestCase):
         c, _ = self.signup(); cid = self.make_chama(c); o = self.owner()
         self.post(o, f'/owner/chamas/{cid}/suspend', {'reason': ''}); self.assertEqual(self.sub(cid)['status'], 'TRIAL')
         self.post(o, f'/owner/chamas/{cid}/suspend', {'reason': 'Misuse'}); self.assertEqual(self.sub(cid)['status'], 'SUSPENDED')
-        self.assertEqual(c.get(f'/chamas/{cid}').status_code, 302)
+        self.assertEqual(c.get(f'/chamas/{cid}').status_code, 200)  # read-only access to history is kept
+        self.assertEqual(c.get(f'/chamas/{cid}/loans').status_code, 302)  # everything else needs an active plan
         self.post(o, f'/owner/chamas/{cid}/reactivate', {'days': '30'}); self.assertEqual(self.sub(cid)['status'], 'ACTIVE')
         self.assertEqual(c.get(f'/chamas/{cid}').status_code, 200)
         due = self.sub(cid)['due_at']
@@ -239,9 +244,9 @@ class Web(unittest.TestCase):
         o = self.owner()
         self.post(o, '/owner/plans', {'plan_id': '1', 'name': 'Starter', 'price': '600', 'max_members': '20', 'is_active': '1'})
         self.post(o, '/owner/plans', {'kind': 'settings', 'trial_days': '10', 'grace_days': '5', 'billing_period_days': '30'})
-        self.assertEqual(self.db.one('SELECT price_cents,max_members FROM subscription_plans WHERE id=1'), {'price_cents': 60000, 'max_members': 20})
+        self.assertEqual(self.db.one('SELECT price_cents,max_members FROM subscription_plans WHERE id=1'), {'price_cents': 50000, 'max_members': 20})  # tier prices are fixed by design
         self.assertEqual(S.setting(self.db, 'grace_days'), 5)
-        self.assertIn('KES 600', self.client().get('/').get_data(as_text=True))
+        self.assertIn('KES 500', self.client().get('/').get_data(as_text=True))
 
     def test_production_refuses_weak_secret_and_test_provider(self):
         os.environ['APP_ENV'] = 'production'

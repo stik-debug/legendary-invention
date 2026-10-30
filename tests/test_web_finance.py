@@ -31,6 +31,11 @@ class FinWeb(unittest.TestCase):
 
     def bal(self): return F.cash_balance(self.db, self.cid)
 
+    def approve_all(self, c):
+        """Second official approves every pending maker-checker request (voids, disbursements...)."""
+        for r in self.db.all("SELECT id FROM maker_checker_requests WHERE status='PENDING' ORDER BY id"):
+            self.post(c, self.base() + f'/approvals/{r["id"]}/approve')
+
     # ---------- every page renders for every role ----------
     def test_all_pages_render_for_all_roles(self):
         self.team()
@@ -66,6 +71,8 @@ class FinWeb(unittest.TestCase):
         self.team(); self.add_contrib('m1', 1000)
         cid = self.db.val('SELECT id FROM contributions')
         self.post(self.treas, self.base() + f'/savings/{cid}/void', {'reason': 'wrong member'})
+        self.assertEqual(self.bal(), 100000)  # nothing changes until a second official approves
+        self.approve_all(self.admin)
         self.assertEqual(self.bal(), 0); self.assertEqual(self.db.val('SELECT status FROM contributions WHERE id=?', (cid,)), 'CANCELLED')
         self.assertEqual(self.post(self.m1, self.base() + f'/savings/{cid}/void', {'reason': 'x'}).status_code, 403)
 
@@ -78,6 +85,8 @@ class FinWeb(unittest.TestCase):
         self.assertEqual(self.post(self.m1, self.base() + f'/loans/{lid}/approve').status_code, 403)  # member cannot approve
         self.post(self.treas, self.base() + f'/loans/{lid}/approve')
         before = self.bal(); self.post(self.admin, self.base() + f'/loans/{lid}/disburse')
+        self.assertEqual(self.bal(), before)  # disbursement waits for a second official
+        self.approve_all(self.treas)
         self.assertEqual(self.bal(), before - 1000000)
         self.post(self.treas, self.base() + f'/loans/{lid}/repay', {'amount': '8000', 'paid_on': TODAY, 'method': 'Cash'})
         row = self.db.one('SELECT * FROM loans WHERE id=?', (lid,))
@@ -145,7 +154,7 @@ class FinWeb(unittest.TestCase):
     def test_suspended_chama_blocks_new_pages_but_keeps_data(self):
         self.team(); self.add_contrib('m1', 1000)
         S.suspend_chama(self.db, self.cid, 'test', 1)
-        for p in ('/savings', '/loans', '/fines', '/ledger', '/chat', '/statement'):
+        for p in ('/loans', '/fines', '/chat'):  # savings/ledger/statement stay readable on purpose
             r = self.treas.get(self.base() + p); self.assertEqual(r.status_code, 302, p); self.assertIn('/subscription', r.headers['Location'])
         self.assertEqual(self.add_contrib('m1', 500).status_code, 302); self.assertEqual(self.bal(), 100000)
         S.grant_access(self.db, self.cid, 30, 1, reactivate=True)

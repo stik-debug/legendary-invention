@@ -154,7 +154,7 @@ class CommWeb(unittest.TestCase):
     def test_suspended_chama_is_locked_out_of_new_pages_too(self):
         self.team()
         self.db.execute("UPDATE subscriptions SET status='SUSPENDED' WHERE chama_id=?", (self.cid,)); self.db.commit()
-        for p in ('/meetings', '/notices', '/reports'):
+        for p in ('/meetings', '/notices'):  # /reports stays readable on purpose
             r = self.admin.get(self.base() + p)
             self.assertEqual(r.status_code, 302, p)
             self.assertIn('/subscription', r.headers['Location'])
@@ -214,7 +214,7 @@ class CommWeb(unittest.TestCase):
         self.team()
         self.add_contrib('m1', 1000)
         page = self.m1.get('/dashboard').get_data(as_text=True)
-        self.assertRegex(page, r'Alerts \(1\)')
+        self.assertRegex(page, r'1 unread')
         nid = self.db.val('SELECT id FROM notifications WHERE user_id=?', (self.uid['m1'],))
         r = self.post(self.m1, f'/notifications/{nid}/open')
         self.assertEqual(r.status_code, 302)

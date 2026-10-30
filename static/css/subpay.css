@@ -1,0 +1,45 @@
+/* ChamaPay payment page (V84). Uses the app's design tokens; no inline styles/scripts needed. */
+.pp{background:var(--solid,#fff);border:1px solid var(--line);border-radius:24px;padding:clamp(18px,3vw,28px);margin-bottom:18px;box-shadow:var(--sh);max-width:760px}
+.pp-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.pp-head h3{margin:0 0 4px}.pp-head p{margin:0}
+.pp-secure{font-size:.8rem;font-weight:700;color:var(--em-d);background:var(--ok-bg);padding:6px 11px;border-radius:999px;white-space:nowrap}
+.pp-step{display:flex;align-items:center;gap:10px;margin:22px 0 10px}
+.pp-n{width:26px;height:26px;border-radius:50%;background:var(--em-x);color:#fff;font:800 13px/26px "DM Sans",sans-serif;text-align:center;flex:none}
+.pp-plans{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+.pp-plan,.pp-month{position:relative;display:block;cursor:pointer}
+.pp-plan input,.pp-month input{position:absolute;opacity:0;inset:0;width:100%;height:100%;margin:0;cursor:pointer}
+.pp-plan-body{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border:2px solid var(--line);border-radius:16px;background:#fff;transition:border-color .15s,box-shadow .15s,background .15s;height:100%}
+.pp-plan-body b{font-size:1.02rem}.pp-plan-body small{color:var(--mute)}
+.pp-price{font:800 1.35rem "Bricolage Grotesque","DM Sans",sans-serif;letter-spacing:-.02em}.pp-price small{font:500 .8rem "DM Sans",sans-serif;margin-left:2px}
+.pp-plan input:checked+.pp-plan-body{border-color:var(--em);background:var(--ok-bg);box-shadow:0 0 0 3px rgba(14,138,95,.15)}
+.pp-plan input:focus-visible+.pp-plan-body,.pp-month input:focus-visible+span{outline:3px solid var(--gold);outline-offset:2px}
+.pp-plan.off{opacity:.55;cursor:not-allowed}.pp-plan.off input{cursor:not-allowed}
+.pp-months{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.pp-month span{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:62px;border:2px solid var(--line);border-radius:14px;background:#fff;font:800 1.25rem "Bricolage Grotesque",sans-serif;transition:border-color .15s,background .15s}
+.pp-month small{font:500 .74rem "DM Sans",sans-serif;color:var(--mute)}
+.pp-month input:checked+span{border-color:var(--em);background:var(--ok-bg);color:var(--em-x)}
+.pp-phone{display:flex;align-items:stretch;border:2px solid var(--line);border-radius:14px;background:#fff;overflow:hidden;transition:border-color .15s}
+.pp-phone:focus-within{border-color:var(--em);box-shadow:0 0 0 3px rgba(14,138,95,.15)}
+.pp-phone.bad{border-color:var(--bad)}
+.pp-flag{display:flex;align-items:center;padding:0 14px;background:var(--bg2);font-weight:700;font-size:.92rem;white-space:nowrap}
+.pp-phone input{flex:1;min-width:0;border:0;outline:0;padding:14px;font:600 1.1rem "DM Sans",sans-serif;background:transparent;letter-spacing:.02em}
+.pp-help{margin:8px 2px 0;font-size:.86rem;color:var(--mute)}.pp-help.bad{color:var(--bad)}
+.pp-summary{margin:20px 0 14px;padding:14px 16px;border-radius:16px;background:var(--bg2);display:grid;gap:6px}
+.pp-summary>div{display:flex;justify-content:space-between;gap:10px}.pp-summary span{color:var(--mute)}
+.pp-total{padding-top:8px;margin-top:2px;border-top:1px dashed var(--line);font-size:1.2rem}.pp-total span{color:var(--ink);font-weight:700}.pp-total b{font:800 1.5rem "Bricolage Grotesque",sans-serif;color:var(--em-x)}
+.pp-error{margin:0 0 12px;padding:12px 14px;border-radius:12px;background:var(--bad-bg);color:var(--bad);font-weight:600}
+.pp-go{font-size:1.05rem;min-height:54px}.pp-go[disabled]{opacity:.7;cursor:progress}
+.pp-alt{display:block;width:100%;margin-top:12px;background:none;border:0;color:var(--em-d);font:600 .92rem "DM Sans",sans-serif;text-decoration:underline;cursor:pointer;padding:8px}
+.pp-fine{margin:10px 0 0;text-align:center;font-size:.82rem;color:var(--mute)}
+.pp-pending{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;padding:14px 18px;border-radius:16px;background:var(--warn-bg);border:1px solid rgba(185,130,18,.3);max-width:760px}
+.pp-wait{text-align:center;padding:26px 8px}.pp-wait[hidden]{display:none}
+.pp-spin{width:46px;height:46px;margin:0 auto 14px;border-radius:50%;border:4px solid var(--ok-bg);border-top-color:var(--em);animation:pp-rot 1s linear infinite}
+@keyframes pp-rot{to{transform:rotate(360deg)}}
+.pp-result{max-width:560px;margin:10px auto 24px;text-align:center;background:var(--solid,#fff);border:1px solid var(--line);border-radius:26px;padding:clamp(24px,5vw,40px);box-shadow:var(--sh)}
+.pp-result h3{font-size:1.5rem;margin-bottom:8px}.pp-result p{margin:0 0 12px}
+.pp-icon{width:64px;height:64px;margin:0 auto 14px;border-radius:50%;display:grid;place-items:center;font:800 2rem "DM Sans",sans-serif;color:#fff}
+.pp-icon.ok{background:var(--em)}.pp-icon.bad{background:var(--bad)}
+.pp-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:22px 0 0;text-align:left}
+.pp-facts div{background:var(--bg2);border-radius:12px;padding:10px 12px}.pp-facts dt{font-size:.75rem;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}.pp-facts dd{margin:2px 0 0;font-weight:700;word-break:break-all}
+@media(max-width:520px){.pp-months{grid-template-columns:repeat(2,1fr)}.pp-secure{order:-1}}
+@media(prefers-reduced-motion:reduce){.pp-spin{animation-duration:3s}}
