@@ -35,11 +35,7 @@ services:
         sync: false
       - key: PAYSTACK_PUBLIC_KEY
         sync: false
-      - key: PAYSTACK_DEFAULT_EMAIL
-        sync: false
       - key: APP_URL
-        sync: false
-      - key: PAYSTACK_CALLBACK_URL
         sync: false
       - key: REQUIRE_OWNER_2FA
         value: "0"

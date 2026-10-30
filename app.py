@@ -842,16 +842,15 @@ def create_app(overrides=None):
         if not prov:
             mode = (os.environ.get('PAYMENT_PROVIDER') or '').strip().lower()
             if mode == 'paystack':
-                flash('Paystack is selected but PAYSTACK_SECRET_KEY is missing or invalid on the server.', 'danger')
+                flash('Paystack is selected but PAYSTACK_SECRET_KEY is missing or invalid.', 'danger')
             else:
                 flash('Payments are not configured yet. ' + app.config['PAY_INSTRUCTIONS'], 'warning')
             return redirect(url_for('subscription', chama_id=chama_id))
-        if getattr(prov, 'name', None) == 'PAYSTACK' and not prov.configured():
+        if getattr(prov, 'name', None) == 'PAYSTACK' and hasattr(prov, 'configured') and not prov.configured():
             flash('Paystack secret key is missing or invalid (must start with sk_test_ or sk_live_).', 'danger')
             return redirect(url_for('subscription', chama_id=chama_id))
-        # Phone optional for Paystack hosted page (used only as metadata)
         raw_phone = (request.form.get('phone') or '').strip()
-        phone = S.normalize_phone(raw_phone) if raw_phone else (me.get('phone') if me else None)
+        phone = S.normalize_phone(raw_phone) if raw_phone else None
         try:
             plan_id, months = int(request.form.get('plan_id')), int(request.form.get('months', 1))
         except (TypeError, ValueError):
@@ -871,13 +870,8 @@ def create_app(overrides=None):
             url = res.get('authorization_url')
             if url:
                 session['paystack_checkout'] = {
-                    'url': url,
-                    'chama_id': chama_id,
-                    'payment_id': pid,
-                    'amount_cents': p['amount_cents'],
-                    'reference': res.get('checkout_id'),
-                    'months': months,
-                    'plan_id': plan_id,
+                    'url': url, 'chama_id': chama_id, 'payment_id': pid,
+                    'amount_cents': p['amount_cents'], 'reference': res.get('checkout_id'),
                 }
                 return redirect(url_for('subscription_checkout', chama_id=chama_id, payment_id=pid))
             flash(res.get('display_text') or 'Payment started.', 'success')
@@ -894,20 +888,16 @@ def create_app(overrides=None):
     @app.route('/chamas/<int:chama_id>/subscription/checkout/<int:payment_id>')
     @login_required
     def subscription_checkout(chama_id, payment_id):
-        """Polished hand-off page before opening Paystack (not a bare link)."""
         chama, me, sub = ctx(chama_id, roles=('CHAMA_ADMIN', 'TREASURER'), allow_inactive=True)
         payment = db().one('SELECT * FROM payments WHERE id=? AND chama_id=?', (payment_id, chama_id))
         if not payment:
             abort(404)
         plan = S.get_plan(db(), payment.get('plan_id') or sub['plan_id'])
         checkout = session.get('paystack_checkout') or {}
-        if checkout.get('payment_id') != payment_id or not checkout.get('url'):
-            # Rebuild link only if still pending and we have provider_txn_id — user may need re-init
-            if payment['status'] != 'PENDING' or not payment.get('provider_txn_id'):
-                flash('This payment is no longer pending. Start a new payment from the subscription page.', 'info')
-                return redirect(url_for('subscription', chama_id=chama_id))
-            flash('Open the payment page again from Subscription if the button below is missing.', 'warning')
         pay_url = checkout.get('url') if checkout.get('payment_id') == payment_id else None
+        if not pay_url and payment['status'] != 'PENDING':
+            flash('This payment is no longer pending. Start a new payment from Subscription.', 'info')
+            return redirect(url_for('subscription', chama_id=chama_id))
         return render_template(
             'subscription_checkout.html',
             chama=chama, me=me, sub=sub, plan=plan, payment=payment, pay_url=pay_url,
@@ -941,20 +931,16 @@ def create_app(overrides=None):
     def paystack_return():
         """Browser return from Paystack hosted checkout — verify reference if present."""
         ref = (request.args.get('reference') or request.args.get('trxref') or '').strip()
-        checkout = session.get('paystack_checkout') or {}
-        chama_id = checkout.get('chama_id')
         if ref and app.config.get('PROVIDER') and getattr(app.config['PROVIDER'], 'name', None) == 'PAYSTACK':
             try:
                 ev = app.config['PROVIDER'].verify_transaction(ref)
                 S.process_webhook(db(), 'PAYSTACK', ev)
-                session.pop('paystack_checkout', None)
-                flash('Payment verified. Your subscription should now be active.', 'success')
+                flash('Payment check complete. If M-Pesa succeeded, your subscription is now active.', 'success')
             except Exception:
-                flash('Payment is still processing. Refresh this page in a minute.', 'info')
+                flash('Payment is still processing. Refresh your subscription page in a minute.', 'info')
         else:
-            flash('Returned from payment. Check status below — or wait for the webhook to confirm.', 'info')
-        if chama_id:
-            return redirect(url_for('subscription', chama_id=chama_id))
+            flash('Return from payment. Check your subscription status below.', 'info')
+        # Best effort: go home; user can open subscription from chama
         return redirect(url_for('dashboard'))
 
     @app.route('/webhooks/paystack', methods=['POST'])

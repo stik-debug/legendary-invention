@@ -140,7 +140,7 @@ class MpesaPaymentProvider:
 
 
 class PaystackPaymentProvider:
-    """Paystack Kenya — hosted checkout page (M-Pesa / card). No STK prompt from our app."""
+    """Paystack Kenya — hosted checkout page (M-Pesa / card). No STK prompt from app."""
 
     name = "PAYSTACK"
     label = "Paystack (secure page)"
@@ -187,7 +187,8 @@ class PaystackPaymentProvider:
             raise RuntimeError(f"Paystack error {e.code}: {msg}") from e
 
     def initiate(self, payment, phone=None):
-        """Create a Paystack hosted checkout session. User pays on Paystack's page."""
+        """Hosted Paystack checkout page (M-Pesa/card). No STK from this app."""
+        phone = _normalize_phone(phone) if phone else ""
         if not self.configured():
             return {
                 "ok": False,
@@ -201,14 +202,12 @@ class PaystackPaymentProvider:
         email = (os.environ.get("PAYSTACK_DEFAULT_EMAIL") or "").strip() or (
             f"chama{payment['chama_id']}@subscribers.chamapay.app"
         )
-        phone254 = _normalize_phone(phone) if phone else ""
         meta = {
-            "chama_id": str(payment["chama_id"]),
-            "payment_id": str(payment["id"]),
+            "chama_id": payment["chama_id"],
+            "payment_id": payment["id"],
         }
-        if phone254:
-            meta["phone"] = phone254
-
+        if phone:
+            meta["phone"] = phone
         app_url = (
             os.environ.get("APP_URL") or os.environ.get("RENDER_EXTERNAL_URL") or ""
         ).rstrip("/")
@@ -222,7 +221,7 @@ class PaystackPaymentProvider:
                 "amount": amount,
                 "currency": "KES",
                 "reference": reference,
-                "channels": ["mobile_money", "card"],
+                "channels": ["mobile_money", "card", "bank", "ussd"],
                 "metadata": meta,
             }
             if callback:
@@ -234,14 +233,13 @@ class PaystackPaymentProvider:
             if not url:
                 return {
                     "ok": False,
-                    "error": "Paystack did not return a payment page. Confirm KES is enabled on your Paystack account.",
+                    "error": "Paystack did not return a payment link. Confirm KES is enabled.",
                 }
             return {
                 "ok": True,
                 "checkout_id": ref,
                 "authorization_url": str(url),
-                "display_text": "Your secure Paystack payment page is ready.",
-                "amount_cents": amount,
+                "display_text": "Opening Paystack… Complete M-Pesa (or card) on the next page.",
             }
         except RuntimeError as e:
             return {"ok": False, "error": str(e)[:400]}
@@ -303,7 +301,6 @@ def get_provider(is_production: bool):
     mode = (os.environ.get("PAYMENT_PROVIDER") or "").strip().lower()
 
     if mode == "paystack":
-        # Always return provider so UI shows Paystack; initiate() validates the key
         return PaystackPaymentProvider()
     if mode == "mpesa":
         p = MpesaPaymentProvider()
