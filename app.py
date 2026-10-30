@@ -79,6 +79,7 @@ def create_app(overrides=None):
         print('WARNING: production is running on SQLite. Data will be lost on redeploy. Set DATABASE_URL to PostgreSQL.')
     provider = get_provider(app.config['IS_PRODUCTION'] and not app.config.get('ALLOW_TEST_PROVIDER'))
     app.config['PROVIDER'] = provider
+    print('PROVIDER loaded:', None if provider is None else f"{provider.name} ({getattr(provider, 'label', '')})")
 
     boot = DB(app.config['DATABASE_URL'])
     init_db(boot)
@@ -856,12 +857,17 @@ def create_app(overrides=None):
             return redirect(url_for('subscription', chama_id=chama_id))
         p = db().one('SELECT * FROM payments WHERE id=?', (pid,))
         res = prov.initiate(p, phone)
-        if res['ok']:
+        if res.get('ok'):
             db().execute('UPDATE payments SET provider_txn_id=? WHERE id=?', (res['checkout_id'], pid)); db().commit()
-            flash(res.get('display_text') or 'Payment prompt sent. Enter your M-Pesa PIN on your phone. Your chama unlocks when payment is confirmed.', 'success')
+            msg = res.get('display_text') or 'Payment prompt sent. Enter your M-Pesa PIN on your phone.'
+            flash(msg, 'success')
+            # Hosted Paystack checkout fallback (when STK charge is blocked)
+            if res.get('authorization_url'):
+                return redirect(res['authorization_url'])
         else:
-            db().execute("UPDATE payments SET status='FAILED', notes=?, completed_at=? WHERE id=?", (res['error'][:200], S.iso(S.now_utc()), pid)); db().commit()
-            flash(res['error'], 'danger')
+            err = (res.get('error') or 'Payment could not be started')[:400]
+            db().execute("UPDATE payments SET status='FAILED', notes=?, completed_at=? WHERE id=?", (err[:200], S.iso(S.now_utc()), pid)); db().commit()
+            flash(err, 'danger')
         return redirect(url_for('subscription', chama_id=chama_id))
 
     @app.route('/chamas/<int:chama_id>/subscription/plan', methods=['POST'])
@@ -887,6 +893,22 @@ def create_app(overrides=None):
         except Exception:
             app.logger.exception('webhook processing failed')
         return jsonify(ResultCode=0, ResultDesc='Accepted')
+
+    @app.route('/subscription/paystack-return')
+    def paystack_return():
+        """Browser return from Paystack hosted checkout — verify reference if present."""
+        ref = (request.args.get('reference') or request.args.get('trxref') or '').strip()
+        if ref and app.config.get('PROVIDER') and getattr(app.config['PROVIDER'], 'name', None) == 'PAYSTACK':
+            try:
+                ev = app.config['PROVIDER'].verify_transaction(ref)
+                S.process_webhook(db(), 'PAYSTACK', ev)
+                flash('Payment check complete. If M-Pesa succeeded, your subscription is now active.', 'success')
+            except Exception:
+                flash('Payment is still processing. Refresh your subscription page in a minute.', 'info')
+        else:
+            flash('Return from payment. Check your subscription status below.', 'info')
+        # Best effort: go home; user can open subscription from chama
+        return redirect(url_for('dashboard'))
 
     @app.route('/webhooks/paystack', methods=['POST'])
     def paystack_webhook():

@@ -135,7 +135,12 @@ class MpesaPaymentProvider:
 
 
 class PaystackPaymentProvider:
-    """Kenya M-Pesa PIN prompt through Paystack charge API."""
+    """Kenya M-Pesa PIN prompt through Paystack.
+
+    1) Try /charge mobile_money (STK-style prompt on phone).
+    2) If charge is blocked (403/etc), fall back to /transaction/initialize
+       and return an authorization_url the user can open.
+    """
 
     name = 'PAYSTACK'
     label = 'Paystack M-Pesa'
@@ -143,7 +148,11 @@ class PaystackPaymentProvider:
     base = 'https://api.paystack.co'
 
     def configured(self):
-        return bool((os.environ.get('PAYSTACK_SECRET_KEY') or '').strip())
+        key = (os.environ.get('PAYSTACK_SECRET_KEY') or '').strip().strip('"').strip("'")
+        return bool(key) and key.startswith('sk_')
+
+    def _secret(self):
+        return (os.environ.get('PAYSTACK_SECRET_KEY') or '').strip().strip('"').strip("'")
 
     def _request(self, path, body=None):
         data = None if body is None else json.dumps(body).encode()
@@ -152,26 +161,37 @@ class PaystackPaymentProvider:
             data=data,
             method='POST' if body is not None else 'GET',
             headers={
-                'Authorization': 'Bearer ' + os.environ['PAYSTACK_SECRET_KEY'],
+                'Authorization': 'Bearer ' + self._secret(),
                 'Content-Type': 'application/json',
+                'User-Agent': 'ChamaPay/1.0',
             },
         )
         try:
             with urllib.request.urlopen(req, timeout=30) as r:
                 return json.loads(r.read())
         except urllib.error.HTTPError as e:
+            raw = e.read().decode('utf-8', errors='replace')
             try:
-                err = json.loads(e.read().decode())
-                raise RuntimeError(err.get('message') or str(e)) from e
-            except RuntimeError:
-                raise
+                err = json.loads(raw)
+                msg = err.get('message') or err.get('data', {}).get('message') or raw
             except Exception:
-                raise RuntimeError(str(e)) from e
+                msg = raw or e.reason or str(e)
+            # Clear, actionable message (403 is usually bad key / channel not enabled)
+            if e.code == 401:
+                raise RuntimeError('Paystack rejected the secret key (401). Check PAYSTACK_SECRET_KEY on Render.') from e
+            if e.code == 403:
+                raise RuntimeError(
+                    'Paystack forbidden (403). Use a valid Kenya secret key, enable Mobile Money / M-Pesa on the Paystack account, '
+                    'and ensure the key matches test vs live mode.'
+                ) from e
+            raise RuntimeError(f'Paystack error {e.code}: {msg}') from e
 
     def initiate(self, payment, phone):
         phone = _normalize_phone(phone)
         if not (phone.startswith('254') and len(phone) == 12):
             return {'ok': False, 'error': 'Enter a valid Safaricom number (2547XXXXXXXX or 07XXXXXXXX).'}
+        if not self.configured():
+            return {'ok': False, 'error': 'PAYSTACK_SECRET_KEY is missing or invalid (must start with sk_test_ or sk_live_).'}
         amount = int(payment['amount_cents'])
         if amount <= 0:
             return {'ok': False, 'error': 'Invalid payment amount.'}
@@ -179,6 +199,13 @@ class PaystackPaymentProvider:
         email = (os.environ.get('PAYSTACK_DEFAULT_EMAIL') or '').strip() or (
             f"chama{payment['chama_id']}@subscribers.chamapay.app"
         )
+        meta = {
+            'chama_id': payment['chama_id'],
+            'payment_id': payment['id'],
+        }
+
+        # --- Path A: M-Pesa charge (prompt on phone) ---
+        charge_err = None
         try:
             data = self._request('/charge', {
                 'email': email,
@@ -186,10 +213,7 @@ class PaystackPaymentProvider:
                 'currency': 'KES',
                 'reference': reference,
                 'mobile_money': {'phone': phone, 'provider': 'mpesa'},
-                'metadata': {
-                    'chama_id': payment['chama_id'],
-                    'payment_id': payment['id'],
-                },
+                'metadata': meta,
             })
             d = data.get('data') or {}
             ref = str(d.get('reference') or reference)
@@ -200,9 +224,44 @@ class PaystackPaymentProvider:
             )
             return {'ok': True, 'checkout_id': ref, 'display_text': text}
         except RuntimeError as e:
-            return {'ok': False, 'error': str(e)[:220]}
-        except Exception:
-            return {'ok': False, 'error': 'Could not reach Paystack. Please try again.'}
+            charge_err = str(e)
+
+        # --- Path B: Hosted checkout (user opens Paystack page, chooses M-Pesa) ---
+        try:
+            callback = (os.environ.get('PAYSTACK_CALLBACK_URL') or os.environ.get('APP_URL') or '').rstrip('/')
+            body = {
+                'email': email,
+                'amount': amount,
+                'currency': 'KES',
+                'reference': reference + 'I',  # unique if charge already reserved ref
+                'channels': ['mobile_money', 'card'],
+                'metadata': meta,
+            }
+            if callback:
+                body['callback_url'] = callback + '/subscription/paystack-return'
+            data = self._request('/transaction/initialize', body)
+            d = data.get('data') or {}
+            ref = str(d.get('reference') or body['reference'])
+            url = d.get('authorization_url')
+            if not url:
+                return {
+                    'ok': False,
+                    'error': charge_err or 'Paystack did not return a payment link. Check currency KES and Mobile Money on your Paystack account.',
+                }
+            return {
+                'ok': True,
+                'checkout_id': ref,
+                'authorization_url': url,
+                'display_text': 'Open the Paystack page to complete M-Pesa payment, then return here.',
+            }
+        except RuntimeError as e:
+            # Prefer the more specific charge error if both failed
+            msg = str(e)
+            if charge_err and '403' in charge_err:
+                msg = charge_err + ' | Fallback also failed: ' + msg
+            elif charge_err:
+                msg = charge_err + ' | ' + msg
+            return {'ok': False, 'error': msg[:400]}
 
     def verify_transaction(self, reference):
         data = self._request(f'/transaction/verify/{urllib.parse.quote(str(reference))}')
@@ -240,7 +299,7 @@ class PaystackPaymentProvider:
 
     @staticmethod
     def verify_signature(raw_body, signature):
-        secret = (os.environ.get('PAYSTACK_SECRET_KEY') or '').encode()
+        secret = (os.environ.get('PAYSTACK_SECRET_KEY') or '').strip().strip('"').strip("'").encode()
         if not secret or not signature:
             return False
         body = raw_body if isinstance(raw_body, bytes) else str(raw_body).encode()
@@ -249,6 +308,7 @@ class PaystackPaymentProvider:
             return hmac.compare_digest(digest, str(signature))
         except Exception:
             return digest == str(signature)
+
 
 
 def get_provider(is_production):
